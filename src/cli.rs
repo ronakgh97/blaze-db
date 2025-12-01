@@ -40,14 +40,10 @@ pub enum Commands {
     Create {
         /// Name of the new database
         #[arg(short, long)]
-        name: Option<String>,
-
-        /// Description of the new database
-        #[arg(short, long)]
-        about: Option<String>,
+        name: String,
 
         /// Number of dimensions for the database embeddings
         #[arg(short, long)]
-        dimensions: Option<usize>,
+        dimensions: usize,
     },
 }
