@@ -10,7 +10,9 @@ async fn main() -> Result<()> {
         Some(Commands::Init { path }) => {
             init_run(path).await?;
         }
-        Some(Commands::Create { .. }) => {}
+        Some(Commands::Create { name, dimensions }) => {
+            create_run(name, dimensions).await?;
+        }
         Some(Commands::Serve { .. }) => {}
         Some(Commands::List { .. }) => {}
 
