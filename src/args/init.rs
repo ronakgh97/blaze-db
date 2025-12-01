@@ -1,4 +1,4 @@
-use crate::core::{Config, save_config};
+use crate::core::{Config, save_config, create_source_dir};
 use anyhow::Result;
 use std::path::PathBuf;
 
@@ -11,6 +11,7 @@ pub async fn init_run(path: Option<PathBuf>) -> Result<()> {
     };
 
     save_config(&config)?;
+    create_source_dir(&config)?;
 
     println!(
         "Blaze-DB initialized successfully at {:?}",

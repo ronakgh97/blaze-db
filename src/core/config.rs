@@ -1,3 +1,4 @@
+use std::fs;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -33,20 +34,33 @@ impl Config {
     }
 }
 
+pub fn create_source_dir(config: &Config) -> Result<()> {
+    let source_path = &config.source_dir.path;
+    if !source_path.exists() {
+        fs::create_dir_all(source_path).with_context(|| {
+            format!(
+                "Failed to create source directory at {}",
+                source_path.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
 /// Save config to default location
 pub fn save_config(config: &Config) -> Result<()> {
     let config_path = get_config_path()?;
 
     // Create parent directory
     if let Some(parent) = config_path.parent() {
-        std::fs::create_dir_all(parent)
+        fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create config directory {}", parent.display()))?;
     }
 
     let toml_string = toml::to_string_pretty(config)
         .with_context(|| format!("Failed to serialize config to {}", config_path.display()))?;
 
-    std::fs::write(&config_path, toml_string)
+    fs::write(&config_path, toml_string)
         .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
 
     Ok(())
@@ -56,7 +70,7 @@ pub fn save_config(config: &Config) -> Result<()> {
 pub fn load_config() -> Result<Config> {
     let config_path = get_config_path()?;
 
-    let config_content = std::fs::read_to_string(&config_path)
+    let config_content = fs::read_to_string(&config_path)
         .with_context(|| format!("Failed to read config file {}", config_path.display()))?;
 
     let config: Config =
