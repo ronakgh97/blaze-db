@@ -5,9 +5,10 @@ use serde::{Deserialize, Serialize};
 pub struct HealthCheckResponse {
     pub status: String,
     pub service: String,
-    pub uptime: u64,
+    pub uptime_hrs: u64,
 }
 
+#[allow(unused)]
 /// Request DTO for database creation
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateDatabaseRequest {
@@ -15,6 +16,7 @@ pub struct CreateDatabaseRequest {
     pub dimensions: usize,
 }
 
+#[allow(unused)]
 /// Response DTO for database creation
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateDatabaseResponse {
