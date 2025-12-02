@@ -12,17 +12,20 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            data_source: { Source { path: None } },
+            data_source: { Source { source_name: None } },
         }
     }
 }
 
 impl Config {
-    /// Create a new config with the given data source path
-    pub async fn update_source(self, source: Source) -> Self {
-        Self {
-            data_source: source,
-        }
+    /// Get the data source object from config
+    pub fn get_source_object(&self) -> Result<Source> {
+        Ok(self.data_source.clone())
+    }
+
+    /// Update the data source in config
+    pub fn update_source(&mut self, source: Source) {
+        self.data_source = source;
     }
 }
 
@@ -31,13 +34,11 @@ pub async fn save_config(config: &Config) -> Result<()> {
     let config_path = get_config_path()?;
 
     // Create parent directory
-
-    fs::create_dir_all(&config_path).await.with_context(|| {
-        format!(
-            "Failed to create config directory {}",
-            config_path.display()
-        )
-    })?;
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("Failed to create config directory {}", parent.display()))?;
+    }
 
     let toml_string = toml::to_string_pretty(config)
         .with_context(|| format!("Failed to serialize config to {}", config_path.display()))?;
@@ -66,5 +67,5 @@ pub async fn load_config() -> Result<Config> {
 /// Get default config path
 fn get_config_path() -> Result<PathBuf> {
     let home = dirs::home_dir().with_context(|| "No home directory?")?;
-    Ok(home.join(".blaze_db").join("config.toml"))
+    Ok(home.join(".blaze").join("config.toml"))
 }
