@@ -7,9 +7,18 @@ edition = "2024"
 name = "blaze_db"
 path = "src/lib.rs"
 
+[[bin]]
+name = "blaze-c"
+path = "src/bin/client.rs"
+
+[[bin]]
+name = "blaze-s"
+path = "src/bin/server.rs"
+
 [[bench]]
 name = "benchmark"
-harness = false
+path = "benches/benchmark.rs"
+harness = true
 
 [dependencies]
 tokio = { version = "1.48.0", features = ["full"] }
