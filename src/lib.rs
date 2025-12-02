@@ -13,5 +13,5 @@ pub mod prelude {
     };
     pub use crate::server::start_server;
     pub use crate::server_args::{ServerArgs, ServerCommands};
-    pub use crate::utils::{EmbeddingStore, Ingestor, Provider, VectorData};
+    pub use crate::utils::{EmbeddingStore, Ingestor, Provider, VectorData, log};
 }
