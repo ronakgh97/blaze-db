@@ -1,6 +1,7 @@
-mod search;
 mod config;
-mod source;
+mod data;
+mod search;
 
+pub use config::{Config, load_config, save_config};
+pub use data::Source;
 pub use search::{Metrics, SearchQuery, SearchResult};
-pub use config::{Source, Config, save_config, load_config, create_source_dir};
