@@ -1,19 +1,18 @@
 use crate::prelude::{load_config, save_config};
 use anyhow::Result;
-use std::path::PathBuf;
 
-pub async fn new_run(path: PathBuf) -> Result<()> {
+pub async fn new_run(source_name: String) -> Result<()> {
     println!("Creating a new source...");
 
     let mut config = load_config().await?;
 
-    let source = config.data_source.add_source_path(path).await;
+    config.data_source.add_source(source_name);
 
-    source.create_source_dir().await?;
-
-    config.data_source = source;
+    config.data_source.create_source_dir().await?;
 
     save_config(&config).await?;
+
+    println!("Source created successfully!");
 
     Ok(())
 }
