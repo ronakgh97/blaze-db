@@ -7,7 +7,7 @@ embeddings.
 
 - Reads text data from a specified file.
 - Chunks the data into smaller batches (configurable batch sizes).
-- Generates vector embeddings for each batch using Jina AI API.
+- Generates vector embeddings for each batch using Ollama API.
 - Stores the generated embeddings on disk in binary format for optimal performance.
 - Fast parallel loading of embeddings from disk using memory-mapped files.
 - **Semantic similarity search with multiple distance metrics** (Cosine, Euclidean, Dot Product).
@@ -15,6 +15,7 @@ embeddings.
 - Async/await architecture for non-blocking operations.
 - Parallel processing with Rayon for compute-intensive operations.
 - Performance benchmarking suite (~3.7ms per search on War and Peace dataset).
+- CLI for server and client for talking to http database server.
 
 ### DEMO
 
