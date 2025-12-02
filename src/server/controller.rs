@@ -1,17 +1,22 @@
-use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse, HealthCheckResponse};
+use crate::server::HealthCheckResponse;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::{Json, Router};
+use std::sync::OnceLock;
+use std::time::Instant;
+#[allow(unused_imports)]
 use uuid::Uuid;
 
+static START_TIME: OnceLock<Instant> = OnceLock::new();
+
 async fn create_router() -> Router {
-    Router::new()
-        .route("/health", get(health_check))
-        .route("/database", post(create_database))
+    Router::new().route("/health", get(health_check))
 }
 
 pub async fn start_server() {
+    START_TIME.get_or_init(|| Instant::now());
+
     let app = create_router().await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8001")
@@ -27,24 +32,17 @@ pub async fn start_server() {
 
 /// Health check handler
 pub async fn health_check() -> impl IntoResponse {
+    // Calculate uptime in seconds since server started
+    let uptime_secs = START_TIME
+        .get()
+        .map(|start| start.elapsed().as_secs())
+        .unwrap_or(0);
+
     let health = HealthCheckResponse {
         status: "OK".to_string(),
         service: "BlazeDB".to_string(),
-        uptime: 3000,
+        uptime: uptime_secs,
     };
 
     (StatusCode::OK, Json(health))
-}
-
-/// Handler that accepts JSON body via DTO
-pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl IntoResponse {
-    // Access the DTO fields
-    let db_id = format!("db_{}", Uuid::new_v4());
-
-    let response = CreateDatabaseResponse {
-        id: db_id,
-        name: payload.name,
-    };
-
-    (StatusCode::CREATED, Json(response))
 }
