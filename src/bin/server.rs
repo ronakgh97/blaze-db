@@ -1,7 +1,14 @@
-use blaze_db::prelude;
+use anyhow::Result;
+use blaze_db::prelude::*;
+use clap::Parser;
 
 #[tokio::main]
-async fn main() {
-    println!("Starting Blaze-DB HTTP Server...");
-    prelude::start_server().await;
+async fn main() -> Result<()> {
+    let args = ServerArgs::parse();
+    match args.command {
+        None => {}
+        Some(_) => {}
+    }
+
+    Ok(())
 }
