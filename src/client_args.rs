@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -26,11 +25,15 @@ pub enum ClientCommands {
     New {
         /// Path to the new data source directory
         #[arg(short, long)]
-        path: PathBuf,
+        name: String,
     },
 
     /// Create a new Blaze-DB database
     Create {
+        /// Source data path for the database
+        #[arg(short, long)]
+        source: String,
+
         /// Name of the new database
         #[arg(short, long)]
         name: String,
@@ -41,9 +44,9 @@ pub enum ClientCommands {
     },
 
     /// List existing Blaze-DB databases
-    List {
-        /// List all local Blaze-DB databases
+    Ls {
+        /// Source data path to filter databases
         #[arg(short, long)]
-        db: Option<bool>,
+        source: Option<String>,
     },
 }

@@ -1,6 +1,5 @@
-#[allow(unused)]
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+
 #[derive(Parser)]
 #[command(
     name = "blaze_db",
@@ -12,7 +11,6 @@ pub struct ServerArgs {
     #[command(subcommand)]
     pub command: Option<ServerCommands>,
 }
-
 #[derive(Subcommand)]
 pub enum ServerCommands {
     /// Start the server
@@ -23,6 +21,6 @@ pub enum ServerCommands {
 
         /// Use specified database path
         #[arg(short, long)]
-        source: PathBuf,
+        source: String,
     },
 }
