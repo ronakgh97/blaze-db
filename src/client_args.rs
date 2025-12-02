@@ -1,39 +1,32 @@
-#[allow(unused)]
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+
 #[derive(Parser)]
 #[command(
-    name = "blaze-db",
+    name = "blaze_db",
     version = "1.0.0-beta",
     about = "Blaze-DB: A high-performance vector database for embeddings",
     long_about = "A CLI client for managing Blaze-DB vector databases"
 )]
-pub struct Args {
+pub struct ClientArgs {
     #[command(subcommand)]
-    pub command: Option<Commands>,
+    pub command: Option<ClientCommands>,
 }
 
 #[derive(Subcommand)]
-pub enum Commands {
-    /// Initialize a new Blaze-DB repository
+pub enum ClientCommands {
+    /// Initialize dotfiles and source dirs for Blaze-DB
     Init {
-        /// Initialize local Blaze-DB database at specified path
+        /// Attempt to fix existing source_path issues
         #[arg(short, long)]
-        path: Option<PathBuf>,
+        fix: bool,
     },
 
-    /// Start the Blaze-DB server
-    Serve {
-        /// Port to run the server on (default: 8001)
+    /// Initialize a new Data source
+    New {
+        /// Path to the new data source directory
         #[arg(short, long)]
-        port: Option<u16>,
-    },
-
-    /// List existing Blaze-DB databases
-    List {
-        /// List all local Blaze-DB databases
-        #[arg(short, long)]
-        db: Option<bool>,
+        path: PathBuf,
     },
 
     /// Create a new Blaze-DB database
@@ -45,5 +38,12 @@ pub enum Commands {
         /// Number of dimensions for the database embeddings
         #[arg(short, long)]
         dimensions: usize,
+    },
+
+    /// List existing Blaze-DB databases
+    List {
+        /// List all local Blaze-DB databases
+        #[arg(short, long)]
+        db: Option<bool>,
     },
 }
