@@ -2,17 +2,18 @@
 name = "blaze-db"
 version = "0.1.0"
 edition = "2024"
+autobins = false
 
 [lib]
 name = "blaze_db"
 path = "src/lib.rs"
 
 [[bin]]
-name = "blaze-c"
+name = "blaze-db"
 path = "src/bin/client.rs"
 
 [[bin]]
-name = "blaze-s"
+name = "blaze-server"
 path = "src/bin/server.rs"
 
 [[bench]]
