@@ -1,3 +1,5 @@
+use crate::info;
+use crate::prelude::log;
 use crate::server::HealthCheckResponse;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -23,7 +25,7 @@ pub async fn start_server() {
         .await
         .unwrap();
 
-    println!("Server starting on http://127.0.0.1:8001");
+    info!("Server is running on http://127.0.0.1:8001");
 
     axum::serve(listener, app)
         .await
@@ -41,8 +43,10 @@ pub async fn health_check() -> impl IntoResponse {
     let health = HealthCheckResponse {
         status: "OK".to_string(),
         service: "BlazeDB".to_string(),
-        uptime: uptime_secs,
+        uptime_hrs: uptime_secs / 3600,
     };
+
+    info!("health check ok, uptime: {}hr", uptime_secs / 3600);
 
     (StatusCode::OK, Json(health))
 }
