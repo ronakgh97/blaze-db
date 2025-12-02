@@ -9,15 +9,19 @@ async fn main() -> Result<()> {
         Some(ClientCommands::Init { .. }) => {
             init_run().await?;
         }
-        Some(ClientCommands::New { path }) => {
-            new_run(path).await?;
+        Some(ClientCommands::New { name }) => {
+            new_run(name).await?;
         }
 
-        Some(ClientCommands::Create { name, dimensions }) => {
-            create_run(name, dimensions).await?;
+        Some(ClientCommands::Create { .. }) => {
+            todo!()
         }
-        Some(ClientCommands::List { .. }) => {}
-        None => todo!(),
+        Some(ClientCommands::Ls { source }) => {
+            list_run(source).await?;
+        }
+        None => {
+            print_ascii().await;
+        }
     }
 
     Ok(())
