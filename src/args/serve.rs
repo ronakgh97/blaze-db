@@ -1,10 +1,20 @@
+use crate::prelude::log;
+use crate::core::check_source_valid;
 use crate::server::start_server;
 use anyhow::Result;
+use crate::{error, info};
 
-pub async fn serve_run() -> Result<()> {
+pub async fn serve_run(port: Option<u16>, source: &String) -> Result<()> {
     println!("Starting the Server...");
 
-    start_server().await;
+    let port = port.unwrap_or(8001);
 
-    Ok(())
+    if check_source_valid(&source).await? {
+        info!("Source: {} is valid", &source);
+        start_server(port, source.clone()).await;
+        Ok(())
+    } else {
+        error!("Source: {} is not valid", &source);
+        Ok(())
+    }
 }
