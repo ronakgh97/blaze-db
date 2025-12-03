@@ -1,3 +1,4 @@
+use crate::core::load_config;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -39,4 +40,16 @@ pub fn get_source_path() -> Result<PathBuf> {
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
     let source_path = home_dir.join(".blaze").join("sources");
     Ok(source_path)
+}
+
+pub async fn check_source_valid(source_name: &String) -> Result<bool> {
+    let source_path = get_source_path()?.join(&source_name);
+    let source_list = load_config().await?.data_source.source_name;
+
+    if let Some(sources) = source_list {
+        if sources.contains(&source_name) && source_path.exists() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
