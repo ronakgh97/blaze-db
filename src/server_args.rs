@@ -20,7 +20,7 @@ pub enum ServerCommands {
         port: Option<u16>,
 
         /// Use specified database path
-        #[arg(short, long)]
+        #[arg(short, long, required = true)]
         source: String,
     },
 }
