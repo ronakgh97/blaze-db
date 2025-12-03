@@ -13,8 +13,12 @@ async fn main() -> Result<()> {
             new_run(name).await?;
         }
 
-        Some(ClientCommands::Create { .. }) => {
-            todo!()
+        Some(ClientCommands::Create {
+            source: _,
+            name,
+            dimensions,
+        }) => {
+            create_run(name, dimensions).await?;
         }
         Some(ClientCommands::Ls { source }) => {
             list_run(source).await?;
