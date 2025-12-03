@@ -1,7 +1,6 @@
 mod controller;
 mod dto;
+mod service;
 
-#[allow(unused_imports)]
+pub use controller::{get_active_source, start_server};
 pub(crate) use dto::{CreateDatabaseRequest, CreateDatabaseResponse, HealthCheckResponse};
-
-pub use controller::start_server;
