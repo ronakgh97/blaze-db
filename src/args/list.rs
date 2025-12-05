@@ -1,12 +1,14 @@
 use crate::core::load_config;
+use crate::server::list_databases;
 use anyhow::Result;
 
 pub async fn list_run(source: Option<String>) -> Result<()> {
     println!("Listing all managed source dirs...");
 
     let config = load_config().await?;
-
     let source_list = config.data_source.source_name;
+
+    let _ = list_databases(source.clone()).await?;
 
     match source {
         Some(src) => {
