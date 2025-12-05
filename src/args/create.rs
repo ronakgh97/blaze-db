@@ -1,4 +1,4 @@
-use crate::server::CreateDatabaseRequest;
+use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse};
 use anyhow::Result;
 
 pub async fn create_run(name: String, dimensions: usize) -> Result<()> {
@@ -13,8 +13,8 @@ pub async fn create_run(name: String, dimensions: usize) -> Result<()> {
         .await?;
 
     if response.status().is_success() {
-        let resp_json: serde_json::Value = response.json().await?;
-        println!("Database created successfully with ID: {}", resp_json["id"]);
+        let resp_json: CreateDatabaseResponse = response.json().await?;
+        println!("Database created successfully with ID: {}", resp_json.id);
     } else {
         println!("Failed to create database. Status: {}", response.status());
     }
