@@ -1,28 +1,23 @@
 # Blaze-DB
 
-Blaze-DB is a high-performance vector database written in Rust, designed for efficient storage and retrieval of vector
+Blaze-DB is a high-performance vector database written in Rust, designed for efficient storage and fast retrieval of vector
 embeddings.
 
 ## Current State
 
-- Reads text data from a specified file.
-- Chunks the data into smaller batches (configurable batch sizes).
-- Generates vector embeddings for each batch using Ollama API.
-- Stores the generated embeddings on disk in binary format for optimal performance.
-- Fast parallel loading of embeddings from disk using memory-mapped files.
-- **Semantic similarity search with multiple distance metrics** (Cosine, Euclidean, Dot Product).
-- Top-K result retrieval with ranked scoring.
+- Two binaries: `blaze-server` and `blaze-client`, for server and client operations respectively.
+- Uses Ollama API for generating vector embeddings.
+- Batch/Chunks processing for embedding generation.
+- Stores embeddings on disk in binary format.
+- Use memory-mapped files for fast loading of embeddings, rayon for parallel processing.
+- Uses semantic similarity search with multiple distance metrics (Cosine, Euclidean, Dot Product).
 - Async/await architecture for non-blocking operations.
-- Parallel processing with Rayon for compute-intensive operations.
 - Performance benchmarking suite (~3.7ms per search on War and Peace dataset).
-- CLI for server and client for talking to http database server.
 
 ### DEMO
 
 ```shell
-Chunk: There is no Peace without War,
-Wars should be celebrated,
-Because it is the win against the evil.
+Chunk: There is no Peace without War, Wars should be celebrated, Because it is the win against the evil.
 Embedding (First 3): [0.04979933, -0.06230091, -0.009091219]
 Found 102 binary files to load...
 
@@ -53,12 +48,11 @@ Search took: 84.1797ms for 51788 vectors
 ## Roadmap
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance.
-- Product quantization for memory optimization.
-- HTTP API server for remote database access.
+- Complete HTTP API server for remote database access.
 - Query filtering and metadata support.
-- CLI client for database management.
 - Incremental updates without full reindex.
 - Distributed storage and sharding support.
+- Cloud deployment options.
 
 ## Contributing
 
