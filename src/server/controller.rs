@@ -1,7 +1,10 @@
 use crate::prelude::log;
-use crate::server::service::create_new_database;
-use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse, HealthCheckResponse};
+use crate::server::service::{create_new_database, embed_run};
+use crate::server::{
+    CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse, HealthCheckResponse,
+};
 use crate::{error, info};
+use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -16,6 +19,8 @@ async fn create_router() -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/create", post(create_database))
+        .route("/embed", post(new_embeddings))
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
 }
 
 pub async fn start_server(port: u16, source: String) {
@@ -65,6 +70,25 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
                 Json(CreateDatabaseResponse {
                     id: "null".to_string(),
                     name: "null".to_string(),
+                }),
+            )
+        }
+    }
+}
+
+pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoResponse {
+    match embed_run(payload.clone()).await {
+        Ok(response) => (StatusCode::OK, Json(response)),
+        Err(_) => {
+            error!(
+                "Could not embed data into database: {}",
+                payload.database.clone()
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(EmbedResponse {
+                    database: "null".to_string(),
+                    total_lines: 0,
                 }),
             )
         }
