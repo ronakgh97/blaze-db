@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct HealthCheckResponse {
     pub status: String,
     pub service: String,
-    pub uptime_hrs: u64,
+    pub uptime_hrs: f32,
 }
 
 /// Request DTO for database creation
@@ -20,6 +20,8 @@ pub struct CreateDatabaseRequest {
 pub struct CreateDatabaseResponse {
     pub id: String,
     pub name: String,
+    pub source: String,
+    pub created_at: String,
 }
 
 /// Request DTO for embedding data

@@ -46,16 +46,18 @@ pub async fn health_check() -> impl IntoResponse {
     // Calculate uptime in seconds since server started
     let uptime_secs = START_TIME
         .get()
-        .map(|start| start.elapsed().as_secs())
-        .unwrap_or(0);
+        .map(|start| start.elapsed().as_secs_f32())
+        .unwrap_or(0.0);
+
+    let uptime_hrs = (uptime_secs / 3600.0 * 10_000.0).round() / 10_000.0;
 
     let health = HealthCheckResponse {
         status: "OK".to_string(),
         service: "BlazeDB".to_string(),
-        uptime_hrs: uptime_secs / 3600,
+        uptime_hrs,
     };
 
-    info!("health check ok, uptime: {}hr", uptime_secs / 3600);
+    info!("health check ok, uptime: {}hr", uptime_hrs);
 
     (StatusCode::OK, Json(health))
 }
@@ -70,6 +72,8 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
                 Json(CreateDatabaseResponse {
                     id: "null".to_string(),
                     name: "null".to_string(),
+                    source: "null".to_string(),
+                    created_at: "null".to_string(),
                 }),
             )
         }
