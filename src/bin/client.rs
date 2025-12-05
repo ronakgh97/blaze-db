@@ -20,10 +20,12 @@ async fn main() -> Result<()> {
             create_run(name, dimensions).await?; // source is unused in this context
         }
         Some(ClientCommands::Embed {
-            file: _,
-            database: _,
-            batch: _,
-        }) => {}
+            file,
+            database,
+            batch,
+        }) => {
+            embed_run(file, database, batch).await?;
+        }
         Some(ClientCommands::Ls { source }) => {
             list_run(source).await?;
         }
