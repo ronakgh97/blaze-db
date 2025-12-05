@@ -23,13 +23,17 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     Ok(CreateDatabaseResponse {
         id: database_id,
         name,
+        source: active_source.to_string(),
+        created_at: timestamp,
     })
 }
 
-#[allow(unused)]
 /// List all databases from specified source directory.
 /// If no source is provided, return all sources with respective databases.
-pub async fn list_databases(source: Option<String>) -> Result<Vec<String>> {
+/// Return format: Vec of (name,id,source_from,timestamp)
+pub async fn list_databases(
+    source: Option<String>,
+) -> Result<Vec<(String, String, String, String)>> {
     let config = load_config().await?;
     let source_path = get_source_path()?;
 
@@ -51,8 +55,8 @@ pub async fn list_databases(source: Option<String>) -> Result<Vec<String>> {
 
         while let Some(entry) = read_dir.next_entry().await? {
             let file_name = entry.file_name().into_string().unwrap_or_default();
-            if parse_database_name(&file_name).is_some() {
-                databases.push(format!("{}:{}", source_name, file_name));
+            if let Some((name, id, _dimensions, timestamp)) = parse_database_name(&file_name) {
+                databases.push((name, id, source_name.clone(), timestamp));
             }
         }
     }
