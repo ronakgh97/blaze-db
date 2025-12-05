@@ -1,7 +1,7 @@
-use crate::{error, info};
 use crate::prelude::log;
 use crate::server::service::create_new_database;
 use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse, HealthCheckResponse};
+use crate::{error, info};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};

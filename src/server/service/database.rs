@@ -2,7 +2,7 @@ use crate::core::get_source_path;
 use crate::server::get_active_source;
 use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse};
 use anyhow::Result;
-use chrono::{Utc};
+use chrono::Utc;
 use uuid::Uuid;
 
 pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<CreateDatabaseResponse> {

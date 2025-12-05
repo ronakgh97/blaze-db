@@ -1,8 +1,8 @@
-use crate::prelude::log;
 use crate::core::check_source_valid;
+use crate::prelude::log;
 use crate::server::start_server;
-use anyhow::Result;
 use crate::{error, info};
+use anyhow::Result;
 
 pub async fn serve_run(port: Option<u16>, source: &String) -> Result<()> {
     println!("Starting the Server...");
