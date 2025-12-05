@@ -44,6 +44,7 @@ pub enum ClientCommands {
         dimensions: usize,
     },
 
+    /// Embed data into an existing Blaze-DB database
     Embed {
         /// Path to the file containing data to embed
         #[arg(short, long)]

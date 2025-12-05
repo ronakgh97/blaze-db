@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
             name,
             dimensions,
         }) => {
-            create_run(name, dimensions).await?; // source is unused in this context
+            create_run(name, dimensions).await?; // source is unused (will be used in server uses multiple sources)
         }
         Some(ClientCommands::Embed {
             file,
