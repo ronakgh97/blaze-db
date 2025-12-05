@@ -14,7 +14,7 @@ pub mod prelude {
         Config, Metrics, SearchQuery, SearchResult, Source, check_source_valid, get_source_path,
         load_config, save_config,
     };
-    pub use crate::server::{get_active_source, start_server};
+    pub use crate::server::{get_active_source, list_databases, start_server};
     pub use crate::server_args::{ServerArgs, ServerCommands};
     pub use crate::utils::{EmbeddingStore, Ingestor, Provider, VectorData, log};
 }
