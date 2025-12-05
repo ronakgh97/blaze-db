@@ -12,14 +12,18 @@ async fn main() -> Result<()> {
         Some(ClientCommands::New { name }) => {
             new_run(name).await?;
         }
-
         Some(ClientCommands::Create {
             source: _,
             name,
             dimensions,
         }) => {
-            create_run(name, dimensions).await?;
+            create_run(name, dimensions).await?; // source is unused in this context
         }
+        Some(ClientCommands::Embed {
+            file: _,
+            database: _,
+            batch: _,
+        }) => {}
         Some(ClientCommands::Ls { source }) => {
             list_run(source).await?;
         }

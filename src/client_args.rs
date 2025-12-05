@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -41,6 +42,20 @@ pub enum ClientCommands {
         /// Number of dimensions for the database embeddings
         #[arg(short, long)]
         dimensions: usize,
+    },
+
+    Embed {
+        /// Path to the file containing data to embed
+        #[arg(short, long)]
+        file: PathBuf,
+
+        /// Name of the target database to embed data into
+        #[arg(short, long)]
+        database: String,
+
+        /// Optional batch size for embedding processing
+        #[arg(short, long)]
+        batch: Option<usize>,
     },
 
     /// List existing Blaze-DB databases
