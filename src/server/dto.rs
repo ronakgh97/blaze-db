@@ -8,7 +8,6 @@ pub struct HealthCheckResponse {
     pub uptime_hrs: u64,
 }
 
-#[allow(unused)]
 /// Request DTO for database creation
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CreateDatabaseRequest {
@@ -16,10 +15,24 @@ pub struct CreateDatabaseRequest {
     pub dimensions: usize,
 }
 
-#[allow(unused)]
 /// Response DTO for database creation
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CreateDatabaseResponse {
     pub id: String,
     pub name: String,
+}
+
+/// Request DTO for embedding data
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EmbedRequest {
+    pub file_content: Vec<Vec<String>>,
+    pub database: String,
+    pub batch: usize,
+}
+
+/// Response DTO for embedding data
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EmbedResponse {
+    pub database: String,
+    pub total_lines: usize,
 }
