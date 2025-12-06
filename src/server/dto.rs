@@ -24,6 +24,12 @@ pub struct CreateDatabaseResponse {
     pub created_at: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ListDatabasesResponse {
+    pub from_sources: String,
+    pub databases: Vec<String>,
+}
+
 /// Request DTO for embedding data
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EmbedRequest {
