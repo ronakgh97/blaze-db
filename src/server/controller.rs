@@ -1,7 +1,8 @@
 use crate::prelude::log;
-use crate::server::service::{create_new_database, embed_run};
+use crate::server::service::{create_new_database, embed_run, list_databases};
 use crate::server::{
-    CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse, HealthCheckResponse,
+    CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
+    HealthCheckResponse, ListDatabasesResponse,
 };
 use crate::{error, info};
 use axum::extract::DefaultBodyLimit;
@@ -20,6 +21,7 @@ async fn create_router() -> Router {
         .route("/health", get(health_check))
         .route("/create", post(create_database))
         .route("/embed", post(new_embeddings))
+        .route("/databases", get(get_databases))
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
 }
 
@@ -94,6 +96,22 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
                     database: "null".to_string(),
                     total_lines: 0,
                 }),
+            )
+        }
+    }
+}
+
+pub async fn get_databases() -> impl IntoResponse {
+    match list_databases().await {
+        Ok(response) => (StatusCode::OK, Json(response)),
+        Err(_) => {
+            error!("Could not list databases");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(vec![ListDatabasesResponse {
+                    from_sources: "null".to_string(),
+                    databases: vec![],
+                }]),
             )
         }
     }

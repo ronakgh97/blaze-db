@@ -1,6 +1,6 @@
 use crate::core::{get_source_path, load_config};
-use crate::server::get_active_source;
 use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse};
+use crate::server::{ListDatabasesResponse, get_active_source};
 use anyhow::Result;
 use chrono::Utc;
 use std::path::PathBuf;
@@ -28,40 +28,36 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     })
 }
 
-/// List all databases from specified source directory.
-/// If no source is provided, return all sources with respective databases.
-/// Return format: Vec of (name,id,source_from,timestamp)
-pub async fn list_databases(
-    source: Option<String>,
-) -> Result<Vec<(String, String, String, String)>> {
+/// List all databases from all source directories.
+pub async fn list_databases() -> Result<Vec<ListDatabasesResponse>> {
     let config = load_config().await?;
-    let source_path = get_source_path()?;
+    let base_path = get_source_path()?;
+    let sources = config.data_source.source_name.unwrap_or_default();
 
-    let sources_to_scan: Vec<String> = match source {
-        Some(s) => vec![s],
-        None => config.data_source.source_name.unwrap_or_default(),
-    };
+    let mut result = Vec::new();
 
-    let mut databases = Vec::new();
-
-    for source_name in sources_to_scan {
-        let dir_path = source_path.join(&source_name);
-
-        if !dir_path.exists() {
+    for source in sources {
+        let dir = base_path.join(&source);
+        if !dir.exists() {
             continue;
         }
 
-        let mut read_dir = tokio::fs::read_dir(&dir_path).await?;
-
-        while let Some(entry) = read_dir.next_entry().await? {
-            let file_name = entry.file_name().into_string().unwrap_or_default();
-            if let Some((name, id, _dimensions, timestamp)) = parse_database_name(&file_name) {
-                databases.push((name, id, source_name.clone(), timestamp));
+        let mut databases = Vec::new();
+        let mut entries = tokio::fs::read_dir(&dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if parse_database_name(&name).is_some() {
+                databases.push(name);
             }
         }
+
+        result.push(ListDatabasesResponse {
+            from_sources: source,
+            databases,
+        });
     }
 
-    Ok(databases)
+    Ok(result)
 }
 
 /// Search for a database by name in the active source directory.
