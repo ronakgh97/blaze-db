@@ -1,38 +1,27 @@
-use crate::core::load_config;
-use crate::server::list_databases;
+use crate::server::ListDatabasesResponse;
 use anyhow::Result;
 
 pub async fn list_run(source: Option<String>) -> Result<()> {
-    println!("Listing all managed source dirs...");
+    println!("Listing all source dirs...");
 
-    let config = load_config().await?;
-    let source_list = config.data_source.source_name;
+    let response = reqwest::Client::new()
+        .get("http://127.0.0.1:8001/databases")
+        .send()
+        .await?;
 
-    let _ = list_databases(source.clone()).await?;
-
-    match source {
-        Some(src) => {
-            if let Some(sources) = source_list {
-                if sources.contains(&src) {
-                    println!("Source '{}' is present.", src);
-                } else {
-                    println!("Source '{}' is not present.", src);
-                }
-            } else {
-                println!("No sources are currently present.");
+    if response.status().is_success() {
+        let databases: Vec<ListDatabasesResponse> = response.json().await?;
+        match source {
+            Some(src) => {
+                let get_source = databases.into_iter().find(|db| db.from_sources == src);
+                println!("Source: {:?}", get_source);
+            }
+            None => {
+                println!(" All Sources: {:?}", databases)
             }
         }
-        None => {
-            if let Some(sources) = source_list {
-                println!("Available sources:");
-                for src in sources {
-                    println!("- {}", src);
-                }
-            } else {
-                println!("No sources are currently present.");
-            }
-        }
+    } else {
+        println!("Failed to list databases. Status: {}", response.status());
     }
-
     Ok(())
 }
