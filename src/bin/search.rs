@@ -2,15 +2,14 @@ use blaze_db::prelude::*;
 use tokio::time::Instant;
 #[tokio::main]
 pub async fn main() {
-    let sample_text = "There is no Peace without War,\nWars should be celebrated,\nBecause it is the win against the evil.";
-    let chunks = vec![sample_text.to_string()];
+    let sample_text = String::from("There is no Peace without War, Wars should be celebrated, Because it is the win against the evil.");
 
     let provider = Provider::new(
         "http://localhost:1234/v1/embeddings",
         "text-embedding-qwen3-embedding-0.6b",
     );
 
-    match provider.fetch_embeddings(&chunks).await {
+    match provider.fetch_embedding(&sample_text).await {
         Ok(embeddings) => {
             for embedding in embeddings.data.clone() {
                 println!("Chunk: {}", &embedding.chunk);
