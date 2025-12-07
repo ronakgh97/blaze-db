@@ -44,3 +44,14 @@ pub struct EmbedResponse {
     pub database: String,
     pub total_lines: usize,
 }
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct QueryRequest {
+    pub query: String,
+    pub database: String,
+    pub top_k: usize,
+}
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct QueryResponse {
+    pub chunk: String,
+    pub score: f32,
+}

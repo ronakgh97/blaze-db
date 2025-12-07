@@ -1,8 +1,8 @@
 use crate::prelude::log;
-use crate::server::service::{create_new_database, embed_run, list_databases};
+use crate::server::service::{create_new_database, embed_run, list_databases, query_search};
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
-    HealthCheckResponse, ListDatabasesResponse,
+    HealthCheckResponse, ListDatabasesResponse, QueryRequest,
 };
 use crate::{error, info};
 use axum::extract::DefaultBodyLimit;
@@ -22,6 +22,7 @@ async fn create_router() -> Router {
         .route("/create", post(create_database))
         .route("/embed", post(new_embeddings))
         .route("/databases", get(get_databases))
+        .route("/query", post(search_query))
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
 }
 
@@ -113,6 +114,19 @@ pub async fn get_databases() -> impl IntoResponse {
                     databases: vec![],
                 }]),
             )
+        }
+    }
+}
+
+pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoResponse {
+    match query_search(payload.clone()).await {
+        Ok(response) => (StatusCode::OK, Json(response)),
+        Err(_) => {
+            error!(
+                "Could not perform query on database: {}",
+                payload.database.clone()
+            );
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(vec![]))
         }
     }
 }
