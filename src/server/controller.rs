@@ -68,10 +68,24 @@ pub async fn health_check() -> impl IntoResponse {
 }
 
 pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /create] Request to create database: '{}' with {} dimensions",
+        payload.name, payload.dimensions
+    );
+
     match create_new_database(payload.clone()).await {
-        Ok(response) => (StatusCode::OK, Json(response)),
+        Ok(response) => {
+            info!(
+                "[POST /create] Database '{}' created successfully with ID: {}",
+                response.name, response.id
+            );
+            (StatusCode::OK, Json(response))
+        }
         Err(_) => {
-            error!("Could not create database: {}", payload.name.clone());
+            error!(
+                "[POST /create] Failed to create database: {}",
+                payload.name.clone()
+            );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(CreateDatabaseResponse {
@@ -86,11 +100,23 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
 }
 
 pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoResponse {
+    let total_chunks: usize = payload.file_content.iter().map(|batch| batch.len()).sum();
+    info!(
+        "[POST /embed] Request to embed {} chunks into database '{}' with batch size {}",
+        total_chunks, payload.database, payload.batch
+    );
+
     match embed_run(payload.clone()).await {
-        Ok(response) => (StatusCode::OK, Json(response)),
+        Ok(response) => {
+            info!(
+                "[POST /embed] Successfully embedded {} lines into database '{}'",
+                response.total_lines, response.database
+            );
+            (StatusCode::OK, Json(response))
+        }
         Err(_) => {
             error!(
-                "Could not embed data into database: {}",
+                "[POST /embed] Failed to embed data into database: {}",
                 payload.database.clone()
             );
             (
@@ -105,10 +131,20 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
 }
 
 pub async fn get_databases() -> impl IntoResponse {
+    info!("[GET /databases] Request to list all databases");
+
     match list_databases().await {
-        Ok(response) => (StatusCode::OK, Json(response)),
+        Ok(response) => {
+            let total_dbs: usize = response.iter().map(|r| r.databases.len()).sum();
+            info!(
+                "[GET /databases] Found {} databases across {} sources",
+                total_dbs,
+                response.len()
+            );
+            (StatusCode::OK, Json(response))
+        }
         Err(_) => {
-            error!("Could not list databases");
+            error!("[GET /databases] Failed to list databases");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(vec![ListDatabasesResponse {
@@ -121,11 +157,22 @@ pub async fn get_databases() -> impl IntoResponse {
 }
 
 pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /query] Query request on database '{}': '{}' (top_k={})",
+        payload.database, payload.query, payload.top_k
+    );
+
     match query_search(payload.clone()).await {
-        Ok(response) => (StatusCode::OK, Json(response)),
+        Ok(response) => {
+            info!(
+                "[POST /query] Query successful, returning {} results",
+                response.len()
+            );
+            (StatusCode::OK, Json(response))
+        }
         Err(_) => {
             error!(
-                "Could not perform query on database: {}",
+                "[POST /query] Query failed on database: {}",
                 payload.database.clone()
             );
             (StatusCode::INTERNAL_SERVER_ERROR, Json(vec![]))

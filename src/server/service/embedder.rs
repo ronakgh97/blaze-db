@@ -69,6 +69,7 @@ pub async fn embed_run(request: EmbedRequest) -> Result<EmbedResponse> {
 
 /// Read embeddings from the specified database
 pub async fn read_embeddings_from_database(database: String) -> Result<VectorData> {
+    info!("Reading embeddings from database '{}'", database);
     let database_path = match search_database(database.clone()).await {
         Ok(path) => path,
         Err(_e) => {
@@ -77,7 +78,12 @@ pub async fn read_embeddings_from_database(database: String) -> Result<VectorDat
         }
     };
 
+    info!("Loading binary embeddings from: {:?}", database_path);
     let embedding_store = EmbeddingStore::read_binary(database_path.to_str().unwrap()).await?;
+    info!(
+        "Successfully loaded {} vectors",
+        embedding_store.total_vectors
+    );
 
     Ok(embedding_store)
 }
