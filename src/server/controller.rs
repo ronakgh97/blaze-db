@@ -27,7 +27,7 @@ async fn create_router() -> Router {
 }
 
 pub async fn start_server(port: u16, source: String) {
-    START_TIME.get_or_init(|| Instant::now());
+    START_TIME.get_or_init(Instant::now);
     ACTIVE_SOURCE.get_or_init(|| source.clone());
 
     info!("Server is running on http://127.0.0.1:{}", port);
@@ -44,23 +44,25 @@ pub fn get_active_source() -> Option<&'static str> {
     ACTIVE_SOURCE.get().map(|s| s.as_str())
 }
 
-/// Health check handler
-pub async fn health_check() -> impl IntoResponse {
-    // Calculate uptime in seconds since server started
+/// Get the server uptime in hours
+pub fn get_uptime_hrs() -> f32 {
     let uptime_secs = START_TIME
         .get()
         .map(|start| start.elapsed().as_secs_f32())
         .unwrap_or(0.0);
 
-    let uptime_hrs = (uptime_secs / 3600.0 * 10_000.0).round() / 10_000.0;
+    (uptime_secs / 3600.0 * 10_000.0).round() / 10_000.0
+}
 
+/// Health check handler
+pub async fn health_check() -> impl IntoResponse {
     let health = HealthCheckResponse {
         status: "OK".to_string(),
         service: "BlazeDB".to_string(),
-        uptime_hrs,
+        uptime_hrs: get_uptime_hrs(),
     };
 
-    info!("health check ok, uptime: {}hr", uptime_hrs);
+    info!("health check ok, uptime: {}hr", get_uptime_hrs());
 
     (StatusCode::OK, Json(health))
 }
