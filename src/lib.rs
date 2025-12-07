@@ -7,7 +7,7 @@ pub mod utils;
 
 pub mod prelude {
     pub use crate::args::{
-        create_run, embed_run, init_run, list_run, new_run, print_ascii, serve_run,
+        create_run, embed_run, init_run, list_run, new_run, print_ascii, query_run, serve_run,
     };
     pub use crate::client_args::{ClientArgs, ClientCommands};
     pub use crate::core::{
