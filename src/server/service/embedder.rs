@@ -9,7 +9,7 @@ pub async fn embed_run(request: EmbedRequest) -> Result<EmbedResponse> {
     let database_name = request.database.clone();
 
     // Locate the database directory
-    let database_path = match { search_database(database_name.clone()).await } {
+    let database_path = match search_database(database_name.clone()).await {
         Ok(path) => path,
         Err(_e) => {
             error!("Database '{}' not found", database_name);
@@ -69,7 +69,7 @@ pub async fn embed_run(request: EmbedRequest) -> Result<EmbedResponse> {
 
 /// Read embeddings from the specified database
 pub async fn read_embeddings_from_database(database: String) -> Result<VectorData> {
-    let database_path = match { search_database(database.clone()).await } {
+    let database_path = match search_database(database.clone()).await {
         Ok(path) => path,
         Err(_e) => {
             error!("Database '{}' not found", database);

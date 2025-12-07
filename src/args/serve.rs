@@ -9,7 +9,7 @@ pub async fn serve_run(port: Option<u16>, source: &String) -> Result<()> {
 
     let port = port.unwrap_or(8001);
 
-    if check_source_valid(&source).await? {
+    if check_source_valid(source).await? {
         info!("Source: {} is valid", &source);
         start_server(port, source.clone()).await;
         Ok(())

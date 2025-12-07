@@ -20,7 +20,7 @@ pub async fn query_search(request: QueryRequest) -> Result<Vec<QueryResponse>> {
         .fetch_embedding(query.as_str())
         .await?
         .data
-        .get(0)
+        .first()
         .unwrap()
         .embedding
         .clone();

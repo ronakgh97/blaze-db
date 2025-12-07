@@ -4,15 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::fs;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Source {
     pub source_name: Option<Vec<String>>,
-}
-
-impl Default for Source {
-    fn default() -> Self {
-        Self { source_name: None }
-    }
 }
 
 impl Source {
@@ -43,13 +37,14 @@ pub fn get_source_path() -> Result<PathBuf> {
 }
 
 pub async fn check_source_valid(source_name: &String) -> Result<bool> {
-    let source_path = get_source_path()?.join(&source_name);
+    let source_path = get_source_path()?.join(source_name);
     let source_list = load_config().await?.data_source.source_name;
 
-    if let Some(sources) = source_list {
-        if sources.contains(&source_name) && source_path.exists() {
-            return Ok(true);
-        }
+    if let Some(sources) = source_list
+        && sources.contains(source_name)
+        && source_path.exists()
+    {
+        return Ok(true);
     }
     Ok(false)
 }

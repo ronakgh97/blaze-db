@@ -70,10 +70,10 @@ pub async fn search_database(name: String) -> Result<PathBuf> {
 
     while let Some(entry) = read_dir.next_entry().await? {
         let file_name = entry.file_name().into_string().unwrap_or_default();
-        if let Some((db_name, _, _, _)) = parse_database_name(&file_name) {
-            if db_name == name {
-                return Ok(entry.path());
-            }
+        if let Some((db_name, _, _, _)) = parse_database_name(&file_name)
+            && db_name == name
+        {
+            return Ok(entry.path());
         }
     }
 
