@@ -26,6 +26,13 @@ async fn main() -> Result<()> {
         }) => {
             embed_run(file, database, batch).await?;
         }
+        Some(ClientCommands::Query {
+            database,
+            search,
+            top_k,
+        }) => {
+            query_run(database, search, top_k).await?;
+        }
         Some(ClientCommands::Ls { source }) => {
             list_run(source).await?;
         }

@@ -17,7 +17,7 @@ pub enum ServerCommands {
     Serve {
         /// Optional port to run the server on
         #[arg(short, long)]
-        port: Option<u16>,
+        port: Option<u16>, // TODO: Client does not use this port arg yet
 
         /// Use specified database path
         #[arg(short, long, required = true)]

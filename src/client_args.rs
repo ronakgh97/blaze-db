@@ -59,6 +59,20 @@ pub enum ClientCommands {
         batch: Option<usize>,
     },
 
+    Query {
+        /// Name of the database to query
+        #[arg(short, long)]
+        database: String,
+
+        /// The query text to search for similar embeddings
+        #[arg(short, long)]
+        search: String,
+
+        /// Number of top similar results to return
+        #[arg(short, long, default_value_t = 5)]
+        top_k: usize,
+    },
+
     /// List existing Blaze-DB databases
     Ls {
         /// Source data path to filter databases
