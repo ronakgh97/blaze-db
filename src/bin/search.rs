@@ -2,7 +2,7 @@ use blaze_db::prelude::*;
 use tokio::time::Instant;
 #[tokio::main]
 pub async fn main() {
-    let sample_text = String::from("There is no Peace without War, Wars should be celebrated, Because it is the win against the evil.");
+    let sample_text = String::from("Who fought?");
 
     let provider = Provider::new(
         "http://localhost:1234/v1/embeddings",
@@ -17,13 +17,15 @@ pub async fn main() {
             }
 
             let start = Instant::now();
-
             let vector_data = EmbeddingStore::read_binary("./embeddings").await.unwrap();
+            let io_duration = start.elapsed();
 
+            let search_start = Instant::now();
             let search_query =
                 SearchQuery::new(5, embeddings.data[0].embedding.clone(), Metrics::Cosine);
 
             let result = search_query.search(&vector_data);
+            let search_duration = search_start.elapsed();
 
             println!("\nTop {} similar chunks:", search_query.top_k);
             for (i, item) in result.iter().enumerate() {
@@ -32,11 +34,16 @@ pub async fn main() {
                 println!("Score: {:.4}", item.score);
             }
 
-            let duration = start.elapsed();
+            let total_duration = start.elapsed();
+            println!(
+                "\nI/O took: {:?} for {} vectors",
+                io_duration, vector_data.total_vectors
+            );
             println!(
                 "Search took: {:?} for {} vectors",
-                duration, vector_data.total_vectors
+                search_duration, vector_data.total_vectors
             );
+            println!("Total took: {:?}", total_duration);
         }
         Err(e) => {
             eprintln!("Error fetching embeddings: {}", e);

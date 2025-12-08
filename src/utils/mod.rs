@@ -1,6 +1,6 @@
 mod embedder;
 mod ingestor;
-mod log;
+pub mod log;
 mod storage;
 
 pub use embedder::Provider;

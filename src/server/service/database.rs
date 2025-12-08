@@ -1,10 +1,10 @@
 use crate::core::{get_source_path, load_config};
-use crate::prelude::log;
 use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse};
 use crate::server::{ListDatabasesResponse, get_active_source};
 use crate::{info, warn};
 use anyhow::Result;
 use chrono::Utc;
+
 use std::path::PathBuf;
 use uuid::Uuid;
 

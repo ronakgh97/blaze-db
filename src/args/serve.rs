@@ -1,5 +1,4 @@
 use crate::core::check_source_valid;
-use crate::prelude::log;
 use crate::server::start_server;
 use crate::{error, info};
 use anyhow::Result;

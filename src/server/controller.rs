@@ -1,4 +1,3 @@
-use crate::prelude::log;
 use crate::server::service::{create_new_database, embed_run, list_databases, query_search};
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,

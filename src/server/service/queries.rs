@@ -1,6 +1,5 @@
 use crate::core::Metrics;
 use crate::info;
-use crate::prelude::log;
 use crate::prelude::{Provider, SearchQuery};
 use crate::server::service::read_embeddings_from_database;
 use crate::server::{QueryRequest, QueryResponse};

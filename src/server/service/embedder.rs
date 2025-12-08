@@ -1,6 +1,6 @@
 use crate::server::service::database::search_database;
 use crate::server::{EmbedRequest, EmbedResponse};
-use crate::utils::{EmbeddingStore, Provider, VectorData, log};
+use crate::utils::{EmbeddingStore, Provider, VectorData};
 use crate::{error, info};
 use anyhow::{Context, Result};
 
