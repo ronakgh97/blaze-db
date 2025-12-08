@@ -1,12 +1,10 @@
 use anyhow::{Context, Result};
+use bincode::{Decode, Encode};
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tokio::fs;
-use tokio::fs::File;
-use tokio::io::{AsyncWriteExt, BufWriter};
-use tokio::task::spawn_blocking;
 
 use crate::utils::EmbeddingData;
 
@@ -45,7 +43,7 @@ impl VectorData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
 pub struct EmbeddingStore {
     pub batch_index: usize,
     pub items: Vec<EmbeddingData>,
@@ -92,8 +90,6 @@ impl EmbeddingStore {
         if bin_files.is_empty() {
             anyhow::bail!("No .bin files found in {:?}", dir_path);
         }
-
-        println!("Found {} binary files to load...", bin_files.len());
 
         // Load all files concurrently using tokio tasks
         let mut tasks = Vec::new();
@@ -144,26 +140,26 @@ impl EmbeddingStore {
             .with_context(|| format!("Failed to read file: {:?}", path_clone))?;
 
         let path_for_error = path_clone.clone();
-        let store: EmbeddingStore = spawn_blocking(move || bincode::deserialize(&bytes))
-            .await?
-            .with_context(|| format!("Failed to deserialize: {:?}", path_for_error))?;
+        let (store, _) = tokio::task::spawn_blocking(move || {
+            bincode::decode_from_slice(&bytes, bincode::config::standard())
+        })
+        .await?
+        .with_context(|| format!("Failed to deserialize: {:?}", path_for_error))?;
 
         Ok(store)
     }
 
     /// Write the embedding store to a binary file
     pub async fn write_binary(&self, file_path: &str) -> Result<()> {
-        let encoded = {
-            let self_clone = self.clone();
-            spawn_blocking(move || bincode::serialize(&self_clone)).await??
-        };
-
         let formatted_path = format!("{}.bin", file_path);
-        let file = File::create(formatted_path).await?;
-        let mut writer = BufWriter::with_capacity(1024 * 1024, file);
-        writer.write_all(&encoded).await?;
-        writer.flush().await?;
-
+        let self_clone = self.clone();
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let mut file = std::fs::File::create(&formatted_path)?;
+            bincode::encode_into_std_write(&self_clone, &mut file, bincode::config::standard())?;
+            file.sync_all()?;
+            Ok(())
+        })
+        .await??;
         Ok(())
     }
 }
