@@ -3,6 +3,9 @@ use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 use rayon::prelude::IntoParallelRefIterator;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+#[allow(unused_imports)]
+use std::collections::BinaryHeap;
+use wide::f32x8;
 
 #[derive(Serialize, Deserialize)]
 pub struct SearchQuery {
@@ -71,45 +74,102 @@ impl Metrics {
     }
 }
 
-/// Cosine similarity: dot(a,b) / (||a|| * ||b||)
-/// Returns value in [-1, 1],
+/// SIMD-optimized cosine similarity using 8-wide f32 vectors
+/// Returns value in [-1, 1]
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "Vector dimensions must match");
+    debug_assert_eq!(a.len(), b.len(), "Vector dimensions must match");
 
-    let (dot, norm_a_sq, norm_b_sq) = a
-        .iter()
-        .zip(b.iter())
-        .fold((0.0f32, 0.0f32, 0.0f32), |(dot, na, nb), (&x, &y)| {
-            (dot + x * y, na + x * x, nb + y * y)
-        });
+    let chunks = a.len() / 8;
+    let mut dot = f32x8::ZERO;
+    let mut norm_a = f32x8::ZERO;
+    let mut norm_b = f32x8::ZERO;
 
-    let denominator = (norm_a_sq * norm_b_sq).sqrt();
+    // Process 8 elements at a time with SIMD
+    for i in 0..chunks {
+        let offset = i * 8;
+        let va = f32x8::from(&a[offset..offset + 8]);
+        let vb = f32x8::from(&b[offset..offset + 8]);
+        dot += va * vb;
+        norm_a += va * va;
+        norm_b += vb * vb;
+    }
+
+    // Reduce SIMD vectors to scalars
+    let arr_dot = dot.to_array();
+    let arr_na = norm_a.to_array();
+    let arr_nb = norm_b.to_array();
+
+    let mut dot_sum: f32 = arr_dot.iter().sum();
+    let mut na_sum: f32 = arr_na.iter().sum();
+    let mut nb_sum: f32 = arr_nb.iter().sum();
+
+    // Handle remaining elements (tail)
+    let remainder_start = chunks * 8;
+    for i in remainder_start..a.len() {
+        dot_sum += a[i] * b[i];
+        na_sum += a[i] * a[i];
+        nb_sum += b[i] * b[i];
+    }
+
+    let denominator = (na_sum * nb_sum).sqrt();
     if denominator < f32::EPSILON {
         0.0
     } else {
-        dot / denominator
+        dot_sum / denominator
     }
 }
 
-/// Similarity = 1 / (1 + Euclidean distance)
+/// SIMD-optimized Euclidean similarity
 /// Returns value in (0, 1]
 pub fn euclidean_similarity(a: &[f32], b: &[f32]) -> f32 {
     debug_assert_eq!(a.len(), b.len(), "Vector dimensions must match");
 
-    let distance_sq: f32 = a
-        .iter()
-        .zip(b.iter())
-        .map(|(&x, &y)| {
-            let diff = x - y;
-            diff * diff
-        })
-        .sum();
+    let chunks = a.len() / 8;
+    let mut sum_sq = f32x8::ZERO;
+
+    for i in 0..chunks {
+        let offset = i * 8;
+        let va = f32x8::from(&a[offset..offset + 8]);
+        let vb = f32x8::from(&b[offset..offset + 8]);
+        let diff = va - vb;
+        sum_sq += diff * diff;
+    }
+
+    let arr = sum_sq.to_array();
+    let mut distance_sq: f32 = arr.iter().sum();
+
+    // Handle remainder
+    let remainder_start = chunks * 8;
+    for i in remainder_start..a.len() {
+        let diff = a[i] - b[i];
+        distance_sq += diff * diff;
+    }
 
     1.0 / (1.0 + distance_sq.sqrt())
 }
 
-/// Dot product similarity (for normalized vectors)
+/// SIMD-optimized dot product
 pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
     debug_assert_eq!(a.len(), b.len(), "Vector dimensions must match");
-    a.iter().zip(b.iter()).map(|(&x, &y)| x * y).sum()
+
+    let chunks = a.len() / 8;
+    let mut sum = f32x8::ZERO;
+
+    for i in 0..chunks {
+        let offset = i * 8;
+        let va = f32x8::from(&a[offset..offset + 8]);
+        let vb = f32x8::from(&b[offset..offset + 8]);
+        sum += va * vb;
+    }
+
+    let arr = sum.to_array();
+    let mut total: f32 = arr.iter().sum();
+
+    // Handle remainder
+    let remainder_start = chunks * 8;
+    for i in remainder_start..a.len() {
+        total += a[i] * b[i];
+    }
+
+    total
 }
