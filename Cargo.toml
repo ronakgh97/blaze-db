@@ -2,7 +2,7 @@
 name = "blaze-db"
 version = "0.1.0"
 edition = "2024"
-autobins = false
+# autobins = false
 
 [lib]
 name = "blaze_db"
