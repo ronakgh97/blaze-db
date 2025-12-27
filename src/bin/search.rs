@@ -2,7 +2,7 @@ use blaze_db::prelude::*;
 use tokio::time::Instant;
 #[tokio::main]
 pub async fn main() {
-    let sample_text = String::from("Who fought?");
+    let sample_text = String::from("What this book about?");
 
     let provider = Provider::new(
         "http://localhost:1234/v1/embeddings",

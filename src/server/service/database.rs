@@ -1,4 +1,4 @@
-use crate::core::{get_source_path, load_config};
+use crate::core::{ServerConfig, get_source_path};
 use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse};
 use crate::server::{ListDatabasesResponse, get_active_source};
 use crate::{info, warn};
@@ -17,7 +17,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     let name = request.name;
     let dimensions = &request.dimensions;
 
-    let file_name = format!("#{}_{}_#{}_#{}", name, database_id, dimensions, timestamp);
+    let file_name = format!("#{}_#{}_#{}_#{}", name, database_id, dimensions, timestamp);
 
     let database_path = source_path.join(active_source).join(&file_name);
     info!("Creating database directory: {:?}", database_path);
@@ -34,7 +34,8 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
 
 /// List all databases from all source directories.
 pub async fn list_databases() -> Result<Vec<ListDatabasesResponse>> {
-    let config = load_config().await?;
+    let config =
+        ServerConfig::load_config(&ServerConfig::get_default_server_config_path()?).await?;
     let base_path = get_source_path()?;
     let sources = config.data_source.source_name.unwrap_or_default();
 
@@ -51,9 +52,20 @@ pub async fn list_databases() -> Result<Vec<ListDatabasesResponse>> {
         let mut databases = Vec::new();
         let mut entries = tokio::fs::read_dir(&dir).await?;
         while let Some(entry) = entries.next_entry().await? {
+            let metadata = entry.metadata().await?;
+            if !metadata.is_dir() {
+                continue;
+            }
+
             let name = entry.file_name().to_string_lossy().to_string();
-            if parse_database_name(&name).is_some() {
+            if let Some((db_name, id, dims, timestamp)) = parse_database_name(&name) {
+                info!(
+                    "Found database: name='{}', id='{}', dims='{}', timestamp='{}'",
+                    db_name, id, dims, timestamp
+                );
                 databases.push(name);
+            } else {
+                warn!("Skipping invalid database directory: {}", name);
             }
         }
 

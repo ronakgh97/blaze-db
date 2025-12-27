@@ -1,4 +1,4 @@
-use crate::core::load_config;
+use crate::core::config::ServerConfig;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -10,12 +10,18 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn add_source(&mut self, new_source: String) -> &mut Self {
+    pub fn add_source(&mut self, new_source: String) -> Result<&mut Self> {
         match &mut self.source_name {
-            Some(source) => source.push(new_source),
+            Some(source) => {
+                // Check for duplicates
+                if source.contains(&new_source) {
+                    anyhow::bail!("Source '{}' already exists", new_source);
+                }
+                source.push(new_source);
+            }
             None => self.source_name = Some(vec![new_source]),
         }
-        self
+        Ok(self)
     }
 
     pub async fn create_source_dir(&self) -> Result<()> {
@@ -38,7 +44,10 @@ pub fn get_source_path() -> Result<PathBuf> {
 
 pub async fn check_source_valid(source_name: &String) -> Result<bool> {
     let source_path = get_source_path()?.join(source_name);
-    let source_list = load_config().await?.data_source.source_name;
+    let source_list = ServerConfig::load_config(&ServerConfig::get_default_server_config_path()?)
+        .await?
+        .data_source
+        .source_name;
 
     if let Some(sources) = source_list
         && sources.contains(source_name)

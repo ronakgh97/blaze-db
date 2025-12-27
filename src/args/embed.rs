@@ -1,3 +1,4 @@
+use crate::core::ClientConfig;
 use crate::prelude::Ingestor;
 use crate::server::{EmbedRequest, EmbedResponse};
 use anyhow::Result;
@@ -5,6 +6,8 @@ use std::path::PathBuf;
 
 pub async fn embed_run(file_path: PathBuf, database: String, batch: Option<usize>) -> Result<()> {
     println!("Embedding data into database...: {}", &database);
+
+    let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
 
     let batch = batch.unwrap_or(512);
 
@@ -18,7 +21,7 @@ pub async fn embed_run(file_path: PathBuf, database: String, batch: Option<usize
     };
 
     let response = reqwest::Client::new()
-        .post("http://127.0.0.1:8001/embed")
+        .post(config.url + "/embed")
         .json(&request_body)
         .send()
         .await?;

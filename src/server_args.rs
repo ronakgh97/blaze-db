@@ -13,11 +13,25 @@ pub struct ServerArgs {
 }
 #[derive(Subcommand)]
 pub enum ServerCommands {
+    /// Initialize the Blaze-DB server source directory
+    Init {
+        /// Attempt to fix existing source_path issues
+        #[arg(short, long)]
+        fix: bool,
+    },
+
+    /// Initialize a new Data source
+    New {
+        /// Name of the new source
+        #[arg(short, long)]
+        name: String,
+    },
+
     /// Start the server
     Serve {
         /// Optional port to run the server on
         #[arg(short, long)]
-        port: Option<u16>, // TODO: Client does not use this port arg yet
+        port: Option<u16>,
 
         /// Use specified database path
         #[arg(short, long, required = true)]

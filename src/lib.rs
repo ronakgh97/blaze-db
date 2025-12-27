@@ -7,12 +7,13 @@ pub mod utils;
 
 pub mod prelude {
     pub use crate::args::{
-        create_run, embed_run, init_run, list_run, new_run, print_ascii, query_run, serve_run,
+        create_run, embed_run, init_run_client, init_run_server, list_run, new_run, print_ascii,
+        query_run, serve_run,
     };
     pub use crate::client_args::{ClientArgs, ClientCommands};
     pub use crate::core::{
-        Config, Metrics, SearchQuery, SearchResult, Source, check_source_valid, cosine_similarity,
-        dot_product, euclidean_similarity, get_source_path, load_config, save_config,
+        ClientConfig, Metrics, SearchQuery, SearchResult, ServerConfig, Source, check_source_valid,
+        cosine_similarity, dot_product, euclidean_similarity, get_source_path, save_config,
     };
     pub use crate::server::{get_active_source, list_databases, start_server};
     pub use crate::server_args::{ServerArgs, ServerCommands};

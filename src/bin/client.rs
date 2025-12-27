@@ -6,17 +6,10 @@ use clap::Parser;
 async fn main() -> Result<()> {
     let args = ClientArgs::parse();
     match args.command {
-        Some(ClientCommands::Init { .. }) => {
-            init_run().await?;
+        Some(ClientCommands::Config { url }) => {
+            init_run_client(url).await?;
         }
-        Some(ClientCommands::New { name }) => {
-            new_run(name).await?;
-        }
-        Some(ClientCommands::Create {
-            source: _,
-            name,
-            dimensions,
-        }) => {
+        Some(ClientCommands::Create { name, dimensions }) => {
             create_run(name, dimensions).await?; // source is unused (will be used in server uses multiple sources)
         }
         Some(ClientCommands::Embed {
@@ -33,11 +26,11 @@ async fn main() -> Result<()> {
         }) => {
             query_run(database, search, top_k).await?;
         }
-        Some(ClientCommands::Ls { source }) => {
-            list_run(source).await?;
+        Some(ClientCommands::Ls) => {
+            list_run().await?;
         }
         None => {
-            print_ascii().await;
+            let _ = print_ascii().await;
         }
     }
 

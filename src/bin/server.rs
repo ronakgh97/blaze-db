@@ -6,11 +6,18 @@ use clap::Parser;
 async fn main() -> Result<()> {
     let args = ServerArgs::parse();
     match args.command {
+        Some(ServerCommands::Init { .. }) => {
+            init_run_server().await?;
+        }
+
         Some(ServerCommands::Serve { port, source }) => {
             serve_run(port, &source).await?;
         }
         None => {
-            print_ascii().await;
+            let _ = print_ascii().await;
+        }
+        Some(ServerCommands::New { name }) => {
+            new_run(name).await?;
         }
     }
 

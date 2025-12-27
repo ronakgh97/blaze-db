@@ -1,8 +1,11 @@
+use crate::core::ClientConfig;
 use crate::server::{QueryRequest, QueryResponse};
 use anyhow::Result;
 
 pub async fn query_run(database: String, query: String, top_k: usize) -> Result<()> {
     println!("Search querying the database...: {}", database);
+
+    let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
 
     let request_body = QueryRequest {
         database,
@@ -11,7 +14,7 @@ pub async fn query_run(database: String, query: String, top_k: usize) -> Result<
     };
 
     let response = reqwest::Client::new()
-        .post("http://127.0.0.1:8001/query")
+        .post(config.url + "/query")
         .json(&request_body)
         .send()
         .await?;

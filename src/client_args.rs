@@ -15,26 +15,15 @@ pub struct ClientArgs {
 
 #[derive(Subcommand)]
 pub enum ClientCommands {
-    /// Initialize dotfiles and source dirs for Blaze-DB
-    Init {
-        /// Attempt to fix existing source_path issues
+    /// Initialize the Blaze-DB client configuration
+    Config {
+        /// Server URL
         #[arg(short, long)]
-        fix: bool,
-    },
-
-    /// Initialize a new Data source
-    New {
-        /// Path to the new data source directory
-        #[arg(short, long)]
-        name: String,
+        url: Option<String>,
     },
 
     /// Create a new Blaze-DB database
     Create {
-        /// Source data path for the database
-        #[arg(short, long)]
-        source: String,
-
         /// Name of the new database
         #[arg(short, long)]
         name: String,
@@ -59,6 +48,7 @@ pub enum ClientCommands {
         batch: Option<usize>,
     },
 
+    /// Query an existing Blaze-DB database for similar embeddings
     Query {
         /// Name of the database to query
         #[arg(short, long)]
@@ -73,10 +63,6 @@ pub enum ClientCommands {
         top_k: usize,
     },
 
-    /// List existing Blaze-DB databases
-    Ls {
-        /// Source data path to filter databases
-        #[arg(short, long)]
-        source: Option<String>,
-    },
+    /// List existing Blaze-DB databases from the active server source
+    Ls,
 }
