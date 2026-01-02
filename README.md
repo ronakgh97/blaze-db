@@ -45,13 +45,15 @@ Score: 0.6123
 Search took: 84.1797ms for 51788 vectors
 ```
 
-## Roadmap
+## TODO:
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance.
 - Complete HTTP API server for remote database access.
 - Query filtering and metadata support.
 - Incremental updates without full reindex.
 - Distributed storage and sharding support.
+- Move hardcoded Values to separate config files.
+- HNSW DEMO and benchmarking.
 - Cloud deployment options.
 
 ## Contributing
