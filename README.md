@@ -45,6 +45,48 @@ Score: 0.6123
 Search took: 84.1797ms for 51788 vectors
 ```
 
+### NSW DEMO
+
+```shell
+
+Building NSW graph with 50000 nodes...
+
+Rearranged in 106.8534603s
+
+Graph Analysis:
+Total Nodes: 50000
+Total Edges: 800000
+Average Edges per Node: 16.00
+Nodes with most neighbour count: 50000
+
+Querying vector: [1.1767917, -1.995266, 0.7625747]...
+
+Greedy search completed in 0.0000403s
+
+Top 5 Greedy Search Results:
+Result 1: Node Index: 32477, Similarity: 0.09
+Result 2: Node Index: 30343, Similarity: 0.03
+Result 3: Node Index: 23980, Similarity: -0.0
+
+Parallel Greedy search completed in 0.0010476s
+
+Top 5 Parallel Greedy Search Results:
+Result 1: Node Index: 41269, Similarity: 0.11
+Result 2: Node Index: 4418, Similarity: 0.10
+Result 3: Node Index: 4058, Similarity: 0.10
+Result 4: Node Index: 29716, Similarity: 0.10
+Result 5: Node Index: 37193, Similarity: 0.10
+
+Brute search completed in 0.3269939...
+
+Top 5 Brute-force Results:
+Result 1: Node Index: 31738, Similarity: 0.13
+Result 2: Node Index: 47913, Similarity: 0.13
+Result 3: Node Index: 41260, Similarity: 0.12
+Result 4: Node Index: 3757, Similarity: 0.12
+Result 5: Node Index: 33942, Similarity: 0.11
+```
+
 ## TODO:
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance.
