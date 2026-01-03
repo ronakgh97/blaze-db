@@ -3,7 +3,7 @@ use rand::Rng;
 use rand::seq::SliceRandom;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
-use rayon::prelude::IntoParallelRefIterator;
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 use wide::f32x8;
 
 #[derive(Debug, Clone)]
@@ -97,8 +97,8 @@ fn main() {
 
     let mut nsw = NSW::new();
 
-    // Generate 100K random vectors
-    let num_vectors = 20_000;
+    // Generate 50K random vectors
+    let num_vectors = 50_000;
     for i in 0..num_vectors {
         let vector = generate_random_vector();
 
@@ -123,6 +123,65 @@ fn main() {
 
     // Analyze the graph
     graph_analyze(&graph, &nsw);
+
+    // Perform a query
+    let query_vector = generate_random_vector();
+    println!("Querying vector: {:?}...", &query_vector[..3]);
+    let top_k = 5;
+
+    // Greedy Search
+    let start_time = std::time::Instant::now();
+    let results = greedy_search(&query_vector, top_k, &graph);
+    let duration = start_time.elapsed().as_secs_f64();
+    println!(
+        "\nGreedy search completed in {}s",
+        duration.to_string().yellow()
+    );
+    println!("\nTop {} Greedy Search Results:", top_k);
+    for (i, result) in results.iter().enumerate() {
+        println!(
+            "Result {}: Node Index: {}, Similarity: {:.4}",
+            i + 1,
+            result.node.index.to_string().cyan(),
+            result.similarity.to_string().cyan()
+        );
+    }
+
+    // Parallel Greedy Search
+    let start_time = std::time::Instant::now();
+    let parallel_results = parallel_greedy_search(&query_vector, top_k, 100, &graph);
+    let duration = start_time.elapsed().as_secs_f64();
+    println!(
+        "\nParallel Greedy search completed in {}s",
+        duration.to_string().yellow()
+    );
+    println!("\nTop {} Parallel Greedy Search Results:", top_k);
+    for (i, result) in parallel_results.iter().enumerate() {
+        println!(
+            "Result {}: Node Index: {}, Similarity: {:.4}",
+            i + 1,
+            result.node.index.to_string().cyan(),
+            result.similarity.to_string().cyan()
+        );
+    }
+
+    // Brute-force Search
+    let start_time = std::time::Instant::now();
+    let brute_results = brute_search(&query_vector, top_k, &graph);
+    let duration = start_time.elapsed().as_secs_f64();
+    println!(
+        "\nBrute search completed in {}...",
+        duration.to_string().yellow()
+    );
+    println!("\nTop {} Brute-force Results:", top_k);
+    for (i, result) in brute_results.iter().enumerate() {
+        println!(
+            "Result {}: Node Index: {}, Similarity: {:.4}",
+            i + 1,
+            result.node.index.to_string().cyan(),
+            result.similarity.to_string().cyan()
+        );
+    }
 }
 
 fn graph_analyze(nodes: &Vec<Node>, nsw: &NSW) {
@@ -141,26 +200,146 @@ fn graph_analyze(nodes: &Vec<Node>, nsw: &NSW) {
     println!("Total Edges: {}", total_edges);
     println!("Average Edges per Node: {:.2}", average_edges);
     println!(
-        "Nodes with most neighbour count: {:?}",
+        "Nodes with most neighbour count: {:?}\n",
         most_neighbors_node.len()
     );
 }
 
-#[allow(unused)]
+#[derive(Debug, Clone)]
 struct QueryResult {
     pub node: Node,
     pub similarity: f32,
 }
 
-#[allow(unused)]
-/// Perform query on built NSW graph
-fn query_nsw(vector: &[f32; 1024], top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
+/// Perform greedy search on built NSW graph
+fn greedy_search(vector: &[f32; 1024], top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
     // Get a random start node
     let mut rng = rand::rng();
     let start_index = rng.random_range(0..nodes.len());
-    let start_node = &nodes[start_index];
+    let mut start_node = &nodes[start_index];
 
-    unimplemented!("HElP ME SOMEONE 😞")
+    let mut result_buffer = Vec::new();
+
+    loop {
+        // Calculate similarity with the start node
+        let similarity = cosine_similarity(vector, &start_node.vector);
+        result_buffer.push(QueryResult {
+            node: start_node.clone(),
+            similarity,
+        });
+
+        // Find the best neighbor to continue the search
+        let best_neighbor = start_node
+            .neighbors
+            .iter()
+            .map(|&neighbor_idx| &nodes[neighbor_idx])
+            .max_by(|a, b| {
+                let sim_a = cosine_similarity(vector, &a.vector);
+                let sim_b = cosine_similarity(vector, &b.vector);
+                sim_a.partial_cmp(&sim_b).unwrap()
+            });
+
+        match best_neighbor {
+            Some(neighbor) => {
+                let neighbor_similarity = cosine_similarity(vector, &neighbor.vector);
+                // If the best neighbor is better than the current node, move to it
+                if neighbor_similarity > similarity {
+                    start_node = neighbor;
+                } else {
+                    // No better neighbor found, end search
+                    break;
+                }
+            }
+            None => break, // No neighbors, end search
+        }
+
+        if result_buffer.len() >= top_k as usize {
+            break;
+        }
+    }
+
+    result_buffer.reverse();
+    result_buffer
+}
+
+fn parallel_greedy_search(
+    vector: &[f32; 1024],
+    top_k: i32,
+    start_points: usize,
+    nodes: &Vec<Node>,
+) -> Vec<QueryResult> {
+    // Get multiple random start nodes
+    let mut rng = rand::rng();
+    let start_indices: Vec<usize> = (0..start_points)
+        .map(|_| rng.random_range(0..nodes.len()))
+        .collect();
+
+    let mut result_buffer: Vec<QueryResult> = start_indices
+        .par_iter()
+        .map(|&start_index| {
+            let mut start_node = &nodes[start_index];
+            loop {
+                // Calculate similarity with the start node
+                let similarity = cosine_similarity(vector, &start_node.vector);
+
+                // Find the best neighbor to continue the search
+                let best_neighbor = start_node
+                    .neighbors
+                    .iter()
+                    .map(|&neighbor_idx| &nodes[neighbor_idx])
+                    .max_by(|a, b| {
+                        let sim_a = cosine_similarity(vector, &a.vector);
+                        let sim_b = cosine_similarity(vector, &b.vector);
+                        sim_a.partial_cmp(&sim_b).unwrap()
+                    });
+
+                match best_neighbor {
+                    Some(neighbor) => {
+                        let neighbor_similarity = cosine_similarity(vector, &neighbor.vector);
+                        // If the best neighbor is better than the current node, move to it
+                        if neighbor_similarity > similarity {
+                            start_node = neighbor;
+                        } else {
+                            // No better neighbor found, end search
+                            break;
+                        }
+                    }
+                    None => break, // No neighbors, end search
+                }
+            }
+
+            QueryResult {
+                node: start_node.clone(),
+                similarity: cosine_similarity(vector, &start_node.vector),
+            }
+        })
+        .collect();
+
+    // Sort results by similarity in descending order
+    result_buffer.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+
+    // Return top_k results
+    result_buffer.into_par_iter().take(top_k as usize).collect()
+}
+
+/// Perform brute-force search for comparison and validation
+fn brute_search(vector: &[f32; 1024], top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
+    let mut results: Vec<QueryResult> = nodes
+        .par_iter()
+        .map(|node| {
+            let similarity = cosine_similarity(vector, &node.vector);
+            QueryResult {
+                node: node.clone(),
+                similarity,
+            }
+        })
+        .collect();
+
+    // Sort results by similarity in descending order
+    results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+
+    // Return top_k results
+    results.into_par_iter().take(top_k as usize).collect()
 }
 
 fn generate_random_vector() -> [f32; 1024] {
@@ -168,7 +347,7 @@ fn generate_random_vector() -> [f32; 1024] {
 
     let mut vector = [0.0f32; 1024];
     for i in 0..1024 {
-        vector[i] = rng.random_range(0.0..1.0);
+        vector[i] = rng.random_range(-2.0..2.0);
     }
     vector
 }
