@@ -29,7 +29,7 @@ impl SearchQuery {
         }
     }
 
-    pub fn search(&self, data: &VectorData) -> Vec<SearchResult> {
+    pub fn search_vector(&self, data: &VectorData) -> Vec<SearchResult> {
         let mut results: Vec<SearchResult> = data
             .embedding
             .par_iter()

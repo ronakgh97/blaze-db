@@ -101,7 +101,7 @@ fn bench_search_varying_vectors(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(count as u64));
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |bench, _| {
-            bench.iter(|| search.search(black_box(&data)))
+            bench.iter(|| search.search_vector(black_box(&data)))
         });
     }
 
@@ -122,7 +122,7 @@ fn bench_search_varying_dimensions(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements((vector_count * dim) as u64));
         group.bench_with_input(BenchmarkId::from_parameter(dim), &dim, |bench, _| {
-            bench.iter(|| search.search(black_box(&data)))
+            bench.iter(|| search.search_vector(black_box(&data)))
         });
     }
 
@@ -144,7 +144,7 @@ fn bench_search_varying_top_k(c: &mut Criterion) {
         let search = SearchQuery::new(top_k, query.clone(), Metrics::Cosine);
 
         group.bench_with_input(BenchmarkId::from_parameter(top_k), &top_k, |bench, _| {
-            bench.iter(|| search.search(black_box(&data)))
+            bench.iter(|| search.search_vector(black_box(&data)))
         });
     }
 
@@ -168,7 +168,7 @@ fn bench_all_metrics(c: &mut Criterion) {
         let search = SearchQuery::new(10, query.clone(), metric);
 
         group.bench_with_input(BenchmarkId::from_parameter(name), &name, |bench, _| {
-            bench.iter(|| search.search(black_box(&data)))
+            bench.iter(|| search.search_vector(black_box(&data)))
         });
     }
 

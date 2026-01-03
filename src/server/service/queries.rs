@@ -40,7 +40,7 @@ pub async fn query_search(request: QueryRequest) -> Result<Vec<QueryResponse>> {
     );
     let search = SearchQuery::new(request.top_k, query_vector, Metrics::Cosine);
 
-    let results = search.search(&vector_data);
+    let results = search.search_vector(&vector_data);
     info!("Search complete, found {} results", results.len());
 
     // Map SearchResult to QueryResponse
