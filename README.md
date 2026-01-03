@@ -48,7 +48,6 @@ Search took: 84.1797ms for 51788 vectors
 ### NSW DEMO
 
 ```shell
-
 Building NSW graph with 50000 nodes...
 
 Rearranged in 106.8534603s
@@ -90,6 +89,7 @@ Result 5: Node Index: 33942, Similarity: 0.11
 ## TODO:
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance.
+- Fix Chunking for better meaningful text segments.
 - Complete HTTP API server for remote database access.
 - Query filtering and metadata support.
 - Incremental updates without full reindex.
