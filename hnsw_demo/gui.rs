@@ -1,31 +1,36 @@
 use macroquad::prelude::*;
 
-#[macroquad::main(window_conf)]
+#[allow(dead_code)]
+struct MainState {}
+
+fn _window_conf() -> Conf {
+    Conf {
+        window_title: String::from("NSW DEMO"),
+        window_width: 1200,
+        window_height: 800,
+        window_resizable: false,
+        sample_count: 256,
+        ..Default::default()
+    }
+}
+
+#[allow(unused)]
+#[macroquad::main(_window_conf)]
 async fn main() {
+    let state = MainState {};
+
     loop {
-        clear_background(WHITE);
+        clear_background(BLACK);
 
-        draw_text("HNSW Demo GUI", 20.0, 40.0, 30.0, BLACK);
-
-        draw_text(
-            "This is a placeholder for the HNSW demo GUI.",
-            20.0,
-            80.0,
-            20.0,
-            DARKGRAY,
-        );
+        render_main(&state).await;
 
         // Update the screen
         next_frame().await;
     }
 }
 
-fn window_conf() -> Conf {
-    Conf {
-        window_title: "Ghost Engine".to_owned(),
-        window_width: 800,
-        window_height: 600,
-        window_resizable: false,
-        ..Default::default()
-    }
+#[allow(unused)]
+async fn render_main(state: &MainState) {
+    let screen_width = screen_width();
+    let screen_height = screen_height();
 }

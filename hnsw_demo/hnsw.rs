@@ -1,5 +1,3 @@
-mod gui;
-
 use blaze_db::prelude::EmbeddingStore;
 use blaze_db::utils::VectorData;
 use colored::Colorize;
