@@ -163,3 +163,6 @@ impl EmbeddingStore {
         Ok(())
     }
 }
+
+#[allow(dead_code)]
+struct LSMTree {}

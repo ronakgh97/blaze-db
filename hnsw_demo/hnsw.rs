@@ -21,7 +21,7 @@ impl NSW {
     pub fn new() -> Self {
         Self {
             nodes: Vec::new(),
-            max_neighbours: 16,
+            max_neighbours: 32,
         }
     }
 
@@ -33,7 +33,7 @@ impl NSW {
     #[allow(unused)]
     // Insert a node into the NSW graph, with incremental updates
     pub fn incremental_insert_node(&mut self, node: Node) {
-        unimplemented!("INSERT THE NODE INTO THE GRAPH HERE");
+        unimplemented!("Incremental insertion not implemented yet");
     }
 
     // Rearrange all nodes in the graph after bulk insertion (slow method)
@@ -78,7 +78,7 @@ impl NSW {
                 }
 
                 // Create a new node with updated neighbors
-                let rearranged_node = Node::new(node.index, node.vector, neighbors);
+                let rearranged_node = Node::new(node.index, node.vector.clone(), neighbors);
                 progress_bar.inc(1);
                 rearranged_node
             })
@@ -93,12 +93,12 @@ type NodeIndex = usize;
 #[derive(Debug, Clone)]
 struct Node {
     pub index: NodeIndex,
-    pub vector: [f32; 1024],
+    pub vector: Vec<f32>,
     pub neighbors: Vec<NodeIndex>,
 }
 
 impl Node {
-    pub fn new(index: NodeIndex, vector: [f32; 1024], neighbors: Vec<NodeIndex>) -> Self {
+    pub fn new(index: NodeIndex, vector: Vec<f32>, neighbors: Vec<NodeIndex>) -> Self {
         Self {
             index,
             vector,
@@ -108,7 +108,7 @@ impl Node {
 }
 
 fn main() {
-    println!("\n === NSW DEMO === \n");
+    println!("\n NSW DEMO \n");
 
     let mut nsw = NSW::new();
 
@@ -116,7 +116,7 @@ fn main() {
     // let num_vectors = 75_000;
     //
     // for i in 0..num_vectors {
-    //     let vector = generate_random_vector();
+    //     let vector = generate_random_vector(1024);
     //
     //     // if (i + 1) % 10000 == 0 {
     //     //     println!("Generated {} vectors", (i + 1).to_string().cyan());
@@ -133,8 +133,10 @@ fn main() {
         .block_on(load_vector_from_sample());
 
     for (i, embedding) in embeddings.embedding.iter().enumerate() {
-        let mut vector = [0.0f32; 1024];
-        vector.copy_from_slice(&embedding[..1024]); // PROBLEMS: Use Vec<f32> instead of [f32; 1024] everywhere
+        let mut vector = vec![0.0f32; embeddings.dimensions];
+        for j in 0..embeddings.dimensions {
+            vector[j] = embedding[j];
+        }
         let node = Node::new(i, vector, vec![]);
         nsw.add_node_rearranged_later(node);
     }
@@ -153,7 +155,7 @@ fn main() {
     //graph_analyze(&graph, &nsw);
 
     // Perform a query
-    let query_vector = generate_random_vector();
+    let query_vector = generate_random_vector(1024);
     println!("Querying vector: {:?}...", &query_vector[..3]);
     let top_k = 5;
 
@@ -249,7 +251,7 @@ struct QueryResult {
 }
 
 /// Perform greedy search on built NSW graph
-fn greedy_search(vector: &[f32; 1024], top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
+fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
     // Get a random start node
     let mut rng = rand::rng();
     let start_index = rng.random_range(0..nodes.len());
@@ -300,7 +302,7 @@ fn greedy_search(vector: &[f32; 1024], top_k: i32, nodes: &Vec<Node>) -> Vec<Que
 }
 
 fn parallel_greedy_search(
-    vector: &[f32; 1024],
+    vector: &Vec<f32>,
     top_k: i32,
     start_points: usize,
     nodes: &Vec<Node>,
@@ -360,7 +362,7 @@ fn parallel_greedy_search(
 }
 
 /// Perform brute-force search for comparison and validation
-fn brute_search(vector: &[f32; 1024], top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
+fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
     let mut results: Vec<QueryResult> = nodes
         .par_iter()
         .map(|node| {
@@ -425,11 +427,11 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 }
 
 /// Generate a random vector of 1024 dimensions with values in range [-2.0, 2.0]
-fn generate_random_vector() -> [f32; 1024] {
+fn generate_random_vector(dimension: usize) -> Vec<f32> {
     let mut rng = rand::rng();
 
-    let mut vector = [0.0f32; 1024];
-    for i in 0..1024 {
+    let mut vector = vec![0.0f32; dimension];
+    for i in 0..dimension {
         vector[i] = rng.random_range(-2.0..2.0);
     }
     vector
