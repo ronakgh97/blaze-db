@@ -24,7 +24,7 @@ pub async fn main() {
             let search_query =
                 SearchQuery::new(5, embeddings.data[0].embedding.clone(), Metrics::Cosine);
 
-            let result = search_query.search(&vector_data);
+            let result = search_query.search_vector(&vector_data);
             let search_duration = search_start.elapsed();
 
             println!("\nTop {} similar chunks:", search_query.top_k);

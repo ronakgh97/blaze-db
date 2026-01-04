@@ -1,6 +1,7 @@
 # Blaze-DB
 
-Blaze-DB is a high-performance vector database written in Rust, designed for efficient storage and fast retrieval of vector
+Blaze-DB is a high-performance vector database written in Rust, designed for efficient storage and fast retrieval of
+vector
 embeddings.
 
 ## Current State
@@ -90,9 +91,11 @@ Result 5: Node Index: 33942, Similarity: 0.11
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance.
 - Fix Chunking for better meaningful text segments.
+- Make a storage engine, e.g SSTable or LSMTree based.
+- Use gRPC/Protobuf for client-server communication?
 - Complete HTTP API server for remote database access.
 - Query filtering and metadata support.
-- Incremental updates without full reindex.
+- Incremental updates without full reindex. (HNSW)
 - Distributed storage and sharding support.
 - Move hardcoded Values to separate config files.
 - HNSW DEMO and benchmarking.

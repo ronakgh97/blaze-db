@@ -1,4 +1,9 @@
+mod gui;
+
+use blaze_db::prelude::EmbeddingStore;
+use blaze_db::utils::VectorData;
 use colored::Colorize;
+use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng;
 use rand::seq::SliceRandom;
 use rayon::iter::IndexedParallelIterator;
@@ -34,6 +39,15 @@ impl NSW {
     // Rearrange all nodes in the graph after bulk insertion (slow method)
     // Returns the rearranged nodes, why not mut, cuz we need to for incremental insert later
     pub fn rearrange_nodes(&self) -> Vec<Node> {
+        // Progress bar setup
+        let progress_bar = ProgressBar::new(self.nodes.len() as u64);
+        progress_bar.set_style(
+            ProgressStyle::default_bar()
+                .template("[{bar:60.cyan/blue}] {pos}/{len} ({percent}%)")
+                .unwrap()
+                .progress_chars("●●-"),
+        );
+
         let mut nodes = self.nodes.clone();
         let mut rng = rand::rng();
         nodes.shuffle(&mut rng); // randomness
@@ -65,6 +79,7 @@ impl NSW {
 
                 // Create a new node with updated neighbors
                 let rearranged_node = Node::new(node.index, node.vector, neighbors);
+                progress_bar.inc(1);
                 rearranged_node
             })
             .collect::<Vec<Node>>();
@@ -98,15 +113,28 @@ fn main() {
     let mut nsw = NSW::new();
 
     // Generate 50K random vectors
-    let num_vectors = 50_000;
-    for i in 0..num_vectors {
-        let vector = generate_random_vector();
+    // let num_vectors = 75_000;
+    //
+    // for i in 0..num_vectors {
+    //     let vector = generate_random_vector();
+    //
+    //     // if (i + 1) % 10000 == 0 {
+    //     //     println!("Generated {} vectors", (i + 1).to_string().cyan());
+    //     // }
+    //
+    //     // Create a node with none neighbors for simplicity
+    //     let node = Node::new(i, vector, vec![]);
+    //     nsw.add_node_rearranged_later(node);
+    // }
 
-        // if (i + 1) % 10000 == 0 {
-        //     println!("Generated {} vectors", (i + 1).to_string().cyan());
-        // }
+    // Load vector from sample embeddings
+    let embeddings = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(load_vector_from_sample());
 
-        // Create a node with none neighbors for simplicity
+    for (i, embedding) in embeddings.embedding.iter().enumerate() {
+        let mut vector = [0.0f32; 1024];
+        vector.copy_from_slice(&embedding[..1024]); // PROBLEMS: Use Vec<f32> instead of [f32; 1024] everywhere
         let node = Node::new(i, vector, vec![]);
         nsw.add_node_rearranged_later(node);
     }
@@ -122,7 +150,7 @@ fn main() {
     println!("Rearranged in {}s", duration.to_string().yellow());
 
     // Analyze the graph
-    graph_analyze(&graph, &nsw);
+    //graph_analyze(&graph, &nsw);
 
     // Perform a query
     let query_vector = generate_random_vector();
@@ -170,7 +198,7 @@ fn main() {
     let brute_results = brute_search(&query_vector, top_k, &graph);
     let duration = start_time.elapsed().as_secs_f64();
     println!(
-        "\nBrute search completed in {}...",
+        "\nBrute search completed in {}s",
         duration.to_string().yellow()
     );
     println!("\nTop {} Brute-force Results:", top_k);
@@ -184,6 +212,7 @@ fn main() {
     }
 }
 
+#[allow(unused)]
 fn graph_analyze(nodes: &Vec<Node>, nsw: &NSW) {
     let total_nodes = nodes.len();
     let total_edges: usize = nodes.iter().map(|node| node.neighbors.len()).sum();
@@ -203,6 +232,14 @@ fn graph_analyze(nodes: &Vec<Node>, nsw: &NSW) {
         "Nodes with most neighbour count: {:?}\n",
         most_neighbors_node.len()
     );
+}
+
+async fn load_vector_from_sample() -> VectorData {
+    let binary_data = EmbeddingStore::read_binary("./embeddings")
+        .await
+        .expect("Failed to load embeddings");
+
+    binary_data
 }
 
 #[derive(Debug, Clone)]
@@ -342,16 +379,6 @@ fn brute_search(vector: &[f32; 1024], top_k: i32, nodes: &Vec<Node>) -> Vec<Quer
     results.into_par_iter().take(top_k as usize).collect()
 }
 
-fn generate_random_vector() -> [f32; 1024] {
-    let mut rng = rand::rng();
-
-    let mut vector = [0.0f32; 1024];
-    for i in 0..1024 {
-        vector[i] = rng.random_range(-2.0..2.0);
-    }
-    vector
-}
-
 /// Cosine similarity using 8-wide f32 vectors
 /// Returns value in [-1, 1]
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -395,4 +422,15 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     } else {
         dot_sum / denominator
     }
+}
+
+/// Generate a random vector of 1024 dimensions with values in range [-2.0, 2.0]
+fn generate_random_vector() -> [f32; 1024] {
+    let mut rng = rand::rng();
+
+    let mut vector = [0.0f32; 1024];
+    for i in 0..1024 {
+        vector[i] = rng.random_range(-2.0..2.0);
+    }
+    vector
 }
