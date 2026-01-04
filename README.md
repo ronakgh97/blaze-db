@@ -91,6 +91,7 @@ Result 5: Node Index: 33942, Similarity: 0.11
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance.
 - Fix Chunking for better meaningful text segments.
+- Write/insert functionality for adding new vectors to the database. (Currently read-only, or rebuild entire DB)
 - Make a storage engine, e.g SSTable or LSMTree based.
 - Use gRPC/Protobuf for client-server communication?
 - Complete HTTP API server for remote database access.
