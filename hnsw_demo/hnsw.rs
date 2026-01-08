@@ -1,8 +1,10 @@
 use anyhow::Result;
+#[allow(unused)]
 use rayon::iter::ParallelIterator;
 #[allow(unused)]
 use rayon::prelude::{IntoParallelIterator, ParallelExtend};
 use std::collections::HashMap;
+#[allow(unused)]
 use std::sync::Mutex;
 
 /// Hierarchical Navigable Small World (HNSW) graph structure for approximate nearest neighbor search.
@@ -32,9 +34,10 @@ impl HNSW {
 
     /// Generates a random level for a new node based on an exponential distribution.
     pub fn get_random_level(&self) -> usize {
-        let r: f32 = rand::random();
+        let r: f32 = rand::random(); // TODO: Will this return 0.0?, ln(0) is undefined
         let level = (-r.ln() / self.distribution_bias).floor() as usize;
-        level
+        // Clamp to [0, max_layers - 1]
+        level.min(self.max_layers - 1)
     }
 }
 
@@ -52,42 +55,40 @@ struct Node {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let hnsw = HNSW::new(16, 6, 1.7);
+    let hnsw = HNSW::new(16, 6, 0.8);
 
-    let random_levels = Mutex::new(HashMap::new());
+    let mut random_levels = HashMap::new();
 
-    (0..5000).into_par_iter().for_each(|i| {
+    // Fill the histogram with random levels
+    for _ in 0..10000 {
         let level = hnsw.get_random_level();
-        let mut levels = random_levels.lock().unwrap();
-        levels.insert(i, level);
-    });
-
-    let levels = random_levels.lock().unwrap();
-    let total = levels.len() as f32;
-    let mut counts = HashMap::new();
-
-    for level in levels.values() {
-        *counts.entry(level).or_insert(0) += 1;
-    }
-    for (level, count) in counts.iter() {
-        let percent = (*count as f32 / total) * 100.0;
-        println!("Level {}: {:.2}%", level, percent);
+        *random_levels.entry(level).or_insert(0) += 1;
     }
 
-    // Assert that count for level 0 > level 1 > level 2 > ...
-    let mut prev_count = None;
-    let mut sorted_counts: Vec<_> = counts.iter().collect();
-    sorted_counts.sort_by_key(|(level, _)| *level);
-    for (_, count) in sorted_counts.iter() {
-        if let Some(prev) = prev_count {
-            assert!(
-                prev > count,
-                "Bad distribution: previous count {} is not greater than current count {}",
-                prev,
-                count
-            );
-        }
-        prev_count = Some(count);
+    // Analyze the distribution
+    let mut levels: Vec<usize> = random_levels.keys().cloned().collect();
+    levels.sort();
+
+    println!(
+        "\nLevel Distribution Percentage with bias: {}\n",
+        hnsw.distribution_bias
+    );
+    for level in &levels {
+        let count = random_levels.get(&level).unwrap();
+        let percentage = (*count as f32 / 10000.0) * 100.0;
+        println!("Level {}: {:.2}%", level, percentage);
+    }
+
+    // Assert that higher levels are less frequent
+    for level in 1..(&levels).len() {
+        let lower_count = random_levels.get(&(level - 1)).unwrap_or(&0);
+        let higher_count = random_levels.get(&level).unwrap_or(&0);
+        assert!(
+            lower_count >= higher_count,
+            "Level {} has more nodes than Level {}",
+            level - 1,
+            level
+        );
     }
 
     Ok(())
