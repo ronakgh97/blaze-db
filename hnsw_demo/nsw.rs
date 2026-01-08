@@ -9,6 +9,7 @@ use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 use wide::f32x8;
 
+/// Navigable Small World (NSW) graph structure for approximate nearest neighbor search.
 #[derive(Debug, Clone)]
 struct NSW {
     pub nodes: Vec<Node>,
@@ -88,6 +89,7 @@ impl NSW {
 
 type NodeIndex = usize;
 
+/// Represents a node in the NSW graph.
 #[derive(Debug, Clone)]
 struct Node {
     pub index: NodeIndex,

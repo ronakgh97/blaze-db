@@ -20,8 +20,13 @@ path = "src/bin/server.rs"
 name = "nsw"
 path = "hnsw_demo/nsw.rs"
 
+
 [[bin]]
-name = "hnsw_demo"
+name = "hnsw"
+path = "hnsw_demo/hnsw.rs"
+
+[[bin]]
+name = "hnsw_gui"
 path = "hnsw_demo/gui.rs"
 
 [[bench]]
