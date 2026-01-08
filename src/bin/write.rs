@@ -8,18 +8,17 @@ async fn main() {
     let model = "text-embedding-qwen3-embedding-0.6b";
     let provider = Provider::new(url, model);
 
-    let batch_size = 768;
+    let batch_size = 256;
     let ingestor = Ingestor::new("./sample/War_and_peace.txt", batch_size);
 
-    match ingestor.read_line() {
+    match ingestor.read_chunks(150, 50) {
         Ok(batched_data) => {
-            let total_lines: usize = batched_data.par_iter().map(|b| b.len()).sum();
+            let total_chunks: usize = batched_data.par_iter().map(|b| b.len()).sum();
             println!();
             println!("Batch size: {}", batch_size.to_string().cyan());
-            println!("Total batch: {}", batched_data.len().to_string().blue());
-            println!("Total Lines: {}", total_lines.to_string().green());
-            println!();
-
+            println!("Total batches: {}", batched_data.len().to_string().blue());
+            println!("Total chunks: {}", total_chunks.to_string().green());
+            println!("{}", "Processing embeddings...".yellow());
             println!();
 
             for (index, chunk) in batched_data.iter().enumerate() {
@@ -30,6 +29,8 @@ async fn main() {
                         let filename = format!("./embeddings/embeddings_batch_{}", index);
                         if let Err(e) = embedding_store.write_binary(&filename).await {
                             eprintln!("Failed to write embeddings to file: {}", e);
+                        } else {
+                            println!("Batch {} saved", index.to_string().green());
                         }
                     }
                     Err(e) => {
@@ -37,10 +38,16 @@ async fn main() {
                     }
                 }
             }
+
+            println!();
+            println!(
+                "Total chunks embedded: {}",
+                total_chunks.to_string().bright_green()
+            );
         }
 
         Err(e) => {
-            eprintln!("Error reading lines: {}", e);
+            eprintln!("Error reading chunks: {}", e);
         }
     }
 }

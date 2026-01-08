@@ -12,7 +12,14 @@ pub async fn embed_run(file_path: PathBuf, database: String, batch: Option<usize
     let batch = batch.unwrap_or(512);
 
     let ingest = Ingestor::new(&file_path, batch);
-    let content = ingest.read_line()?;
+
+    // Use smart chunking instead of line-by-line for better semantic search
+    let content = ingest.read_chunks(100, 50)?;
+
+    println!(
+        "Created {} batches of semantic chunks for embedding",
+        content.len()
+    );
 
     let request_body = EmbedRequest {
         file_content: content,

@@ -57,10 +57,19 @@ impl EmbeddingStore {
     pub fn debug_print(&self) {
         println!("Batch Index: {}", self.batch_index);
         self.items.iter().take(3).for_each(|item| {
+            // Safely truncate at character boundary, not byte boundary
+            let preview: String = item.chunk.chars().take(50).collect();
+            let preview_display = if item.chunk.chars().count() > 50 {
+                format!("{}...", preview)
+            } else {
+                preview
+            };
+
             println!(
-                "Index: {:?}\n Chunk: {:?}\n Embeddings (first 3): {:?}\n Embedding Length : {:?}\n",
+                "Index: {:?}\n Chunk: {:?}\n Words: {}\n Embeddings (first 3): {:?}\n Embedding Length: {:?}\n",
                 &item.index,
-                &item.chunk,
+                preview_display,
+                item.chunk.split_whitespace().count(),
                 &item.embedding[..3],
                 &item.dimensions,
             );
@@ -164,5 +173,10 @@ impl EmbeddingStore {
     }
 }
 
+// HELP ME, I CANT UNDERSTAND HOW TO IMPLEMENT LSM TREES AND SSTABLES YET. 😵‍💫
+
 #[allow(dead_code)]
 struct LSMTree {}
+
+#[allow(dead_code)]
+struct SSTable {}
