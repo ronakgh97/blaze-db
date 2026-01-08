@@ -1,4 +1,4 @@
-use blaze_db::prelude::EmbeddingStore;
+use blaze_db::prelude::{EmbeddingStore, Provider};
 use blaze_db::utils::VectorData;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -30,7 +30,7 @@ impl NSW {
 
     #[allow(unused)]
     // Insert a node into the NSW graph, with incremental updates
-    pub fn incremental_insert_node(&mut self, node: Node) {
+    pub fn incremental_insert_node(&mut self, node: Node) -> Vec<Node> {
         unimplemented!("Incremental insertion not implemented yet");
     }
 
@@ -68,7 +68,7 @@ impl NSW {
                     .collect();
 
                 // Sort results by similarity score in descending order
-                results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+                results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
                 // Select top max_neighbors
                 for (neighbor_idx, _) in results.into_iter().take(self.max_neighbours) {
@@ -105,7 +105,8 @@ impl Node {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     println!("\n NSW DEMO \n");
 
     let mut nsw = NSW::new();
@@ -126,9 +127,7 @@ fn main() {
     // }
 
     // Load vector from sample embeddings
-    let embeddings = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(load_vector_from_sample());
+    let embeddings = load_vector_from_sample().await;
 
     for (i, embedding) in embeddings.embedding.iter().enumerate() {
         let mut vector = vec![0.0f32; embeddings.dimensions];
@@ -141,7 +140,7 @@ fn main() {
 
     // Rearrange nodes to build the graph with neighbors
     println!(
-        "Building NSW graph with {} nodes...\n",
+        "Building NSW graph with {} nodes...",
         nsw.nodes.len().to_string().cyan()
     );
     let start_time = std::time::Instant::now();
@@ -153,8 +152,16 @@ fn main() {
     //graph_analyze(&graph, &nsw);
 
     // Perform a query
-    let query_vector = generate_random_vector(1024);
-    println!("Querying vector: {:?}...", &query_vector[..3]);
+    let provider = Provider::new(
+        "http://localhost:1234/v1/embeddings",
+        "text-embedding-qwen3-embedding-0.6b",
+    );
+    let sample_query = "What is this book about?";
+    let query_embedding = provider.fetch_embedding(sample_query).await?;
+
+    let query_vector = query_embedding.data[0].embedding.clone();
+    // let query_vector = generate_random_vector(1024);
+    println!("\nQuerying vector: {:?}...", &query_vector[..3]);
     let top_k = 5;
 
     // Greedy Search
@@ -177,10 +184,12 @@ fn main() {
 
     // Parallel Greedy Search
     let start_time = std::time::Instant::now();
-    let parallel_results = parallel_greedy_search(&query_vector, top_k, 100, &graph);
+    let start_points = 5;
+    let parallel_results = parallel_greedy_search(&query_vector, top_k, start_points, &graph);
     let duration = start_time.elapsed().as_secs_f64();
     println!(
-        "\nParallel Greedy search completed in {}s",
+        "\nParallel Greedy search with {} start points, completed in {}s",
+        start_points.to_string().yellow(),
         duration.to_string().yellow()
     );
     println!("\nTop {} Parallel Greedy Search Results:", top_k);
@@ -210,6 +219,8 @@ fn main() {
             result.similarity.to_string().cyan()
         );
     }
+
+    Ok(())
 }
 
 #[allow(unused)]
@@ -353,7 +364,7 @@ fn parallel_greedy_search(
         .collect();
 
     // Sort results by similarity in descending order
-    result_buffer.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+    result_buffer.sort_unstable_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
 
     // Return top_k results
     result_buffer.into_par_iter().take(top_k as usize).collect()
@@ -373,7 +384,7 @@ fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryRe
         .collect();
 
     // Sort results by similarity in descending order
-    results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+    results.sort_unstable_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
 
     // Return top_k results
     results.into_par_iter().take(top_k as usize).collect()
@@ -425,6 +436,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 }
 
 /// Generate a random vector of 1024 dimensions with values in range [-2.0, 2.0]
+#[allow(unused)]
 fn generate_random_vector(dimension: usize) -> Vec<f32> {
     let mut rng = rand::rng();
 

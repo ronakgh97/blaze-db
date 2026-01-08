@@ -17,8 +17,8 @@ name = "blzsrv"
 path = "src/bin/server.rs"
 
 [[bin]]
-name = "hnsw"
-path = "hnsw_demo/hnsw.rs"
+name = "nsw"
+path = "hnsw_demo/nsw.rs"
 
 [[bin]]
 name = "hnsw_demo"
