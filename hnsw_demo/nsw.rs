@@ -1,3 +1,4 @@
+#![allow(unused)]
 use blaze_db::prelude::{EmbeddingStore, Provider};
 use blaze_db::utils::VectorData;
 use colored::Colorize;
@@ -114,31 +115,31 @@ async fn main() -> anyhow::Result<()> {
     let mut nsw = NSW::new();
 
     // Generate 50K random vectors
-    // let num_vectors = 75_000;
-    //
-    // for i in 0..num_vectors {
-    //     let vector = generate_random_vector(1024);
-    //
-    //     // if (i + 1) % 10000 == 0 {
-    //     //     println!("Generated {} vectors", (i + 1).to_string().cyan());
-    //     // }
-    //
-    //     // Create a node with none neighbors for simplicity
-    //     let node = Node::new(i, vector, vec![]);
-    //     nsw.add_node_rearranged_later(node);
-    // }
+    let num_vectors = 50_000;
 
-    // Load vector from sample embeddings
-    let embeddings = load_vector_from_sample().await;
+    for i in 0..num_vectors {
+        let vector = generate_random_vector(1024);
 
-    for (i, embedding) in embeddings.embedding.iter().enumerate() {
-        let mut vector = vec![0.0f32; embeddings.dimensions];
-        for j in 0..embeddings.dimensions {
-            vector[j] = embedding[j];
-        }
+        // if (i + 1) % 10000 == 0 {
+        //     println!("Generated {} vectors", (i + 1).to_string().cyan());
+        // }
+
+        // Create a node with none neighbors for simplicity
         let node = Node::new(i, vector, vec![]);
         nsw.add_node_rearranged_later(node);
     }
+
+    // Load vector from sample embeddings
+    // let embeddings = load_vector_from_sample().await;
+    //
+    // for (i, embedding) in embeddings.embedding.iter().enumerate() {
+    //     let mut vector = vec![0.0f32; embeddings.dimensions];
+    //     for j in 0..embeddings.dimensions {
+    //         vector[j] = embedding[j];
+    //     }
+    //     let node = Node::new(i, vector, vec![]);
+    //     nsw.add_node_rearranged_later(node);
+    // }
 
     // Rearrange nodes to build the graph with neighbors
     println!(
@@ -154,15 +155,15 @@ async fn main() -> anyhow::Result<()> {
     //graph_analyze(&graph, &nsw);
 
     // Perform a query
-    let provider = Provider::new(
-        "http://localhost:1234/v1/embeddings",
-        "text-embedding-qwen3-embedding-0.6b",
-    );
-    let sample_query = "What is this book about?";
-    let query_embedding = provider.fetch_embedding(sample_query).await?;
+    //let provider = Provider::new(
+    //    "http://localhost:1234/v1/embeddings",
+    //    "text-embedding-qwen3-embedding-0.6b",
+    //);
+    // let sample_query = "What is this book about?";
+    //let query_embedding = provider.fetch_embedding(sample_query).await?;
 
-    let query_vector = query_embedding.data[0].embedding.clone();
-    // let query_vector = generate_random_vector(1024);
+    // let query_vector = query_embedding.data[0].embedding.clone();
+    let query_vector = generate_random_vector(1024);
     println!("\nQuerying vector: {:?}...", &query_vector[..3]);
     let top_k = 5;
 
@@ -247,6 +248,7 @@ fn graph_analyze(nodes: &Vec<Node>, nsw: &NSW) {
     );
 }
 
+#[allow(unused)]
 async fn load_vector_from_sample() -> VectorData {
     let binary_data = EmbeddingStore::read_binary("./embeddings")
         .await
