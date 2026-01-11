@@ -20,8 +20,8 @@ struct NSW {
 impl NSW {
     pub fn new() -> Self {
         Self {
-            nodes: Vec::new(),
-            max_neighbours: 32,
+            nodes: Vec::with_capacity(10000), // Pre-allocate for efficiency
+            max_neighbours: 16,
         }
     }
 
@@ -110,12 +110,10 @@ impl Node {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    println!("\n NSW DEMO \n");
-
     let mut nsw = NSW::new();
 
     // Generate 50K random vectors
-    let num_vectors = 50_000;
+    let num_vectors = 20_000;
 
     for i in 0..num_vectors {
         let vector = generate_random_vector(1024);
@@ -168,22 +166,22 @@ async fn main() -> anyhow::Result<()> {
     let top_k = 5;
 
     // Greedy Search
-    let start_time = std::time::Instant::now();
-    let results = greedy_search(&query_vector, top_k, &graph);
-    let duration = start_time.elapsed().as_secs_f64();
-    println!(
-        "\nGreedy search completed in {}s",
-        duration.to_string().yellow()
-    );
-    println!("\nTop {} Greedy Search Results:", top_k);
-    for (i, result) in results.iter().enumerate() {
-        println!(
-            "Result {}: Node Index: {}, Similarity: {:.4}",
-            i + 1,
-            result.node.index.to_string().cyan(),
-            result.similarity.to_string().cyan()
-        );
-    }
+    // let start_time = std::time::Instant::now();
+    // let results = greedy_search(&query_vector, top_k, &graph);
+    // let duration = start_time.elapsed().as_secs_f64();
+    // println!(
+    //     "\nGreedy search completed in {}s",
+    //     duration.to_string().yellow()
+    // );
+    // println!("\nTop {} Greedy Search Results:", top_k);
+    // for (i, result) in results.iter().enumerate() {
+    //     println!(
+    //         "Result {}: Node Index: {}, Similarity: {:.4}",
+    //         i + 1,
+    //         result.node.index.to_string().cyan(),
+    //         result.similarity.to_string().cyan()
+    //     );
+    // }
 
     // Parallel Greedy Search
     let start_time = std::time::Instant::now();
@@ -210,7 +208,7 @@ async fn main() -> anyhow::Result<()> {
     let brute_results = brute_search(&query_vector, top_k, &graph);
     let duration = start_time.elapsed().as_secs_f64();
     println!(
-        "\nBrute search completed in {}s",
+        "\nBrute Force search completed in {}s",
         duration.to_string().yellow()
     );
     println!("\nTop {} Brute-force Results:", top_k);
@@ -263,6 +261,7 @@ struct QueryResult {
     pub similarity: f32,
 }
 
+#[allow(unused)]
 /// Perform greedy search on built NSW graph
 fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
     // Get a random start node
@@ -270,7 +269,7 @@ fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryR
     let start_index = rng.random_range(0..nodes.len());
     let mut start_node = &nodes[start_index];
 
-    let mut result_buffer = Vec::new();
+    let mut result_buffer = Vec::with_capacity(nodes.len()); // Pre-allocate
 
     loop {
         // Calculate similarity with the start node
@@ -326,7 +325,9 @@ fn parallel_greedy_search(
         .map(|_| rng.random_range(0..nodes.len()))
         .collect();
 
-    let mut result_buffer: Vec<QueryResult> = start_indices
+    let mut result_buffer: Vec<QueryResult> = Vec::with_capacity(nodes.len()); // Pre-allocate
+
+    result_buffer = start_indices
         .par_iter()
         .map(|&start_index| {
             let mut start_node = &nodes[start_index];
@@ -376,7 +377,9 @@ fn parallel_greedy_search(
 
 /// Perform brute-force search for comparison and validation
 fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
-    let mut results: Vec<QueryResult> = nodes
+    let mut results: Vec<QueryResult> = Vec::with_capacity(nodes.len()); // Pre-allocate
+
+    results = nodes
         .par_iter()
         .map(|node| {
             let similarity = cosine_similarity(vector, &node.vector);
@@ -395,9 +398,11 @@ fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryRe
 }
 
 /// Cosine similarity using 8-wide f32 vectors
+/// Higher the value, the more similar the vectors are
 /// Returns value in [-1, 1]
+#[inline]
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len(), "Vector dimensions must match");
+    assert_eq!(a.len(), b.len(), "Vector dimensions must match");
 
     let chunks = a.len() / 8;
     let mut dot = f32x8::ZERO;
