@@ -100,6 +100,10 @@ Result 5: Node Index: 5124, Similarity: 0.38
 - HNSW DEMO and benchmarking.
 - Cloud deployment options.
 
+## References
+
+- [Curse of Dimensionality](https://en.wikipedia.org/wiki/Curse_of_dimensionality)
+
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues or submit pull requests. 🤧🏳️
