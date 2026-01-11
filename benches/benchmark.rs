@@ -1,7 +1,4 @@
-use blaze_db::prelude::{
-    EmbeddingStore, Metrics, SearchQuery, VectorData, cosine_similarity, dot_product,
-    euclidean_similarity,
-};
+use blaze_db::prelude::{EmbeddingStore, Metrics, SearchQuery, VectorData};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 use tokio::runtime::Runtime;
@@ -29,61 +26,6 @@ fn generate_random_vectors(num_vectors: usize, dimensions: usize) -> VectorData 
 
 fn generate_query_vector(dimensions: usize) -> Vec<f32> {
     (0..dimensions).map(|i| (i as f32 * 0.002).cos()).collect()
-}
-
-// Similarity Function Benchmarks
-fn bench_cosine_similarity(c: &mut Criterion) {
-    let dimensions = [128, 384, 768, 1536];
-
-    let mut group = c.benchmark_group("cosine_similarity");
-
-    for dim in dimensions {
-        let a: Vec<f32> = (0..dim).map(|i| (i as f32 * 0.001).sin()).collect();
-        let b: Vec<f32> = (0..dim).map(|i| (i as f32 * 0.002).cos()).collect();
-
-        group.throughput(Throughput::Elements(dim as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(dim), &dim, |bench, _| {
-            bench.iter(|| cosine_similarity(black_box(&a), black_box(&b)))
-        });
-    }
-
-    group.finish();
-}
-
-fn bench_dot_product(c: &mut Criterion) {
-    let dimensions = [128, 384, 768, 1536];
-
-    let mut group = c.benchmark_group("dot_product");
-
-    for dim in dimensions {
-        let a: Vec<f32> = (0..dim).map(|i| (i as f32 * 0.001).sin()).collect();
-        let b: Vec<f32> = (0..dim).map(|i| (i as f32 * 0.002).cos()).collect();
-
-        group.throughput(Throughput::Elements(dim as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(dim), &dim, |bench, _| {
-            bench.iter(|| dot_product(black_box(&a), black_box(&b)))
-        });
-    }
-
-    group.finish();
-}
-
-fn bench_euclidean_similarity(c: &mut Criterion) {
-    let dimensions = [128, 384, 768, 1536];
-
-    let mut group = c.benchmark_group("euclidean_similarity");
-
-    for dim in dimensions {
-        let a: Vec<f32> = (0..dim).map(|i| (i as f32 * 0.001).sin()).collect();
-        let b: Vec<f32> = (0..dim).map(|i| (i as f32 * 0.002).cos()).collect();
-
-        group.throughput(Throughput::Elements(dim as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(dim), &dim, |bench, _| {
-            bench.iter(|| euclidean_similarity(black_box(&a), black_box(&b)))
-        });
-    }
-
-    group.finish();
 }
 
 // Search Benchmarks
@@ -198,13 +140,6 @@ fn bench_load_embeddings(c: &mut Criterion) {
 }
 
 criterion_group!(
-    similarity_benches,
-    bench_cosine_similarity,
-    bench_dot_product,
-    bench_euclidean_similarity
-);
-
-criterion_group!(
     search_benches,
     bench_search_varying_vectors,
     bench_search_varying_dimensions,
@@ -214,4 +149,4 @@ criterion_group!(
 
 criterion_group!(io_benches, bench_load_embeddings);
 
-criterion_main!(similarity_benches, search_benches, io_benches);
+criterion_main!(search_benches, io_benches);
