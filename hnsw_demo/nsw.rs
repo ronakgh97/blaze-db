@@ -247,6 +247,21 @@ fn graph_analyze(nodes: &Vec<Node>, nsw: &NSW) {
 }
 
 #[allow(unused)]
+async fn get_cpu_usage() -> f32 {
+    use sysinfo::System;
+    let mut sys = System::new_all();
+    sys.refresh_cpu_usage();
+
+    tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
+    sys.refresh_cpu_usage();
+
+    let cpu_usage =
+        sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32; // Average CPU usage
+
+    cpu_usage
+}
+
+#[allow(unused)]
 async fn load_vector_from_sample() -> VectorData {
     let binary_data = EmbeddingStore::read_binary("./embeddings")
         .await
