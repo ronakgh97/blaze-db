@@ -51,39 +51,68 @@ Total took: 15.7322ms
 ### NSW DEMO WITH BENCHMARKING
 
 ```shell
-Building NSW graph with 5981 nodes...
-Rearranged in 0.7676408s
+Building NSW graph with 50000 nodes...
+Rearranged in 152.7613933s
 
-Querying vector: [0.026481036, -0.020060454, -0.008198336]...
+Querying vector: [0.8538208, 0.9682727, 0.5688729]...
 
-Greedy search completed in 0.0001116s
-
-Top 5 Greedy Search Results:
-Result 1: Node Index: 5083, Similarity: 0.39
-Result 2: Node Index: 5084, Similarity: 0.37
-Result 3: Node Index: 4906, Similarity: 0.30
-Result 4: Node Index: 4898, Similarity: 0.28
-
-Parallel Greedy search with 5 start points, completed in 0.0002976s
+Parallel Greedy search with 5 start points, completed in 0.0002725s
 
 Top 5 Parallel Greedy Search Results:
-Result 1: Node Index: 5596, Similarity: 0.33
-Result 2: Node Index: 757, Similarity: 0.31
-Result 3: Node Index: 757, Similarity: 0.31
-Result 4: Node Index: 385, Similarity: 0.29
-Result 5: Node Index: 5153, Similarity: 0.28
+Result 1: Node Index: 49687, Similarity: 0.10
+Result 2: Node Index: 33600, Similarity: 0.08
+Result 3: Node Index: 1301, Similarity: 0.07
+Result 4: Node Index: 46925, Similarity: 0.07
+Result 5: Node Index: 27158, Similarity: 0.06
 
-Brute search completed in 0.0047755s
+Brute Force search completed in 0.061732s
 
 Top 5 Brute-force Results:
-Result 1: Node Index: 5125, Similarity: 0.40
-Result 2: Node Index: 5083, Similarity: 0.39
-Result 3: Node Index: 421, Similarity: 0.39
-Result 4: Node Index: 4188, Similarity: 0.39
-Result 5: Node Index: 5124, Similarity: 0.38
+Result 1: Node Index: 40173, Similarity: 0.13
+Result 2: Node Index: 40968, Similarity: 0.12
+Result 3: Node Index: 11221, Similarity: 0.12
+Result 4: Node Index: 34480, Similarity: 0.11
+Result 5: Node Index: 8626, Similarity: 0.11
 ```
 
-- Almost 40x speedup with NSW over brute-force search on 6k vectors!
+- Almost 200x speedup with NSW over parallel brute-force search on 50k vectors!
+- Beware: These are very random, high-dimensional vectors, so accuracy may be low, since finding true nearest neighbors
+  in high dimensions is inherently difficult (curse of dimensionality).
+
+### HHSW DEMO WITH BENCHMARKING
+
+```shell
+Building HNSW graph with 50000 nodes...                                                                                 Indexing completed in 291.6110926s
+Indexing completed in 291.6110926s
+
+HNSW Layer Statistics:
+  Layer 0: 50000 nodes (100.00%)
+  Layer 1: 3070 nodes (6.14%)
+  Layer 2: 183 nodes (0.37%)
+  Layer 3: 16 nodes (0.03%)
+  Layer 4: 3 nodes (0.01%)
+  Entry point: node 18377 at layer 4
+
+Performing search...
+Search took: 0.0005666s
+
+Top 10 nearest neighbors:
+  1. Node 36602 - similarity: 0.10
+  2. Node 11926 - similarity: 0.09
+  3. Node 35536 - similarity: 0.08
+  4. Node 18359 - similarity: 0.08
+  5. Node 15308 - similarity: 0.08
+  6. Node 16649 - similarity: 0.07
+  7. Node 8112  - similarity: 0.07
+  8. Node 3205  - similarity: 0.07
+  9. Node 1895  - similarity: 0.07
+  10. Node 6704  - similarity: 0.06
+```
+
+- Again, significant speedup with HNSW over brute-force search on 50k vectors!
+- Curse of dimensionality still applies.
+- HNSW implementation is basic and can be further optimized. (Which are beyond of my knowledge 😵‍💫)
+- Anyways, Look at that smooth exponential layer distribution! *chief kiss* 😼
 
 ## TODO:
 
