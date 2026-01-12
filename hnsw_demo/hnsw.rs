@@ -1,3 +1,6 @@
+mod utils;
+
+use crate::utils::{cosine_similarity, generate_random_vector};
 use anyhow::Result;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -13,7 +16,6 @@ use std::io::BufWriter;
 use std::io::Write;
 #[allow(unused)]
 use std::sync::Mutex;
-use wide::f32x8;
 
 /// # Hierarchical Navigable Small World (HNSW)
 ///
@@ -629,7 +631,7 @@ async fn main() -> Result<()> {
     // Uncomment to see level distribution stats
     // get_level_math_debug(&hnsw).await?;
 
-    let node_count = 1_000;
+    let node_count = 20_000;
     let dimension = 1024;
 
     println!(
@@ -652,7 +654,7 @@ async fn main() -> Result<()> {
         progress_bar.inc(1);
         hnsw.insert(vector, level);
     }
-    progress_bar.finish();
+    progress_bar.finish_and_clear();
     println!("Indexing completed in {:?}", start.elapsed());
 
     // Print layer statistics
@@ -676,51 +678,6 @@ async fn main() -> Result<()> {
             node_id.to_string().yellow(),
             similarity.to_string().green()
         );
-    }
-
-    Ok(())
-}
-
-/// Creates a debug log file for capturing the debug statements output.
-async fn create_debug_log_file() -> Result<()> {
-    // Create or truncate the log file
-    tokio::fs::File::create("hnsw_debug.log").await?;
-
-    // Write header
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs();
-
-    let header = format!(
-        "HNSW Debug Log \nStarted at: {}\n{}\n",
-        timestamp,
-        "=".repeat(50)
-    );
-
-    tokio::fs::write("hnsw_debug.log", header).await?;
-    println!("Created debug log file: hnsw_debug.log");
-    Ok(())
-}
-
-/// Appends a debug message to the log file with timestamp.
-fn log_debug_message(message: &str) -> Result<()> {
-    use std::fs::OpenOptions;
-
-    let file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("hnsw_debug.log");
-
-    if let Ok(f) = file {
-        let mut writer = BufWriter::new(f);
-        // Add a simple counter-based timestamp for performance
-        if let Err(e) = writeln!(writer, "{}", message) {
-            eprintln!("Warning: Failed to write to log file: {}", e);
-        }
-        // Flush to ensure data is written
-        let _ = writer.flush();
-    } else {
-        eprintln!("Warning: Failed to open log file");
     }
 
     Ok(())
@@ -814,22 +771,9 @@ async fn get_level_math_debug(hnsw: &HNSW) -> Result<()> {
     Ok(())
 }
 
-/// Generates a random vector of given dimension with values in range [-2.0, 2.0]
-/// Still bad for cosine similarity, but okay for demo purposes
-#[inline]
-fn generate_random_vector(dimension: usize) -> Vec<f32> {
-    let mut rng = rand::rng();
-
-    let mut vector = vec![0.0f32; dimension];
-    for i in 0..dimension {
-        vector[i] = rng.random_range(-2.0..2.0);
-    }
-    vector
-}
-
 /// Returns 6+6 hardcoded 3d and a 3d random generated vectors for testing and debugging
 #[allow(unused)]
-async fn get_mutual_vector3() -> (Vec<Vec<f32>>, Vec<f32>) {
+async fn get_test_vectors() -> (Vec<Vec<f32>>, Vec<f32>) {
     // Generate a random vector
     let mut rng = rand::rng();
 
@@ -857,48 +801,48 @@ async fn get_mutual_vector3() -> (Vec<Vec<f32>>, Vec<f32>) {
     (hardcoded, random_vector)
 }
 
-/// Cosine similarity using 8-wide f32 vectors
-/// Returns value in [-1, 1]
+/// Creates a debug log file for capturing the debug statements output.
+async fn create_debug_log_file() -> Result<()> {
+    // Create or truncate the log file
+    tokio::fs::File::create("hnsw_debug.log").await?;
+
+    // Write header
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
+
+    let header = format!(
+        "HNSW Debug Log \nStarted at: {}\n{}\n",
+        timestamp,
+        "=".repeat(50)
+    );
+
+    tokio::fs::write("hnsw_debug.log", header).await?;
+    println!("Created debug log file: hnsw_debug.log");
+    Ok(())
+}
+
+/// Appends a debug message to the log file with timestamp.
 #[inline]
-pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len(), "Vector dimensions must match");
+fn log_debug_message(message: &str) -> Result<()> {
+    use std::fs::OpenOptions;
 
-    let chunks = a.len() / 8;
-    let mut dot = f32x8::ZERO;
-    let mut norm_a = f32x8::ZERO;
-    let mut norm_b = f32x8::ZERO;
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("hnsw_debug.log");
 
-    // Process 8 elements at a time with SIMD
-    for i in 0..chunks {
-        let offset = i * 8;
-        let va = f32x8::from(&a[offset..offset + 8]);
-        let vb = f32x8::from(&b[offset..offset + 8]);
-        dot += va * vb;
-        norm_a += va * va;
-        norm_b += vb * vb;
-    }
-
-    // Reduce SIMD vectors to scalars
-    let arr_dot = dot.to_array();
-    let arr_na = norm_a.to_array();
-    let arr_nb = norm_b.to_array();
-
-    let mut dot_sum: f32 = arr_dot.iter().sum();
-    let mut na_sum: f32 = arr_na.iter().sum();
-    let mut nb_sum: f32 = arr_nb.iter().sum();
-
-    // Handle remaining elements (tail)
-    let remainder_start = chunks * 8;
-    for i in remainder_start..a.len() {
-        dot_sum += a[i] * b[i];
-        na_sum += a[i] * a[i];
-        nb_sum += b[i] * b[i];
-    }
-
-    let denominator = (na_sum * nb_sum).sqrt();
-    if denominator < f32::EPSILON {
-        0.0
+    if let Ok(f) = file {
+        let mut writer = BufWriter::new(f);
+        // Add a simple counter-based timestamp for performance
+        if let Err(e) = writeln!(writer, "{}", message) {
+            eprintln!("Warning: Failed to write to log file: {}", e);
+        }
+        // Flush to ensure data is written
+        let _ = writer.flush();
     } else {
-        dot_sum / denominator
+        eprintln!("Warning: Failed to open log file");
     }
+
+    Ok(())
 }

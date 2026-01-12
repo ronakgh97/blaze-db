@@ -1,5 +1,11 @@
-#![allow(unused)]
+mod utils;
+
+use crate::utils::cosine_similarity;
+#[allow(unused)]
+use crate::utils::{generate_random_vector, load_vector_from_sample};
+#[allow(unused)]
 use blaze_db::prelude::{EmbeddingStore, Provider};
+#[allow(unused)]
 use blaze_db::utils::VectorData;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -8,7 +14,6 @@ use rand::seq::SliceRandom;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
-use wide::f32x8;
 
 /// Navigable Small World (NSW) graph structure for approximate nearest neighbor search.
 #[derive(Debug, Clone)]
@@ -26,7 +31,7 @@ impl NSW {
     }
 
     /// Add a node to be rearranged later in bulk
-    pub fn add_node_rearranged_later(&mut self, node: Node) {
+    pub fn add_node_index_later(&mut self, node: Node) {
         self.nodes.push(node);
     }
 
@@ -38,7 +43,7 @@ impl NSW {
 
     // Rearrange all nodes in the graph after bulk insertion (slow method)
     // Returns the rearranged nodes, why not mut, cuz we need to for incremental insert later
-    pub fn rearrange_nodes(&self) -> Vec<Node> {
+    pub fn index_nodes(&self) -> Vec<Node> {
         // Progress bar setup
         let progress_bar = ProgressBar::new(self.nodes.len() as u64);
         progress_bar.set_style(
@@ -124,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
 
         // Create a node with none neighbors for simplicity
         let node = Node::new(i, vector, vec![]);
-        nsw.add_node_rearranged_later(node);
+        nsw.add_node_index_later(node);
     }
 
     // Load vector from sample embeddings
@@ -145,7 +150,7 @@ async fn main() -> anyhow::Result<()> {
         nsw.nodes.len().to_string().cyan()
     );
     let start_time = std::time::Instant::now();
-    let graph = nsw.rearrange_nodes();
+    let graph = nsw.index_nodes();
     let duration = start_time.elapsed().as_secs_f64();
     println!("Rearranged in {}s", duration.to_string().yellow());
 
@@ -261,15 +266,6 @@ async fn get_cpu_usage() -> f32 {
     cpu_usage
 }
 
-#[allow(unused)]
-async fn load_vector_from_sample() -> VectorData {
-    let binary_data = EmbeddingStore::read_binary("./embeddings")
-        .await
-        .expect("Failed to load embeddings");
-
-    binary_data
-}
-
 #[derive(Debug, Clone)]
 struct QueryResult {
     pub node: Node,
@@ -277,6 +273,7 @@ struct QueryResult {
 }
 
 #[allow(unused)]
+#[inline]
 /// Perform greedy search on built NSW graph
 fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
     // Get a random start node
@@ -328,6 +325,7 @@ fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryR
     result_buffer
 }
 
+#[inline]
 fn parallel_greedy_search(
     vector: &Vec<f32>,
     top_k: i32,
@@ -391,6 +389,7 @@ fn parallel_greedy_search(
 }
 
 /// Perform brute-force search for comparison and validation
+#[inline]
 fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
     let mut results: Vec<QueryResult> = Vec::with_capacity(nodes.len()); // Pre-allocate
 
@@ -410,63 +409,4 @@ fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryRe
 
     // Return top_k results
     results.into_par_iter().take(top_k as usize).collect()
-}
-
-/// Cosine similarity using 8-wide f32 vectors
-/// Higher the value, the more similar the vectors are
-/// Returns value in [-1, 1]
-#[inline]
-pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "Vector dimensions must match");
-
-    let chunks = a.len() / 8;
-    let mut dot = f32x8::ZERO;
-    let mut norm_a = f32x8::ZERO;
-    let mut norm_b = f32x8::ZERO;
-
-    // Process 8 elements at a time with SIMD
-    for i in 0..chunks {
-        let offset = i * 8;
-        let va = f32x8::from(&a[offset..offset + 8]);
-        let vb = f32x8::from(&b[offset..offset + 8]);
-        dot += va * vb;
-        norm_a += va * va;
-        norm_b += vb * vb;
-    }
-
-    // Reduce SIMD vectors to scalars
-    let arr_dot = dot.to_array();
-    let arr_na = norm_a.to_array();
-    let arr_nb = norm_b.to_array();
-
-    let mut dot_sum: f32 = arr_dot.iter().sum();
-    let mut na_sum: f32 = arr_na.iter().sum();
-    let mut nb_sum: f32 = arr_nb.iter().sum();
-
-    // Handle remaining elements (tail)
-    let remainder_start = chunks * 8;
-    for i in remainder_start..a.len() {
-        dot_sum += a[i] * b[i];
-        na_sum += a[i] * a[i];
-        nb_sum += b[i] * b[i];
-    }
-
-    let denominator = (na_sum * nb_sum).sqrt();
-    if denominator < f32::EPSILON {
-        0.0
-    } else {
-        dot_sum / denominator
-    }
-}
-
-/// Generate a random vector of 1024 dimensions with values in range [-2.0, 2.0]
-#[allow(unused)]
-fn generate_random_vector(dimension: usize) -> Vec<f32> {
-    let mut rng = rand::rng();
-
-    let mut vector = vec![0.0f32; dimension];
-    for i in 0..dimension {
-        vector[i] = rng.random_range(-2.0..2.0);
-    }
-    vector
 }
