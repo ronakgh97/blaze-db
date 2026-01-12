@@ -112,22 +112,23 @@ Top 10 nearest neighbors:
 - Again, significant speedup with HNSW over brute-force search on 50k vectors!
 - Curse of dimensionality still applies.
 - HNSW implementation is basic and can be further optimized. (Which are beyond of my knowledge 😵‍💫)
-- Anyways, Look at that smooth exponential layer distribution! *chief kiss* 😼
+- Anyway, Look at that smooth exponential layer distribution! *chief kiss* 😼
 
 ## TODO:
 
-- HNSW (Hierarchical Navigable Small World) indexing for improved search performance.
-- Fix Chunking for better meaningful text segments.
+- HNSW (Hierarchical Navigable Small World) indexing for improved search performance. `DONE (basic implementation)`
+- Fix Chunking for better meaningful text segments. `DONE, but kinda broken for now.`
 - Write/insert functionality for adding new vectors to the database. (Currently read-only, or rebuild entire DB)
+  `PARTIALLY DONE (only for flat files, not for HNSW)`
 - Make a storage engine, e.g SSTable or LSMTree based.
 - Use gRPC/Protobuf for client-server communication?
-- Complete HTTP API server for remote database access.
+- Complete HTTP API server for remote database access. `Insert endpoint is missing.`
 - Query filtering and metadata support.
-- Incremental updates without full reindex. (HNSW)
+- Incremental updates without full reindex. (HNSW) `DONE (HNSW insert implemented)`
 - Distributed storage and sharding support.
 - Move hardcoded Values to separate config files.
 - HNSW DEMO and benchmarking.
-- Cloud deployment options.
+- Cloud deployment options. `What is cloud thingy?`
 
 ## References
 
