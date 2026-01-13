@@ -1,7 +1,9 @@
 mod utils;
 
-use crate::utils::{cosine_similarity, generate_random_vector};
+#[allow(unused)]
+use crate::utils::{cosine_similarity, generate_random_vector, load_vector_from_sample};
 use anyhow::Result;
+use blaze_db::prelude::Provider;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng;
@@ -87,7 +89,7 @@ impl HNSW {
     /// 1. If first node, just add it as entry point
     /// 2. Otherwise, search from top layer down to find nearest neighbors
     /// 3. Connect the new node to its neighbors at each layer
-    pub fn insert(&mut self, vector: Vec<f32>, max_level: usize) -> NodeId {
+    pub fn insert(&mut self, vector: Vec<f32>, metadata: String, max_level: usize) -> NodeId {
         let node_id = self.nodes.len();
 
         // println!(
@@ -103,6 +105,7 @@ impl HNSW {
         // Create the node with empty neighbor lists
         let node = Node {
             id: node_id,
+            metadata,
             vector,
             neighbors: vec![
                 Vec::with_capacity(self.max_neighbors * self.max_layers);
@@ -579,7 +582,7 @@ impl HNSW {
         // ))
         // .ok();
 
-        let candidates = self.search_layer_knn(query, current, k * 2, 0);
+        let candidates = self.search_layer_knn(query, current, k * 2, 0); //TODO Higher ef? Maybe ef_search as param?
 
         // println!("[SEARCH] Found {} candidates at layer 0", candidates.len());
         // log_debug_message(&format!(
@@ -602,6 +605,21 @@ impl HNSW {
 
         results
     }
+
+    /// Search and return results with metadata
+    /// Returns results as (NodeId, similarity, metadata) tuples sorted by similarity (highest first)
+    pub fn search_with_metadata(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32, String)> {
+        let results = self.search(query, k);
+        results
+            .into_par_iter()
+            .map(|(id, sim)| (id, sim, self.nodes[id].metadata.clone()))
+            .collect()
+    }
+
+    /// Get metadata for a specific node
+    pub fn get_metadata(&self, node_id: NodeId) -> Option<&String> {
+        self.nodes.get(node_id).map(|node| &node.metadata)
+    }
 }
 
 /// Unique identifier for a node in the HNSW graph.
@@ -613,12 +631,28 @@ type NodeId = usize;
 struct Node {
     /// Unique identifier for the node
     pub id: NodeId,
+    /// Metadata associated with the node
+    pub metadata: String, // String for now, I guess? TODO: make generic?
     /// Vector representation of the node, any dimensionality
     pub vector: Vec<f32>,
     /// Neighbors per layer, e.g neighbors[0] is the list of neighbors in layer 0
     pub neighbors: Vec<Vec<NodeId>>,
     /// The highest layer this node exists in
     pub max_level: usize,
+}
+
+impl Node {
+    /// Creates a new Node with the given id, vector, metadata, and max_level.
+    #[allow(unused)]
+    pub fn new(id: NodeId, vector: Vec<f32>, metadata: String, max_level: usize) -> Self {
+        Node {
+            id,
+            metadata,
+            vector,
+            neighbors: vec![Vec::new(); max_level + 1], // Preallocate neighbor lists
+            max_level,
+        }
+    }
 }
 
 #[tokio::main]
@@ -628,11 +662,13 @@ async fn main() -> Result<()> {
 
     // create_debug_log_file().await?;
 
-    // Uncomment to see level distribution stats
     // get_level_math_debug(&hnsw).await?;
 
-    let node_count = 20_000;
-    let dimension = 1024;
+    let loaded_vector_data = load_vector_from_sample().await;
+
+    // let node_count = 20_000;
+    let node_count = loaded_vector_data.embedding.len();
+    // let dimension = 1024;
 
     println!(
         "\nBuilding HNSW graph with {} nodes...",
@@ -648,11 +684,13 @@ async fn main() -> Result<()> {
     );
 
     let start = std::time::Instant::now();
-    for _ in 0..node_count {
-        let vector = generate_random_vector(dimension);
+    for i in 0..node_count {
+        //let vector = generate_random_vector(dimension);
+        let vector = loaded_vector_data.embedding[i].clone();
         let level = hnsw.get_random_level();
+        let metadata = loaded_vector_data.chunk[i].clone();
         progress_bar.inc(1);
-        hnsw.insert(vector, level);
+        hnsw.insert(vector, metadata, level);
     }
     progress_bar.finish_and_clear();
     println!("Indexing completed in {:?}", start.elapsed());
@@ -660,23 +698,38 @@ async fn main() -> Result<()> {
     // Print layer statistics
     print_layer_stats(&hnsw);
 
-    // Test search
-    println!("\nPerforming search...");
-    let query = generate_random_vector(dimension);
-    let k = 10;
+    // Perform a query
+    let provider = Provider::new(
+        "http://localhost:1234/v1/embeddings",
+        "text-embedding-qwen3-embedding-0.6b",
+    );
+    let sample_query = "What is this about?";
+    let query_embedding = provider.fetch_embedding(sample_query).await?;
+
+    let query_vector = query_embedding.data[0].embedding.clone();
+    // let query_vector = generate_random_vector(1024);
+    println!("\nQuery: {}", sample_query.to_string().yellow());
+    println!("Querying vector: {:?}...", &query_vector[..3]);
+    let top_k = 5;
 
     let start = std::time::Instant::now();
-    let results = hnsw.search(&query, k);
-    println!("Search took: {:?}s", start.elapsed().as_secs_f64());
+    let results = hnsw.search_with_metadata(&query_vector, top_k);
+    let search_time = start.elapsed().as_secs_f64();
+    println!("Search completed in: {}s", search_time.to_string().yellow());
 
-    println!("\nTop {} nearest neighbors:", k);
+    println!("\nTop {} nearest neighbors:", top_k);
 
-    for (i, (node_id, similarity)) in results.iter().enumerate() {
+    for (i, (node_id, similarity, _metadata)) in results.iter().enumerate() {
         println!(
-            "  {}. Node {:5} - similarity: {:.4}",
+            "  {}. Node {:5} - similarity: {:.4}\n Metadata: {}",
             i + 1,
             node_id.to_string().yellow(),
-            similarity.to_string().green()
+            similarity.to_string().green(),
+            HNSW::get_metadata(&hnsw, *node_id)
+                .unwrap()
+                .to_string()
+                .dimmed()
+                .green()
         );
     }
 
