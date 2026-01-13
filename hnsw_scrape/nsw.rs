@@ -14,6 +14,7 @@ use rand::seq::SliceRandom;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
+use std::collections::HashSet;
 
 /// Navigable Small World (NSW) graph structure for approximate nearest neighbor search.
 #[derive(Debug, Clone)]
@@ -23,10 +24,10 @@ struct NSW {
 }
 
 impl NSW {
-    pub fn new() -> Self {
+    pub fn new(max_neighbours: usize, max_nodes: usize) -> Self {
         Self {
-            nodes: Vec::with_capacity(10000), // Pre-allocate for efficiency
-            max_neighbours: 16,
+            nodes: Vec::with_capacity(max_nodes), // Pre-allocate for efficiency
+            max_neighbours,
         }
     }
 
@@ -50,7 +51,7 @@ impl NSW {
             ProgressStyle::default_bar()
                 .template("[{bar:60.cyan/blue}] {pos}/{len} ({percent}%)")
                 .unwrap()
-                .progress_chars("●●-"),
+                .progress_chars("●●>-"),
         );
 
         let mut nodes = self.nodes.clone();
@@ -83,7 +84,12 @@ impl NSW {
                 }
 
                 // Create a new node with updated neighbors
-                let rearranged_node = Node::new(node.index, node.vector.clone(), neighbors);
+                let rearranged_node = Node::new(
+                    node.index,
+                    node.vector.clone(),
+                    node.metadata.clone(),
+                    neighbors,
+                );
                 progress_bar.inc(1);
                 rearranged_node
             })
@@ -100,86 +106,93 @@ impl NSW {
         top_k: i32,
         start_points: usize,
         nodes: &Vec<Node>,
-    ) -> Vec<QueryResult> {
+    ) -> Vec<Node> {
         // Get multiple random start nodes
         let mut rng = rand::rng();
         let start_indices: Vec<usize> = (0..start_points)
             .map(|_| rng.random_range(0..nodes.len()))
             .collect();
 
-        let mut result_buffer: Vec<QueryResult> = Vec::with_capacity(nodes.len()); // Pre-allocate
-
-        result_buffer = start_indices
+        // Run parallel greedy searches from each start point
+        // Collect ALL visited nodes, not just final destination (Important)
+        let all_candidates: Vec<(Node, f32)> = start_indices
             .par_iter()
-            .map(|&start_index| {
-                let mut start_node = &nodes[start_index];
-                loop {
-                    // Calculate similarity with the start node
-                    let similarity = cosine_similarity(vector, &start_node.vector);
+            .flat_map(|&start_index| {
+                let mut current_node = &nodes[start_index];
+                let mut path_results = Vec::new();
 
-                    // Find the best neighbor to continue the search
-                    let best_neighbor = start_node
+                loop {
+                    // Calculate similarity with current node
+                    let current_similarity = cosine_similarity(vector, &current_node.vector);
+                    path_results.push((current_node.clone(), current_similarity));
+
+                    // Find the best neighbor
+                    let best_neighbor = current_node
                         .neighbors
-                        .iter()
-                        .map(|&neighbor_idx| &nodes[neighbor_idx])
-                        .max_by(|a, b| {
-                            let sim_a = cosine_similarity(vector, &a.vector);
-                            let sim_b = cosine_similarity(vector, &b.vector);
-                            sim_a.partial_cmp(&sim_b).unwrap()
-                        });
+                        .par_iter()
+                        .map(|&neighbor_idx| {
+                            let neighbor = &nodes[neighbor_idx];
+                            (neighbor, cosine_similarity(vector, &neighbor.vector))
+                        })
+                        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
                     match best_neighbor {
-                        Some(neighbor) => {
-                            let neighbor_similarity = cosine_similarity(vector, &neighbor.vector);
-                            // If the best neighbor is better than the current node, move to it
-                            if neighbor_similarity > similarity {
-                                start_node = neighbor;
+                        Some((neighbor, neighbor_similarity)) => {
+                            // If neighbor is better, move to it
+                            if neighbor_similarity > current_similarity {
+                                current_node = neighbor;
                             } else {
-                                // No better neighbor found, end search
+                                // Found local optimum
                                 break;
                             }
                         }
-                        None => break, // No neighbors, end search
+                        None => break, // No neighbors
                     }
                 }
 
-                QueryResult {
-                    node: start_node.clone(),
-                    similarity: cosine_similarity(vector, &start_node.vector),
-                }
+                path_results
             })
             .collect();
 
-        // Sort results by similarity in descending order
-        result_buffer.sort_unstable_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        // Sort all candidates by similarity descending
+        let mut sorted_candidates = all_candidates;
+        sorted_candidates.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        // Return top_k results
-        result_buffer.into_par_iter().take(top_k as usize).collect()
+        // Deduplicate and return top_k
+        let mut seen = HashSet::new();
+        sorted_candidates
+            .into_iter()
+            .filter(|(node, _)| seen.insert(node.index))
+            .take(top_k as usize)
+            .map(|(node, _)| node)
+            .collect()
     }
 
     /// Search API - Brute-force Search
     /// Perform parallel brute-force search over all nodes
     /// Use a lot of cpu and memory, but accurate and slow
     #[inline]
-    fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
-        let mut results: Vec<QueryResult> = Vec::with_capacity(nodes.len()); // Pre-allocate
+    fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<Node> {
+        let mut results: Vec<(Node, f32)> = Vec::new();
+        results.reserve(nodes.len()); // Pre-allocate
 
         results = nodes
             .par_iter()
             .map(|node| {
                 let similarity = cosine_similarity(vector, &node.vector);
-                QueryResult {
-                    node: node.clone(),
-                    similarity,
-                }
+                (node.clone(), similarity)
             })
             .collect();
 
         // Sort results by similarity in descending order
-        results.sort_unstable_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        // Return top_k results
-        results.into_par_iter().take(top_k as usize).collect()
+        // Return top_k results as Vec<Node>
+        results
+            .into_par_iter()
+            .take(top_k as usize)
+            .map(|(node, _)| node)
+            .collect()
     }
 }
 
@@ -190,14 +203,21 @@ type NodeIndex = usize;
 struct Node {
     pub index: NodeIndex,
     pub vector: Vec<f32>,
+    pub metadata: String,
     pub neighbors: Vec<NodeIndex>,
 }
 
 impl Node {
-    pub fn new(index: NodeIndex, vector: Vec<f32>, neighbors: Vec<NodeIndex>) -> Self {
+    pub fn new(
+        index: NodeIndex,
+        vector: Vec<f32>,
+        metadata: String,
+        neighbors: Vec<NodeIndex>,
+    ) -> Self {
         Self {
             index,
             vector,
+            metadata,
             neighbors,
         }
     }
@@ -205,34 +225,45 @@ impl Node {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut nsw = NSW::new();
+    let mut nsw = NSW::new(5555, 16);
 
     // Generate 50K random vectors
-    let num_vectors = 20_000;
+    // let num_vectors = 20_000;
 
-    for i in 0..num_vectors {
-        let vector = generate_random_vector(1024);
+    // for i in 0..num_vectors {
+    //    let vector = generate_random_vector(1024);
 
-        // if (i + 1) % 10000 == 0 {
-        //     println!("Generated {} vectors", (i + 1).to_string().cyan());
-        // }
+    // if (i + 1) % 10000 == 0 {
+    //     println!("Generated {} vectors", (i + 1).to_string().cyan());
+    // }
 
-        // Create a node with none neighbors for simplicity
-        let node = Node::new(i, vector, vec![]);
-        nsw.add_node_index_later(node);
-    }
+    // Create a node with none neighbors for simplicity
+    //     let node = Node::new(i, vector, "whatever".to_string(), vec![]);
+    //     nsw.add_node_index_later(node);
+    // }
 
     // Load vector from sample embeddings
-    // let embeddings = load_vector_from_sample().await;
-    //
-    // for (i, embedding) in embeddings.embedding.iter().enumerate() {
-    //     let mut vector = vec![0.0f32; embeddings.dimensions];
-    //     for j in 0..embeddings.dimensions {
-    //         vector[j] = embedding[j];
-    //     }
-    //     let node = Node::new(i, vector, vec![]);
-    //     nsw.add_node_rearranged_later(node);
-    // }
+
+    let load_time = std::time::Instant::now();
+    let embeddings = load_vector_from_sample().await;
+    let total_vectors = embeddings.total_vectors;
+
+    // Insert/load all vectors into NSW
+    let mut chunks = embeddings.chunk.into_iter();
+    for (i, vector) in embeddings.embedding.into_iter().enumerate() {
+        let metadata = chunks
+            .next()
+            .unwrap_or_else(|| format!("No metadata for index {}", i));
+
+        let node = Node::new(i, vector, metadata, vec![]);
+        nsw.add_node_index_later(node);
+    }
+    let load_duration = load_time.elapsed().as_secs_f64();
+    println!(
+        "\nLoaded {} vectors in {}s",
+        total_vectors.to_string().cyan(),
+        load_duration.to_string().yellow()
+    );
 
     // Rearrange nodes to build the graph with neighbors
     println!(
@@ -245,16 +276,17 @@ async fn main() -> anyhow::Result<()> {
     println!("Rearranged in {}s", duration.to_string().yellow());
 
     // Perform a query
-    //let provider = Provider::new(
-    //    "http://localhost:1234/v1/embeddings",
-    //    "text-embedding-qwen3-embedding-0.6b",
-    //);
-    // let sample_query = "What is this book about?";
-    //let query_embedding = provider.fetch_embedding(sample_query).await?;
+    let provider = Provider::new(
+        "http://localhost:1234/v1/embeddings",
+        "text-embedding-qwen3-embedding-0.6b",
+    );
+    let sample_query = "What is this about?";
+    let query_embedding = provider.fetch_embedding(sample_query).await?;
 
-    // let query_vector = query_embedding.data[0].embedding.clone();
-    let query_vector = generate_random_vector(1024);
-    println!("\nQuerying vector: {:?}...", &query_vector[..3]);
+    let query_vector = query_embedding.data[0].embedding.clone();
+    // let query_vector = generate_random_vector(1024);
+    println!("\nQuery: {}", sample_query.to_string().yellow());
+    println!("Querying vector: {:?}...", &query_vector[..3]);
     let top_k = 5;
 
     // Greedy Search
@@ -287,11 +319,13 @@ async fn main() -> anyhow::Result<()> {
     );
     println!("\nTop {} Parallel Greedy Search Results:", top_k);
     for (i, result) in parallel_results.iter().enumerate() {
+        let similarity = cosine_similarity(&query_vector, &result.vector);
         println!(
-            "Result {}: Node Index: {}, Similarity: {:.4}",
+            "Result {}: Node Index: {}, Similarity: {:.4}\n Metadata: {}",
             i + 1,
-            result.node.index.to_string().cyan(),
-            result.similarity.to_string().cyan()
+            result.index.to_string().cyan(),
+            similarity.to_string().cyan(),
+            result.metadata.to_string().dimmed().green()
         );
     }
 
@@ -305,11 +339,13 @@ async fn main() -> anyhow::Result<()> {
     );
     println!("\nTop {} Brute-force Results:", top_k);
     for (i, result) in brute_results.iter().enumerate() {
+        let similarity = cosine_similarity(&query_vector, &result.vector);
         println!(
-            "Result {}: Node Index: {}, Similarity: {:.4}",
+            "Result {}: Node Index: {}, Similarity: {:.4}, Metadata: {}",
             i + 1,
-            result.node.index.to_string().cyan(),
-            result.similarity.to_string().cyan()
+            result.index.to_string().cyan(),
+            similarity.to_string().cyan(),
+            result.metadata.to_string().dimmed().green()
         );
     }
 
@@ -331,16 +367,10 @@ async fn get_cpu_usage() -> f32 {
     cpu_usage
 }
 
-#[derive(Debug, Clone)]
-struct QueryResult {
-    pub node: Node,
-    pub similarity: f32,
-}
-
 #[allow(unused)]
-#[inline]
+#[deprecated = "use parallel_greedy_search instead for better performance and accuracy"]
 /// Perform a single greedy search on built NSW graph
-fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryResult> {
+fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<Node> {
     // Get a random start node
     let mut rng = rand::rng();
     let start_index = rng.random_range(0..nodes.len());
@@ -351,10 +381,7 @@ fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryR
     loop {
         // Calculate similarity with the start node
         let similarity = cosine_similarity(vector, &start_node.vector);
-        result_buffer.push(QueryResult {
-            node: start_node.clone(),
-            similarity,
-        });
+        result_buffer.push((start_node.clone(), similarity));
 
         // Find the best neighbor to continue the search
         let best_neighbor = start_node
@@ -387,5 +414,5 @@ fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<QueryR
     }
 
     result_buffer.reverse();
-    result_buffer
+    result_buffer.into_iter().map(|(node, _)| node).collect()
 }
