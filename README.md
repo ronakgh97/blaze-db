@@ -122,6 +122,7 @@ Top 10 nearest neighbors:
   `PARTIALLY DONE (only for flat files, not for HNSW)`
 - Make a storage engine, e.g SSTable or LSMTree based. (Actually, I have no idea how to do that. 😵‍💫)
 - Complete Refactor of storage and search modules for new HNSW architecture. `IN PROGRESS`
+- Gotta destroy/refactor the utils module. It's a mess. 😵‍💫 `IN PROGRESS`
 - Use gRPC/Protobuf for client-server communication?
 - Complete HTTP API server for remote database access. `Insert endpoint is missing.`
 - Query filtering and metadata support.
