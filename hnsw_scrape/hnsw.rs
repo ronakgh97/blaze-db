@@ -876,6 +876,7 @@ async fn get_test_vectors() -> (Vec<Vec<f32>>, Vec<f32>) {
 }
 
 /// Creates a debug log file for capturing the debug statements output.
+#[allow(unused)]
 async fn create_debug_log_file() -> Result<()> {
     // Create or truncate the log file
     tokio::fs::File::create("hnsw_debug.log").await?;
@@ -898,6 +899,7 @@ async fn create_debug_log_file() -> Result<()> {
 
 /// Appends a debug message to the log file with timestamp.
 #[inline]
+#[allow(unused)]
 fn log_debug_message(message: &str) -> Result<()> {
     use std::fs::OpenOptions;
 

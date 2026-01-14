@@ -9,7 +9,7 @@ async fn main() {
     let model = "text-embedding-qwen3-embedding-0.6b";
     let provider = Provider::init(url, model);
 
-    let batch_size = 256;
+    let batch_size = 1024;
     let ingestor = Ingestor::new("./sample/War_and_peace.txt", batch_size);
 
     match ingestor.read_chunks(150, 50) {
@@ -32,9 +32,10 @@ async fn main() {
                         let embedded_count = embeddings.embedding.len();
 
                         // Insert each embedding into HNSW index
-                        for vector in embeddings.embedding.iter() {
+                        for (i, vector) in embeddings.embedding.iter().enumerate() {
                             let random_level = hnsw.get_random_level();
-                            hnsw.insert(vector.clone(), random_level);
+                            let metadata = chunk.get(i).cloned().unwrap_or("[EMPTY]".to_string());
+                            hnsw.insert(vector.clone(), metadata, random_level);
                         }
 
                         let mut embedding_store = EmbeddingStore::new(hnsw.clone());

@@ -66,6 +66,7 @@ async fn main() {
                     &node.vector[..5.min(node.vector.len())]
                 );
                 println!("    Vector dimensions: {}", node.vector.len());
+                println!("\nMetadata: {}", node.metadata.to_string().green().dimmed());
             }
         }
         Err(e) => {

@@ -47,18 +47,19 @@ pub async fn embed_run(request: EmbedRequest, _hnsw: Option<HNSW>) -> Result<Emb
     let model = "text-embedding-qwen3-embedding-0.6b";
     let provider = Provider::init(url, model);
 
-    for (index, chunk) in batch_content.iter().enumerate() {
+    for (index, chunks) in batch_content.iter().enumerate() {
         let batch_index = index;
 
         // Fetch embeddings for the current chunk, and update HNSW index
-        match provider.fetch_embeddings(chunk).await {
+        match provider.fetch_embeddings(chunks).await {
             Ok(embeddings) => {
                 let embedded_count = embeddings.embedding.len();
 
                 // Insert embeddings into HNSW index
-                for (_i, vector) in embeddings.embedding.iter().enumerate() {
+                for (i, vector) in embeddings.embedding.iter().enumerate() {
+                    let metadata = chunks.get(i).cloned().unwrap_or("[EMPTY]".to_string());
                     let random_level = hnsw.get_random_level();
-                    hnsw.insert(vector.clone(), random_level);
+                    hnsw.insert(vector.clone(), metadata, random_level);
                 }
 
                 let mut embedding_store = EmbeddingStore::new(hnsw.clone());

@@ -66,15 +66,16 @@ pub async fn main() {
             let top_k = 5;
 
             // Use HNSW search
-            let results = hnsw.search(query_vector, top_k);
+            let results = hnsw.search_with_metadata(query_vector, top_k);
             let search_duration = search_start.elapsed();
 
             println!("Top {} similar chunks (HNSW):", top_k);
-            for (i, (node_id, similarity)) in results.iter().enumerate() {
+            for (i, (node_id, similarity, metadata)) in results.iter().enumerate() {
                 println!("\nResult {}:", i + 1);
                 println!("Node ID: {}", node_id);
                 println!("Similarity: {:.4}", similarity);
                 println!("Vector (first 5): {:?}", &hnsw.nodes[*node_id].vector[..5]);
+                println!("Metadata: {}", metadata);
             }
 
             let total_duration = start.elapsed();

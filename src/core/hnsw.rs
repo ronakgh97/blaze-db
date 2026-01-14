@@ -78,8 +78,8 @@ impl HNSW {
     /// 1. If first node, just add it as entry point
     /// 2. Otherwise, search from top layer down to find nearest neighbors
     /// 3. Connect the new node to its neighbors at each layer
-    pub fn insert(&mut self, vector: Vec<f32>, max_level: usize) -> NodeId {
-        let node_id = self.nodes.len();
+    pub fn insert(&mut self, vector: Vec<f32>, metadata: String, max_level: usize) -> NodeId {
+        let node_id = self.nodes.len(); // TODO: Maybe use a better ID system later
 
         // println!(
         //     "\n[INSERT] Inserting node {} at max_level {}",
@@ -94,6 +94,7 @@ impl HNSW {
         // Create the node with empty neighbor lists
         let node = Node {
             id: node_id,
+            metadata,
             vector,
             neighbors: vec![
                 Vec::with_capacity(self.max_neighbors * self.max_layers);
@@ -593,6 +594,21 @@ impl HNSW {
 
         results
     }
+    
+    /// Search and return results with metadata
+    /// Returns results as (NodeId, similarity, metadata) tuples sorted by similarity (highest first)
+    pub fn search_with_metadata(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32, String)> {
+        let results = self.search(query, k);
+        results
+            .into_par_iter()
+            .map(|(id, sim)| (id, sim, self.nodes[id].metadata.clone()))
+            .collect()
+    }
+
+    /// Get metadata for a specific node
+    pub fn get_metadata(&self, node_id: NodeId) -> Option<&String> {
+        self.nodes.get(node_id).map(|node| &node.metadata)
+    }
 }
 
 /// Unique identifier for a node in the HNSW graph.
@@ -604,10 +620,26 @@ pub type NodeId = usize;
 pub struct Node {
     /// Unique identifier for the node
     pub id: NodeId,
+    /// Metadata associated with the node
+    pub metadata: String, // String for now, I guess? TODO: make generic?
     /// Vector representation of the node, any dimensionality
     pub vector: Vec<f32>,
     /// Neighbors per layer, e.g neighbors[0] is the list of neighbors in layer 0
     pub neighbors: Vec<Vec<NodeId>>,
     /// The highest layer this node exists in
     pub max_level: usize,
+}
+
+impl Node {
+    /// Creates a new Node with the given id, vector, metadata, and max_level.
+    #[allow(unused)]
+    pub fn new(id: NodeId, vector: Vec<f32>, metadata: String, max_level: usize) -> Self {
+        Node {
+            id,
+            metadata,
+            vector,
+            neighbors: vec![Vec::new(); max_level + 1], // Preallocate neighbor lists
+            max_level,
+        }
+    }
 }
