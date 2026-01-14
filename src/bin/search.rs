@@ -1,47 +1,92 @@
 use blaze_db::prelude::*;
+use std::path::PathBuf;
 use tokio::time::Instant;
+
 #[tokio::main]
 pub async fn main() {
-    let sample_text = String::from("What this book about?");
+    let sample_text = String::from("What is this about?");
 
-    let provider = Provider::new(
+    let provider = Provider::init(
         "http://localhost:1234/v1/embeddings",
         "text-embedding-qwen3-embedding-0.6b",
     );
 
     match provider.fetch_embedding(&sample_text).await {
         Ok(embeddings) => {
-            for embedding in embeddings.data.clone() {
-                println!("Chunk: {}", &embedding.chunk);
-                println!("Embedding (First 3): {:?}", &embedding.embedding[..3]);
+            println!("Query: {}", sample_text);
+            println!("Embedding (First 3): {:?}", &embeddings.embedding[0][..3]);
+            println!();
+
+            // Find the latest index file in embeddings directory
+            let embeddings_dir = PathBuf::from("./embeddings");
+            let mut entries = tokio::fs::read_dir(&embeddings_dir)
+                .await
+                .expect("Failed to read embeddings directory");
+
+            let mut latest_file: Option<PathBuf> = None;
+            let mut latest_number: i32 = -1;
+
+            while let Some(entry) = entries.next_entry().await.unwrap() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("bin") {
+                    if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
+                        // Extract number from filename like "embeddings_batch_23"
+                        if let Some(num_str) = filename.strip_prefix("embeddings_batch_") {
+                            if let Ok(num) = num_str.parse::<i32>() {
+                                if num > latest_number {
+                                    latest_number = num;
+                                    latest_file = Some(path.clone());
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
+            let latest_index = latest_file.expect("No embedding files found in ./embeddings");
+            println!("Loading latest index: {:?}", latest_index);
+            println!();
+
             let start = Instant::now();
-            let vector_data = EmbeddingStore::read_binary("./embeddings").await.unwrap();
+            let store = EmbeddingStore::load_binary_file(&latest_index)
+                .await
+                .expect("Failed to load index file");
             let io_duration = start.elapsed();
 
-            let search_start = Instant::now();
-            let search_query =
-                SearchQuery::new(5, embeddings.data[0].embedding.clone(), Metrics::Cosine);
+            let hnsw = &store.hnsw_store;
+            println!("Loaded HNSW index with {} nodes", hnsw.nodes.len());
+            println!(
+                "Index parameters: M={}, ef_construction={}, layers={}",
+                hnsw.max_neighbors, hnsw.ef_construction, hnsw.max_layers
+            );
+            println!();
 
-            let result = search_query.search_vector(&vector_data);
+            let search_start = Instant::now();
+            let query_vector = &embeddings.embedding[0];
+            let top_k = 5;
+
+            // Use HNSW search
+            let results = hnsw.search(query_vector, top_k);
             let search_duration = search_start.elapsed();
 
-            println!("\nTop {} similar chunks:", search_query.top_k);
-            for (i, item) in result.iter().enumerate() {
+            println!("Top {} similar chunks (HNSW):", top_k);
+            for (i, (node_id, similarity)) in results.iter().enumerate() {
                 println!("\nResult {}:", i + 1);
-                println!("Chunk: {}", item.chunk);
-                println!("Score: {:.4}", item.score);
+                println!("Node ID: {}", node_id);
+                println!("Similarity: {:.4}", similarity);
+                println!("Vector (first 5): {:?}", &hnsw.nodes[*node_id].vector[..5]);
             }
 
             let total_duration = start.elapsed();
             println!(
-                "\nI/O took: {:?} for {} vectors",
-                io_duration, vector_data.total_vectors
+                "\nI/O took: {:?} to load {} nodes",
+                io_duration,
+                hnsw.nodes.len()
             );
             println!(
-                "Search took: {:?} for {} vectors",
-                search_duration, vector_data.total_vectors
+                "HNSW search took: {:?} for {} nodes",
+                search_duration,
+                hnsw.nodes.len()
             );
             println!("Total took: {:?}", total_duration);
         }

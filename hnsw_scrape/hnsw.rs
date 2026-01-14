@@ -1,7 +1,7 @@
 mod utils;
 
 #[allow(unused)]
-use crate::utils::{cosine_similarity, generate_random_vector, load_vector_from_sample};
+use crate::utils::{cosine_similarity, generate_random_vector, load_sample_hnsw_index};
 use anyhow::Result;
 use blaze_db::prelude::Provider;
 use colored::Colorize;
@@ -90,7 +90,7 @@ impl HNSW {
     /// 2. Otherwise, search from top layer down to find nearest neighbors
     /// 3. Connect the new node to its neighbors at each layer
     pub fn insert(&mut self, vector: Vec<f32>, metadata: String, max_level: usize) -> NodeId {
-        let node_id = self.nodes.len();
+        let node_id = self.nodes.len(); // TODO: Maybe use a better ID system later
 
         // println!(
         //     "\n[INSERT] Inserting node {} at max_level {}",
@@ -664,10 +664,10 @@ async fn main() -> Result<()> {
 
     // get_level_math_debug(&hnsw).await?;
 
-    let loaded_vector_data = load_vector_from_sample().await;
+    let loaded_vector_data = load_sample_hnsw_index().await;
 
     // let node_count = 20_000;
-    let node_count = loaded_vector_data.embedding.len();
+    let node_count = loaded_vector_data.hnsw_store.nodes.len();
     // let dimension = 1024;
 
     println!(
@@ -683,30 +683,51 @@ async fn main() -> Result<()> {
             .progress_chars("●●-"),
     );
 
-    let start = std::time::Instant::now();
-    for i in 0..node_count {
-        //let vector = generate_random_vector(dimension);
-        let vector = loaded_vector_data.embedding[i].clone();
-        let level = hnsw.get_random_level();
-        let metadata = loaded_vector_data.chunk[i].clone();
-        progress_bar.inc(1);
+    let load_time = std::time::Instant::now();
+    // for i in 0..node_count {
+    //     //let vector = generate_random_vector(dimension);
+    //     let vector = loaded_vector_data.embedding[i].clone();
+    //     let level = hnsw.get_random_level();
+    //     let metadata = loaded_vector_data.chunk[i].clone();
+    //     progress_bar.inc(1);
+    //     hnsw.insert(vector, metadata, level);
+    // }
+    // progress_bar.finish_and_clear();
+
+    let nodes_data: Vec<_> = loaded_vector_data
+        .hnsw_store
+        .nodes
+        .par_iter()
+        .map(|node_data| {
+            let vector = node_data.vector.clone();
+            let metadata = "".to_string(); // Placeholder, no metadata in loaded data
+            let level = node_data.max_level;
+            (vector, metadata, level)
+        })
+        .collect();
+
+    // TODO: Shouldn't be indexing again here, but load from saved index, need to move metadata feature to core module
+
+    for (vector, metadata, level) in nodes_data {
         hnsw.insert(vector, metadata, level);
+        progress_bar.inc(1);
     }
     progress_bar.finish_and_clear();
-    println!("Indexing completed in {:?}", start.elapsed());
+
+    println!("Indexing completed in {:?}", load_time.elapsed());
 
     // Print layer statistics
     print_layer_stats(&hnsw);
 
     // Perform a query
-    let provider = Provider::new(
+    let provider = Provider::init(
         "http://localhost:1234/v1/embeddings",
         "text-embedding-qwen3-embedding-0.6b",
     );
     let sample_query = "What is this about?";
     let query_embedding = provider.fetch_embedding(sample_query).await?;
 
-    let query_vector = query_embedding.data[0].embedding.clone();
+    let query_vector = query_embedding.embedding[0].clone();
     // let query_vector = generate_random_vector(1024);
     println!("\nQuery: {}", sample_query.to_string().yellow());
     println!("Querying vector: {:?}...", &query_vector[..3]);

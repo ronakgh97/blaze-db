@@ -1,83 +1,50 @@
+use crate::core::HNSW;
 use anyhow::{Context, Result};
 use bincode::{Decode, Encode};
-use rayon::iter::ParallelIterator;
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use sha2::Digest;
+use std::path::PathBuf;
 use tokio::fs;
-
-use crate::utils::EmbeddingData;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct VectorData {
-    pub chunk: Vec<String>,
-    pub embedding: Vec<Vec<f32>>,
-    pub dimensions: usize,
-    pub total_vectors: usize,
-}
-
-impl VectorData {
-    /// Get a specific vector by index
-    pub fn get_vector(&self, index: usize) -> Option<&[f32]> {
-        self.embedding.get(index).map(|v| v.as_slice())
-    }
-
-    /// Get text chunk by index
-    pub fn get_chunk(&self, index: usize) -> Option<&str> {
-        self.chunk.get(index).map(|s| s.as_str())
-    }
-
-    /// Memory usage estimate in MB
-    pub fn memory_usage_mb(&self) -> f64 {
-        let vector_bytes: usize = self
-            .embedding
-            .par_iter()
-            .map(|emb| emb.len() * size_of::<f32>())
-            .sum();
-        let metadata_bytes: usize = self
-            .chunk
-            .par_iter()
-            .map(|c| c.len() * size_of::<u8>())
-            .sum();
-        (vector_bytes + metadata_bytes) as f64 / (1024.0 * 1024.0)
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
 pub struct EmbeddingStore {
-    pub batch_index: usize,
-    pub items: Vec<EmbeddingData>,
+    pub hnsw_store: HNSW,
+    checksum: String,
 }
 
 impl EmbeddingStore {
-    pub fn new(batch_index: usize, items: Vec<EmbeddingData>) -> Self {
-        Self { batch_index, items }
+    pub fn new(hnsw: HNSW) -> Self {
+        Self {
+            hnsw_store: hnsw,
+            checksum: String::new(),
+        }
     }
 
-    pub fn debug_print(&self) {
-        println!("Batch Index: {}", self.batch_index);
-        self.items.iter().take(3).for_each(|item| {
-            // Safely truncate at character boundary, not byte boundary
-            let preview: String = item.chunk.chars().take(50).collect();
-            let preview_display = if item.chunk.chars().count() > 50 {
-                format!("{}...", preview)
-            } else {
-                preview
-            };
-
-            println!(
-                "Index: {:?}\n Chunk: {:?}\n Words: {}\n Embeddings (first 3): {:?}\n Embedding Length: {:?}\n",
-                &item.index,
-                preview_display,
-                item.chunk.split_whitespace().count(),
-                &item.embedding[..3],
-                &item.dimensions,
-            );
-        });
+    /// Get information about the EmbeddingStore
+    pub fn get_info(&self) {
+        // TODO: What to do here? idk...
+        unimplemented!("get_info method not implemented yet");
     }
 
-    /// Load multiple binary files from a directory
-    pub async fn read_binary(dir_path: &str) -> Result<VectorData> {
+    /// Load from a single binary file
+    pub async fn load_binary_file(path: &PathBuf) -> Result<Self> {
+        let path_clone = path.to_path_buf();
+        let bytes = fs::read(&path_clone)
+            .await
+            .with_context(|| format!("Failed to read file: {:?}", path_clone))?;
+
+        let path_for_error = path_clone.clone();
+        let (store, _) = tokio::task::spawn_blocking(move || {
+            bincode::decode_from_slice(&bytes, bincode::config::standard())
+        })
+        .await?
+        .with_context(|| format!("Failed to deserialize: {:?}", path_for_error))?;
+
+        Ok(store)
+    }
+
+    /// Load multiple binary files from a directory //TODO: Will this ever be needed?
+    pub async fn load_binaries(dir_path: &str) -> Result<Vec<Self>> {
         // Read directory to get all .bin files
         let mut read_dir = fs::read_dir(dir_path)
             .await
@@ -104,7 +71,7 @@ impl EmbeddingStore {
         let mut tasks = Vec::new();
         for path in bin_files {
             let task = tokio::spawn(async move {
-                match Self::read_binary_file(&path).await {
+                match Self::load_binary_file(&path).await {
                     Ok(store) => Some(store),
                     Err(e) => {
                         eprintln!("Failed to load {:?}: {}", path, e);
@@ -123,52 +90,44 @@ impl EmbeddingStore {
             }
         }
 
-        // Flatten all items from all stores in parallel
-        let (all_chunks, all_embeddings): (Vec<String>, Vec<Vec<f32>>) = stores
-            .into_par_iter()
-            .flat_map(|store| store.items)
-            .map(|item| (item.chunk, item.embedding))
-            .unzip();
-
-        let dimensions = all_embeddings.first().map(|v| v.len()).unwrap_or(0);
-        let total_vectors = all_embeddings.len();
-
-        Ok(VectorData {
-            chunk: all_chunks,
-            embedding: all_embeddings,
-            dimensions,
-            total_vectors,
-        })
+        Ok(stores)
     }
 
-    /// Load from a single binary file
-    pub async fn read_binary_file(path: &Path) -> Result<EmbeddingStore> {
-        let path_clone = path.to_path_buf();
-        let bytes = fs::read(&path_clone)
-            .await
-            .with_context(|| format!("Failed to read file: {:?}", path_clone))?;
+    /// Write the EmbeddingStore to disk and store the hash checksum
+    pub async fn write_to_disk(&mut self, file_path: &PathBuf) -> Result<()> {
+        // Add extension if not present
+        let formatted_path = if file_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext == "bin")
+            .unwrap_or(false)
+        {
+            file_path.to_path_buf()
+        } else {
+            let mut p = file_path.to_path_buf();
+            p.set_extension("bin");
+            p
+        };
 
-        let path_for_error = path_clone.clone();
-        let (store, _) = tokio::task::spawn_blocking(move || {
-            bincode::decode_from_slice(&bytes, bincode::config::standard())
-        })
-        .await?
-        .with_context(|| format!("Failed to deserialize: {:?}", path_for_error))?;
+        let self_clone = self.clone(); // TODO: This is so Bad, find a better way
 
-        Ok(store)
-    }
-
-    /// Write the embedding store to a binary file
-    pub async fn write_binary(&self, file_path: &str) -> Result<()> {
-        let formatted_path = format!("{}.bin", file_path);
-        let self_clone = self.clone();
-        tokio::task::spawn_blocking(move || -> Result<()> {
-            let mut file = std::fs::File::create(&formatted_path)?;
+        // Write and checksum calculation in blocking task, return checksum
+        let checksum = tokio::task::spawn_blocking(move || -> Result<String> {
+            let mut file = std::fs::File::create(&formatted_path.clone())?;
             bincode::encode_into_std_write(&self_clone, &mut file, bincode::config::standard())?;
             file.sync_all()?;
-            Ok(())
+
+            let mut file = std::fs::File::open(&formatted_path)?;
+            let mut hasher = sha2::Sha256::new();
+            std::io::copy(&mut file, &mut hasher)?;
+            let checksum = format!("{:x}", hasher.finalize());
+
+            Ok(checksum)
         })
         .await??;
+
+        self.checksum = checksum;
+
         Ok(())
     }
 }

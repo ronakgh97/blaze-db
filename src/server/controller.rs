@@ -105,7 +105,7 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
         total_chunks, payload.database, payload.batch
     );
 
-    match embed_run(payload.clone()).await {
+    match embed_run(payload.clone(), None).await {
         Ok(response) => {
             info!(
                 "[POST /embed] Successfully embedded {} lines into database '{}'",

@@ -1,5 +1,7 @@
+#[allow(unused)]
 use blaze_db::prelude::{EmbeddingStore, VectorData};
 use rand::Rng;
+use std::path::PathBuf;
 use wide::f32x8;
 
 /// Generates a random vector of given dimension with values in range [-2.0, 2.0]
@@ -67,13 +69,15 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
-/// Loads vector data from a sample real embeddings binary file
+/// Loads an explicit sample HNSW index from disk for testing/demo purposes
 #[inline]
 #[allow(unused)]
-pub async fn load_vector_from_sample() -> VectorData {
-    let binary_data = EmbeddingStore::read_binary("./embeddings")
+pub async fn load_sample_hnsw_index() -> EmbeddingStore {
+    let path_to_sample_index: PathBuf = PathBuf::from("./embeddings/embeddings_batch_23.bin");
+
+    let hnsw_index = EmbeddingStore::load_binary_file(&path_to_sample_index)
         .await
         .expect("Failed to load embeddings");
 
-    binary_data
+    hnsw_index
 }

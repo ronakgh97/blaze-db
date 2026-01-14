@@ -20,7 +20,6 @@ fn generate_random_vectors(num_vectors: usize, dimensions: usize) -> VectorData 
         chunk: chunks,
         embedding: embeddings,
         dimensions,
-        total_vectors: num_vectors,
     }
 }
 
@@ -132,7 +131,7 @@ fn bench_load_embeddings(c: &mut Criterion) {
 
     group.bench_function("load_embeddings_from_disk", |bench| {
         bench.iter(|| {
-            rt.block_on(async { EmbeddingStore::read_binary(black_box("./embeddings")).await })
+            rt.block_on(async { EmbeddingStore::load_binaries(black_box("./embeddings")).await })
         })
     });
 

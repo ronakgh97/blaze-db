@@ -12,8 +12,9 @@ pub mod prelude {
     };
     pub use crate::client_args::{ClientArgs, ClientCommands};
     pub use crate::core::{
-        ClientConfig, Metrics, SearchQuery, SearchResult, ServerConfig, Source, check_source_valid,
-        cosine_similarity, dot_product, euclidean_similarity, get_source_path, save_config,
+        ClientConfig, HNSW, Metrics, Node, NodeId, SearchQuery, SearchResult, ServerConfig, Source,
+        check_source_valid, cosine_similarity, dot_product, euclidean_similarity, get_source_path,
+        save_config,
     };
     pub use crate::server::{get_active_source, list_databases, start_server};
     pub use crate::server_args::{ServerArgs, ServerCommands};

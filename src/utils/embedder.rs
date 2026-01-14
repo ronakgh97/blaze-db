@@ -1,13 +1,50 @@
 use anyhow::Result;
 use bincode::{Decode, Encode};
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
+// A Bridge Wrapper struct to hold vector data and associated metadata, for outside module usage
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VectorData {
+    pub chunk: Vec<String>,
+    pub embedding: Vec<Vec<f32>>,
+    pub dimensions: usize,
+}
+
+impl VectorData {
+    /// Get a specific vector by index
+    pub fn get_vector(&self, index: usize) -> Option<&[f32]> {
+        self.embedding.get(index).map(|v| v.as_slice())
+    }
+
+    /// Get text chunk by index
+    pub fn get_chunk(&self, index: usize) -> Option<&str> {
+        self.chunk.get(index).map(|s| s.as_str())
+    }
+
+    /// Memory usage estimate in MB
+    pub fn memory_usage_mb(&self) -> f64 {
+        let vector_bytes: usize = self
+            .embedding
+            .par_iter()
+            .map(|emb| emb.len() * size_of::<f32>())
+            .sum();
+        let metadata_bytes: usize = self
+            .chunk
+            .par_iter()
+            .map(|c| c.len() * size_of::<u8>())
+            .sum();
+        (vector_bytes + metadata_bytes) as f64 / (1024.0 * 1024.0)
+    }
+}
+
+/// Wrapper just for serialize external embedding API response
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Embeddings {
     pub data: Vec<EmbeddingData>,
 }
 
+/// Wrapper just for serialize external embedding API response
 #[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
 pub struct EmbeddingData {
     pub index: usize,
@@ -25,7 +62,7 @@ pub struct Provider {
 }
 
 impl Provider {
-    pub fn new(url: impl Into<String>, model: impl Into<String>) -> Self {
+    pub fn init(url: impl Into<String>, model: impl Into<String>) -> Self {
         let url = url.into();
         let model = model.into();
         if model.is_empty() {
@@ -41,12 +78,12 @@ impl Provider {
     }
 
     /// Fetch embedding for a single piece of text
-    pub async fn fetch_embedding(&self, text: &str) -> Result<Embeddings> {
+    pub async fn fetch_embedding(&self, text: &str) -> Result<VectorData> {
         self.fetch_embeddings(&[text.to_string()]).await
     }
 
     /// Fetch embeddings for the given chunks of text
-    pub async fn fetch_embeddings(&self, chunks: &[String]) -> Result<Embeddings> {
+    pub async fn fetch_embeddings(&self, chunks: &[String]) -> Result<VectorData> {
         let body = serde_json::json!({
             "model": &self.model,
             "input": chunks,
@@ -82,6 +119,22 @@ impl Provider {
             embedding.dimensions = embedding.embedding.len();
         });
 
-        Ok(embeddings_response)
+        // Map Embeddings to VectorData
+        let all_chunks: Vec<String> = embeddings_response
+            .data
+            .iter()
+            .map(|e| e.chunk.clone())
+            .collect();
+        let all_embeddings: Vec<Vec<f32>> = embeddings_response
+            .data
+            .iter()
+            .map(|e| e.embedding.clone())
+            .collect();
+        let dimensions = all_embeddings.first().map(|v| v.len()).unwrap_or(0);
+        Ok(VectorData {
+            chunk: all_chunks,
+            embedding: all_embeddings,
+            dimensions,
+        })
     }
 }

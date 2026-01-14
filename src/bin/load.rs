@@ -1,66 +1,71 @@
 use blaze_db::prelude::EmbeddingStore;
 use colored::Colorize;
-use rayon::iter::ParallelIterator;
-use rayon::prelude::IntoParallelRefIterator;
 
 #[tokio::main]
 async fn main() {
     println!();
 
-    match EmbeddingStore::read_binary("./embeddings").await {
-        Ok(vector_data) => {
-            println!("{}", "Successfully loaded embeddings".green().bold());
+    match EmbeddingStore::load_binaries("./embeddings").await {
+        Ok(mut stores) => {
+            println!(
+                "{}",
+                "Successfully loaded indexed embeddings".green().bold()
+            );
             println!();
             println!("{}", "Stats:".yellow().bold());
+
+            // Sort stores by number of nodes ascendingly to find the latest/largest index
+            stores.sort_by_key(|s| s.hnsw_store.nodes.len());
+
+            let total_batches = stores.len();
+            let largest_store = stores.last().unwrap();
+
             println!(
-                " Total vectors: {}",
-                vector_data.total_vectors.to_string().cyan()
+                " Total batches loaded: {}",
+                total_batches.to_string().cyan()
             );
-            println!(" Dimensions: {}", vector_data.dimensions.to_string().cyan());
             println!(
-                " Total chunks: {}",
-                vector_data.chunk.len().to_string().cyan()
+                " Total nodes in HNSW (latest index): {}",
+                largest_store.hnsw_store.nodes.len().to_string().cyan()
             );
 
-            // Calculate average chunk size
-            if !vector_data.chunk.is_empty() {
-                let total_words: usize = vector_data
-                    .chunk
-                    .par_iter()
-                    .map(|c| c.split_whitespace().count())
-                    .sum();
-                let avg_words = total_words / vector_data.chunk.len();
-                println!(" Avg chunk size: {} words", avg_words.to_string().cyan());
+            let hnsw = &largest_store.hnsw_store;
+            println!(
+                " HNSW max_neighbors: {}",
+                hnsw.max_neighbors.to_string().cyan()
+            );
+            println!(
+                " HNSW ef_construction: {}",
+                hnsw.ef_construction.to_string().cyan()
+            );
+            println!(" HNSW max_layers: {}", hnsw.max_layers.to_string().cyan());
+
+            if let Some(first_node) = hnsw.nodes.first() {
+                println!(
+                    " Vector dimensions: {}",
+                    first_node.vector.len().to_string().cyan()
+                );
             }
 
-            println!(" Memory Usage: {}MB", vector_data.memory_usage_mb());
             println!();
 
-            // Display sample data
-            if !vector_data.chunk.is_empty() {
-                println!(" {}", "Sample Chunks (first 3):".yellow().bold());
-                for (index, (chunk, embedding)) in vector_data
-                    .chunk
-                    .iter()
-                    .zip(vector_data.embedding.iter())
-                    .take(3)
-                    .enumerate()
-                {
-                    println!();
-                    println!("  {} {}", "Chunk".blue(), index + 1);
-                    let preview = if chunk.len() > 50 {
-                        format!("{}...", chunk.chars().take(50).collect::<String>())
-                    } else {
-                        chunk.clone()
-                    };
-                    println!("    Text: {}", preview.cyan());
-                    println!("    Words: {}", chunk.split_whitespace().count());
-                    println!(
-                        "    Embedding (first 5): {:?}",
-                        &embedding[..5.min(embedding.len())]
-                    );
-                    println!("    Dimensions: {}", embedding.len());
-                }
+            // Display sample nodes from largest store
+            println!(" {}", "Sample Nodes (first 3):".yellow().bold());
+
+            for (idx, node) in hnsw.nodes.iter().take(3).enumerate() {
+                println!();
+                println!("  {} {}", "Node".blue(), idx);
+                println!("    ID: {}", node.id);
+                println!("    Max Level: {}", node.max_level);
+                println!(
+                    "    Neighbors per layer: {:?}",
+                    node.neighbors.iter().map(|n| n.len()).collect::<Vec<_>>()
+                );
+                println!(
+                    "    Vector (first 5): {:?}",
+                    &node.vector[..5.min(node.vector.len())]
+                );
+                println!("    Vector dimensions: {}", node.vector.len());
             }
         }
         Err(e) => {

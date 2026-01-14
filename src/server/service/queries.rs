@@ -1,8 +1,10 @@
-use crate::core::Metrics;
-use crate::info;
+#[allow(unused)]
+use crate::core::{HNSW, Metrics, NodeId};
+#[allow(unused)]
 use crate::prelude::{Provider, SearchQuery};
-use crate::server::service::read_embeddings_from_database;
+use crate::server::service::load_embeddings_index_from_database;
 use crate::server::{QueryRequest, QueryResponse};
+use crate::{error, info};
 use anyhow::Result;
 
 /// Executes a search query against the specified database and returns the top K similar chunks.
@@ -14,41 +16,43 @@ pub async fn query_search(request: QueryRequest) -> Result<Vec<QueryResponse>> {
     // Configure embedding provider
     let url = "http://localhost:1234/v1/embeddings";
     let model = "text-embedding-qwen3-embedding-0.6b";
-    let provider = Provider::new(url, model);
+    let provider = Provider::init(url, model);
 
     info!("Generating embedding for query: '{}'", query);
-    // Take the first as it's a single text query, we unwrap safely here so (Help me GOD!!)
-    let query_vector = provider
-        .fetch_embedding(query.as_str())
-        .await?
-        .data
-        .first()
-        .unwrap()
-        .embedding
-        .clone();
+
+    // Generate embedding for query
+    // TODO: Maybe take vector for explicit
+    let query_vector = &provider.fetch_embedding(query.as_str()).await?.embedding[0];
 
     info!("Loading vector data from database '{}'", from_database);
-    let vector_data = read_embeddings_from_database(from_database.clone()).await?;
-    info!(
-        "Loaded {} vectors with {} dimensions",
-        vector_data.total_vectors, vector_data.dimensions
-    );
+    let (embeddings_store, _max_index) =
+        load_embeddings_index_from_database(from_database.clone()).await?;
+    let hnsw_index = match embeddings_store {
+        Some(store) => store.hnsw_store,
+        None => {
+            error!("No embeddings found in database '{}'", from_database);
+            return Err(anyhow::anyhow!(
+                "No embeddings found in database '{}'",
+                from_database
+            ));
+        }
+    };
+    info!("Loaded HNSW Index with {} entries", hnsw_index.nodes.len());
 
     info!(
-        "Performing similarity search with Cosine metric (top_k={})",
+        "Performing search with Cosine metric (top_k={})",
         request.top_k
     );
-    let search = SearchQuery::new(request.top_k, query_vector, Metrics::Cosine);
 
-    let results = search.search_vector(&vector_data);
-    info!("Search complete, found {} results", results.len());
+    let result: Vec<(NodeId, f32)> = HNSW::search(&hnsw_index, &query_vector, request.top_k); // TODO: Search with metadata
+    info!("Search complete, found {} results", result.len());
 
     // Map SearchResult to QueryResponse
-    let responses = results
+    let responses = result
         .into_iter()
         .map(|r| QueryResponse {
-            chunk: r.chunk,
-            score: r.score,
+            chunk: r.0.to_string(), // TODO: Should be mapped to metadata
+            score: r.1,
         })
         .collect();
 

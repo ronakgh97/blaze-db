@@ -2,7 +2,7 @@ mod utils;
 
 use crate::utils::cosine_similarity;
 #[allow(unused)]
-use crate::utils::{generate_random_vector, load_vector_from_sample};
+use crate::utils::{generate_random_vector, load_sample_hnsw_index};
 #[allow(unused)]
 use blaze_db::prelude::{EmbeddingStore, Provider};
 #[allow(unused)]
@@ -228,42 +228,35 @@ async fn main() -> anyhow::Result<()> {
     let mut nsw = NSW::new(5555, 16);
 
     // Generate 50K random vectors
-    // let num_vectors = 20_000;
+    let num_vectors = 20_000;
 
-    // for i in 0..num_vectors {
-    //    let vector = generate_random_vector(1024);
+    for i in 0..num_vectors {
+        let vector = generate_random_vector(1024);
 
-    // if (i + 1) % 10000 == 0 {
-    //     println!("Generated {} vectors", (i + 1).to_string().cyan());
-    // }
+        // if (i + 1) % 10000 == 0 {
+        //     println!("Generated {} vectors", (i + 1).to_string().cyan());
+        // }
 
-    // Create a node with none neighbors for simplicity
-    //     let node = Node::new(i, vector, "whatever".to_string(), vec![]);
-    //     nsw.add_node_index_later(node);
-    // }
+        // Create a node with none neighbors for simplicity
+        let node = Node::new(i, vector, "whatever".to_string(), vec![]);
+        nsw.add_node_index_later(node);
+    }
 
     // Load vector from sample embeddings
 
-    let load_time = std::time::Instant::now();
-    let embeddings = load_vector_from_sample().await;
-    let total_vectors = embeddings.total_vectors;
-
-    // Insert/load all vectors into NSW
-    let mut chunks = embeddings.chunk.into_iter();
-    for (i, vector) in embeddings.embedding.into_iter().enumerate() {
-        let metadata = chunks
-            .next()
-            .unwrap_or_else(|| format!("No metadata for index {}", i));
-
-        let node = Node::new(i, vector, metadata, vec![]);
-        nsw.add_node_index_later(node);
-    }
-    let load_duration = load_time.elapsed().as_secs_f64();
-    println!(
-        "\nLoaded {} vectors in {}s",
-        total_vectors.to_string().cyan(),
-        load_duration.to_string().yellow()
-    );
+    // let embeddings = load_vector_from_sample().await;
+    // let total_vectors = embeddings.total_vectors;
+    //
+    // // Insert/load all vectors into NSW
+    // let mut chunks = embeddings.chunk.into_iter();
+    // for (i, vector) in embeddings.embedding.into_iter().enumerate() {
+    //     let metadata = chunks
+    //         .next()
+    //         .unwrap_or_else(|| format!("No metadata for index {}", i));
+    //
+    //     let node = Node::new(i, vector, metadata, vec![]);
+    //     nsw.add_node_index_later(node);
+    // }
 
     // Rearrange nodes to build the graph with neighbors
     println!(
@@ -276,14 +269,14 @@ async fn main() -> anyhow::Result<()> {
     println!("Rearranged in {}s", duration.to_string().yellow());
 
     // Perform a query
-    let provider = Provider::new(
+    let provider = Provider::init(
         "http://localhost:1234/v1/embeddings",
         "text-embedding-qwen3-embedding-0.6b",
     );
     let sample_query = "What is this about?";
     let query_embedding = provider.fetch_embedding(sample_query).await?;
 
-    let query_vector = query_embedding.data[0].embedding.clone();
+    let query_vector = query_embedding.embedding[0].clone();
     // let query_vector = generate_random_vector(1024);
     println!("\nQuery: {}", sample_query.to_string().yellow());
     println!("Querying vector: {:?}...", &query_vector[..3]);
@@ -308,10 +301,10 @@ async fn main() -> anyhow::Result<()> {
     // }
 
     // Parallel Greedy Search
-    let start_time = std::time::Instant::now();
+    let greedy_start_time = std::time::Instant::now();
     let start_points = 5;
     let parallel_results = NSW::parallel_greedy_search(&query_vector, top_k, start_points, &graph);
-    let duration = start_time.elapsed().as_secs_f64();
+    let duration = greedy_start_time.elapsed().as_secs_f64();
     println!(
         "\nParallel Greedy search with {} start points, completed in {}s",
         start_points.to_string().yellow(),
@@ -330,9 +323,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Brute-force Search
-    let start_time = std::time::Instant::now();
+    let bruteforce_start_time = std::time::Instant::now();
     let brute_results = NSW::brute_search(&query_vector, top_k, &graph);
-    let duration = start_time.elapsed().as_secs_f64();
+    let duration = bruteforce_start_time.elapsed().as_secs_f64();
     println!(
         "\nBrute Force search completed in {}s",
         duration.to_string().yellow()
