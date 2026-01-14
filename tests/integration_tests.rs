@@ -1,5 +1,4 @@
-use blaze_db::prelude::{EmbeddingStore, Ingestor};
-use blaze_db::utils::EmbeddingData;
+use blaze_db::prelude::{EmbeddingStore, HNSW, Ingestor};
 use std::fs::File;
 use std::io::Write;
 use tempfile::tempdir;
@@ -19,28 +18,22 @@ async fn test_ingest_to_storage_pipeline() {
     assert_eq!(batches.len(), 1);
     assert_eq!(batches[0].len(), 2);
 
-    // Create mock embeddings manually
-    let embeddings = vec![
-        EmbeddingData {
-            index: 0,
-            chunk: "This is line 1".to_string(),
-            embedding: vec![1.0, 2.0, 3.0],
-            dimensions: 3,
-        },
-        EmbeddingData {
-            index: 1,
-            chunk: "This is line 2".to_string(),
-            embedding: vec![4.0, 5.0, 6.0],
-            dimensions: 3,
-        },
-    ];
+    // Create HNSW index with mock embeddings
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
 
-    let store = EmbeddingStore::new(0, embeddings);
+    // Simulate embedding vectors
+    let vector1 = vec![1.0, 2.0, 3.0];
+    let vector2 = vec![4.0, 5.0, 6.0];
+
+    hnsw.insert(vector1.clone(), 0);
+    hnsw.insert(vector2.clone(), 0);
+
+    let mut store = EmbeddingStore::new(hnsw);
 
     // Test storage
     let output_path = dir.path().join("embeddings");
     store
-        .write_binary(output_path.to_str().unwrap())
+        .write_to_disk(&output_path)
         .await
         .unwrap();
 
@@ -49,13 +42,13 @@ async fn test_ingest_to_storage_pipeline() {
     assert!(std::path::Path::new(&binary_path).exists());
 
     // Load and verify
-    let loaded_store = EmbeddingStore::read_binary_file(std::path::Path::new(&binary_path))
+    let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
         .await
         .unwrap();
 
-    assert_eq!(loaded_store.items.len(), 2);
-    assert_eq!(loaded_store.items[0].chunk, "This is line 1");
-    assert_eq!(loaded_store.items[1].chunk, "This is line 2");
+    assert_eq!(loaded_store.hnsw_store.nodes.len(), 2);
+    assert_eq!(loaded_store.hnsw_store.nodes[0].vector, vector1);
+    assert_eq!(loaded_store.hnsw_store.nodes[1].vector, vector2);
 }
 
 #[tokio::test]
@@ -76,43 +69,33 @@ async fn test_multiple_batch_processing() {
     assert_eq!(batches[0].len(), 8);
     assert_eq!(batches[1].len(), 2);
 
-    // Create embeddings for first batch
-    let embeddings1: Vec<EmbeddingData> = (0..8)
-        .map(|i| EmbeddingData {
-            index: i,
-            chunk: format!("Line number {}", i + 1),
-            embedding: vec![i as f32, (i + 1) as f32],
-            dimensions: 2,
-        })
-        .collect();
+    // Create cumulative HNSW index for first batch (8 vectors)
+    let mut hnsw1 = HNSW::new(16, 100, 5, 0.7);
+    for i in 0..8 {
+        hnsw1.insert(vec![i as f32, (i + 1) as f32], 0);
+    }
+    let mut store1 = EmbeddingStore::new(hnsw1.clone());
 
-    let store1 = EmbeddingStore::new(0, embeddings1);
+    // Create cumulative HNSW index for second batch (8 + 2 = 10 vectors)
+    let mut hnsw2 = hnsw1.clone();
+    for i in 8..10 {
+        hnsw2.insert(vec![i as f32, (i + 1) as f32], 0);
+    }
+    let mut store2 = EmbeddingStore::new(hnsw2);
 
-    // Create embeddings for second batch
-    let embeddings2: Vec<EmbeddingData> = (0..2)
-        .map(|i| EmbeddingData {
-            index: i,
-            chunk: format!("Line number {}", i + 9),
-            embedding: vec![(i + 8) as f32, (i + 9) as f32],
-            dimensions: 2,
-        })
-        .collect();
-
-    let store2 = EmbeddingStore::new(1, embeddings2);
-
-    assert_eq!(store1.items.len(), 8);
-    assert_eq!(store2.items.len(), 2);
+    assert_eq!(store1.hnsw_store.nodes.len(), 8);
+    assert_eq!(store2.hnsw_store.nodes.len(), 10); // Cumulative
 
     // Test writing both batches
     let batch1_path = dir.path().join("batch_0");
     let batch2_path = dir.path().join("batch_1");
 
     store1
-        .write_binary(batch1_path.to_str().unwrap())
+        .write_to_disk(&batch1_path)
         .await
         .unwrap();
     store2
-        .write_binary(batch2_path.to_str().unwrap())
+        .write_to_disk(&batch2_path)
         .await
         .unwrap();
 
@@ -143,62 +126,43 @@ async fn test_unicode_text_processing() {
     writeln!(file, "😭 Emoji support test 🤧").unwrap();
 
     let ingestor = Ingestor::new(&file_path, 8);
-    let _batches = ingestor.read_line().unwrap();
+    let batches = ingestor.read_line().unwrap();
+    assert_eq!(batches.len(), 1);
+    assert_eq!(batches[0].len(), 3);
 
-    // Create embeddings
-    let embeddings = vec![
-        EmbeddingData {
-            index: 0,
-            chunk: "Hello 世界! This is unicode text.".to_string(),
-            embedding: vec![1.0, 2.0],
-            dimensions: 2,
-        },
-        EmbeddingData {
-            index: 1,
-            chunk: "Café, naïve, résumé - accented characters".to_string(),
-            embedding: vec![3.0, 4.0],
-            dimensions: 2,
-        },
-        EmbeddingData {
-            index: 2,
-            chunk: "😭 Emoji support test 🤧".to_string(),
-            embedding: vec![5.0, 6.0],
-            dimensions: 2,
-        },
-    ];
-
-    let store = EmbeddingStore::new(0, embeddings);
-
-    // Verify unicode text is preserved
-    assert_eq!(store.items[0].chunk, "Hello 世界! This is unicode text.");
+    // Verify unicode text is preserved during ingestion
+    assert_eq!(batches[0][0], "Hello 世界! This is unicode text.");
     assert_eq!(
-        store.items[1].chunk,
+        batches[0][1],
         "Café, naïve, résumé - accented characters"
     );
-    assert_eq!(store.items[2].chunk, "😭 Emoji support test 🤧");
+    assert_eq!(batches[0][2], "😭 Emoji support test 🤧");
 
-    // Test storage and retrieval of Unicode content
+    // Create HNSW index with test vectors
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    hnsw.insert(vec![1.0, 2.0], 0);
+    hnsw.insert(vec![3.0, 4.0], 0);
+    hnsw.insert(vec![5.0, 6.0], 0);
+
+    let mut store = EmbeddingStore::new(hnsw);
+
+    // Test storage and retrieval
     let output_path = dir.path().join("unicode_embeddings");
     store
-        .write_binary(output_path.to_str().unwrap())
+        .write_to_disk(&output_path)
         .await
         .unwrap();
 
     let binary_path = format!("{}.bin", output_path.to_str().unwrap());
-    let loaded_store = EmbeddingStore::read_binary_file(std::path::Path::new(&binary_path))
+    let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
         .await
         .unwrap();
 
-    // Verify unicode is preserved after serialization/deserialization
-    assert_eq!(
-        loaded_store.items[0].chunk,
-        "Hello 世界! This is unicode text."
-    );
-    assert_eq!(
-        loaded_store.items[1].chunk,
-        "Café, naïve, résumé - accented characters"
-    );
-    assert_eq!(loaded_store.items[2].chunk, "😭 Emoji support test 🤧");
+    // Verify HNSW structure is preserved after serialization/deserialization
+    assert_eq!(loaded_store.hnsw_store.nodes.len(), 3);
+    assert_eq!(loaded_store.hnsw_store.nodes[0].vector, vec![1.0, 2.0]);
+    assert_eq!(loaded_store.hnsw_store.nodes[1].vector, vec![3.0, 4.0]);
+    assert_eq!(loaded_store.hnsw_store.nodes[2].vector, vec![5.0, 6.0]);
 }
 
 #[tokio::test]
@@ -209,36 +173,33 @@ async fn test_large_embedding_dimensions() {
     writeln!(file, "Test with large embedding dimensions").unwrap();
 
     let ingestor = Ingestor::new(&file_path, 8);
-    let _batches = ingestor.read_line().unwrap();
+    let batches = ingestor.read_line().unwrap();
+    assert_eq!(batches.len(), 1);
 
     // Create realistic high-dimensional embeddings (like GPT embeddings)
     let embedding_vector = (0..1536).map(|i| i as f32 * 0.01).collect::<Vec<f32>>();
 
-    let embeddings = vec![EmbeddingData {
-        index: 0,
-        chunk: "Test with large embedding dimensions".to_string(),
-        embedding: embedding_vector.clone(),
-        dimensions: 1536,
-    }];
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    hnsw.insert(embedding_vector.clone(), 0);
 
-    let store = EmbeddingStore::new(0, embeddings);
-
-    assert_eq!(store.items[0].dimensions, 1536);
-    assert_eq!(store.items[0].embedding.len(), 1536);
+    assert_eq!(hnsw.nodes.len(), 1);
+    assert_eq!(hnsw.nodes[0].vector.len(), 1536);
 
     // Test storage and retrieval
     let output_path = dir.path().join("large_embeddings");
+    let mut store = EmbeddingStore::new(hnsw);
     store
-        .write_binary(output_path.to_str().unwrap())
+        .write_to_disk(&output_path)
         .await
         .unwrap();
 
     let binary_path = format!("{}.bin", output_path.to_str().unwrap());
-    let loaded_store = EmbeddingStore::read_binary_file(std::path::Path::new(&binary_path))
+    let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
         .await
         .unwrap();
 
-    assert_eq!(loaded_store.items[0].dimensions, 1536);
-    assert_eq!(loaded_store.items[0].embedding.len(), 1536);
-    assert_eq!(loaded_store.items[0].embedding, embedding_vector);
+    assert_eq!(loaded_store.hnsw_store.nodes.len(), 1);
+    assert_eq!(loaded_store.hnsw_store.nodes[0].vector.len(), 1536);
+    assert_eq!(loaded_store.hnsw_store.nodes[0].vector, embedding_vector);
 }
+

@@ -1,30 +1,17 @@
-use blaze_db::prelude::{EmbeddingStore, VectorData};
-use blaze_db::utils::EmbeddingData;
+use blaze_db::prelude::{EmbeddingStore, HNSW, VectorData};
 use tempfile::tempdir;
 
 #[tokio::test]
 async fn test_embedding_store_creation() {
-    let embedding_data = vec![
-        EmbeddingData {
-            index: 0,
-            chunk: "test chunk 1".to_string(),
-            embedding: vec![1.0, 2.0, 3.0],
-            dimensions: 3,
-        },
-        EmbeddingData {
-            index: 1,
-            chunk: "test chunk 2".to_string(),
-            embedding: vec![4.0, 5.0, 6.0],
-            dimensions: 3,
-        },
-    ];
+    // Create a new HNSW index
+    let hnsw = HNSW::new(16, 100, 5, 0.7);
+    
+    let store = EmbeddingStore::new(hnsw.clone());
 
-    let store = EmbeddingStore::new(0, embedding_data);
-
-    assert_eq!(store.batch_index, 0);
-    assert_eq!(store.items.len(), 2);
-    assert_eq!(store.items[0].chunk, "test chunk 1");
-    assert_eq!(store.items[1].chunk, "test chunk 2");
+    assert_eq!(store.hnsw_store.nodes.len(), 0);
+    assert_eq!(store.hnsw_store.max_neighbors, 16);
+    assert_eq!(store.hnsw_store.ef_construction, 100);
+    assert_eq!(store.hnsw_store.max_layers, 5);
 }
 
 #[tokio::test]
@@ -32,32 +19,32 @@ async fn test_write_read_binary() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_embeddings");
 
-    let embedding_data = vec![EmbeddingData {
-        index: 0,
-        chunk: "test chunk".to_string(),
-        embedding: vec![1.0, 2.0, 3.0],
-        dimensions: 3,
-    }];
+    // Create HNSW index with some test vectors
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let vector1 = vec![1.0, 2.0, 3.0];
+    let vector2 = vec![4.0, 5.0, 6.0];
+    
+    hnsw.insert(vector1.clone(), 0);
+    hnsw.insert(vector2.clone(), 0);
 
-    let store = EmbeddingStore::new(0, embedding_data);
+    let mut store = EmbeddingStore::new(hnsw);
 
     // Write binary
     store
-        .write_binary(file_path.to_str().unwrap())
+        .write_to_disk(&file_path)
         .await
         .unwrap();
 
     // Read binary back
     let binary_path = format!("{}.bin", file_path.to_str().unwrap());
-    let loaded_store = EmbeddingStore::read_binary_file(std::path::Path::new(&binary_path))
+    let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
         .await
         .unwrap();
 
-    assert_eq!(loaded_store.batch_index, store.batch_index);
-    assert_eq!(loaded_store.items.len(), store.items.len());
-    assert_eq!(loaded_store.items[0].chunk, store.items[0].chunk);
-    assert_eq!(loaded_store.items[0].embedding, store.items[0].embedding);
-    assert_eq!(loaded_store.items[0].dimensions, store.items[0].dimensions);
+    assert_eq!(loaded_store.hnsw_store.nodes.len(), store.hnsw_store.nodes.len());
+    assert_eq!(loaded_store.hnsw_store.max_neighbors, store.hnsw_store.max_neighbors);
+    assert_eq!(loaded_store.hnsw_store.nodes[0].vector, vector1);
+    assert_eq!(loaded_store.hnsw_store.nodes[1].vector, vector2);
 }
 
 #[tokio::test]
@@ -66,32 +53,31 @@ async fn test_read_binary_multiple_files() {
     let embeddings_dir = dir.path().join("embeddings");
     std::fs::create_dir_all(&embeddings_dir).unwrap();
 
-    // Create multiple embedding stores
+    // Create multiple embedding stores with cumulative HNSW indices
+    let mut cumulative_hnsw = HNSW::new(16, 100, 5, 0.7);
+    
     for i in 0..3 {
-        let embedding_data = vec![EmbeddingData {
-            index: i,
-            chunk: format!("chunk {}", i),
-            embedding: vec![i as f32, (i + 1) as f32],
-            dimensions: 2,
-        }];
-
-        let store = EmbeddingStore::new(i, embedding_data);
+        let vector = vec![i as f32, (i + 1) as f32];
+        cumulative_hnsw.insert(vector, 0);
+        
+        let mut store = EmbeddingStore::new(cumulative_hnsw.clone());
         let file_path = embeddings_dir.join(format!("batch_{}", i));
         store
-            .write_binary(file_path.to_str().unwrap())
+            .write_to_disk(&file_path)
             .await
             .unwrap();
     }
 
     // Read all files
-    let vector_data = EmbeddingStore::read_binary(embeddings_dir.to_str().unwrap())
+    let stores = EmbeddingStore::load_binaries(embeddings_dir.to_str().unwrap())
         .await
         .unwrap();
 
-    assert_eq!(vector_data.total_vectors, 3);
-    assert_eq!(vector_data.dimensions, 2);
-    assert_eq!(vector_data.chunk.len(), 3);
-    assert_eq!(vector_data.embedding.len(), 3);
+    assert_eq!(stores.len(), 3);
+    // First batch has 1 node, second has 2, third has 3 (cumulative)
+    assert_eq!(stores[0].hnsw_store.nodes.len(), 1);
+    assert_eq!(stores[1].hnsw_store.nodes.len(), 2);
+    assert_eq!(stores[2].hnsw_store.nodes.len(), 3);
 }
 
 #[tokio::test]
@@ -100,7 +86,7 @@ async fn test_read_binary_empty_directory() {
     let empty_dir = dir.path().join("empty");
     std::fs::create_dir_all(&empty_dir).unwrap();
 
-    let result = EmbeddingStore::read_binary(empty_dir.to_str().unwrap()).await;
+    let result = EmbeddingStore::load_binaries(empty_dir.to_str().unwrap()).await;
 
     assert!(result.is_err());
     assert!(
@@ -113,7 +99,7 @@ async fn test_read_binary_empty_directory() {
 
 #[tokio::test]
 async fn test_read_binary_nonexistent_directory() {
-    let result = EmbeddingStore::read_binary("/nonexistent/directory").await;
+    let result = EmbeddingStore::load_binaries("/nonexistent/directory").await;
 
     assert!(result.is_err());
     assert!(
@@ -130,7 +116,6 @@ fn test_vector_data_get_vector() {
         chunk: vec!["chunk1".to_string(), "chunk2".to_string()],
         embedding: vec![vec![1.0, 2.0], vec![3.0, 4.0]],
         dimensions: 2,
-        total_vectors: 2,
     };
 
     assert_eq!(vector_data.get_vector(0), Some([1.0, 2.0].as_slice()));
@@ -144,7 +129,6 @@ fn test_vector_data_get_chunk() {
         chunk: vec!["chunk1".to_string(), "chunk2".to_string()],
         embedding: vec![vec![1.0, 2.0], vec![3.0, 4.0]],
         dimensions: 2,
-        total_vectors: 2,
     };
 
     assert_eq!(vector_data.get_chunk(0), Some("chunk1"));
@@ -158,7 +142,6 @@ fn test_vector_data_memory_usage() {
         chunk: vec!["test".to_string()],
         embedding: vec![vec![1.0; 100]], // 100 f32 values
         dimensions: 100,
-        total_vectors: 1,
     };
 
     let memory_mb = vector_data.memory_usage_mb();
@@ -173,7 +156,6 @@ fn test_vector_data_empty() {
         chunk: vec![],
         embedding: vec![],
         dimensions: 0,
-        total_vectors: 0,
     };
 
     assert_eq!(vector_data.get_vector(0), None);
@@ -181,20 +163,86 @@ fn test_vector_data_empty() {
     assert_eq!(vector_data.memory_usage_mb(), 0.0);
 }
 
-#[tokio::test]
-async fn test_embedding_store_debug_print() {
-    let embedding_data = vec![EmbeddingData {
-        index: 0,
-        chunk: "test chunk for debugging".to_string(),
-        embedding: vec![1.0, 2.0, 3.0, 4.0, 5.0],
-        dimensions: 5,
-    }];
-
-    let store = EmbeddingStore::new(42, embedding_data);
-
-    // This should not panic - just testing the debug_print method doesn't crash
-    store.debug_print();
-
-    assert_eq!(store.batch_index, 42);
-    assert_eq!(store.items[0].dimensions, 5);
+#[test]
+fn test_hnsw_search_basic() {
+    // Test basic HNSW search functionality
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    
+    let vector1 = vec![1.0, 0.0, 0.0];
+    let vector2 = vec![0.0, 1.0, 0.0];
+    let vector3 = vec![0.9, 0.1, 0.0]; // Similar to vector1
+    
+    hnsw.insert(vector1.clone(), 0);
+    hnsw.insert(vector2.clone(), 0);
+    hnsw.insert(vector3.clone(), 0);
+    
+    // Search for something similar to vector1
+    let query = vec![1.0, 0.0, 0.0];
+    let results = hnsw.search(&query, 2);
+    
+    assert_eq!(results.len(), 2);
+    // The most similar should be node 0 (exact match)
+    assert_eq!(results[0].0, 0);
 }
+
+#[test]
+fn test_hnsw_node_insertion() {
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    
+    assert_eq!(hnsw.nodes.len(), 0);
+    assert!(hnsw.entry_point.is_none());
+    
+    let vector = vec![1.0, 2.0, 3.0];
+    let level = 0;
+    let node_id = hnsw.insert(vector.clone(), level);
+    
+    assert_eq!(node_id, 0);
+    assert_eq!(hnsw.nodes.len(), 1);
+    assert_eq!(hnsw.entry_point, Some(0));
+    assert_eq!(hnsw.nodes[0].vector, vector);
+}
+
+#[test]
+fn test_hnsw_multiple_insertions() {
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    
+    for i in 0..10 {
+        let vector = vec![i as f32, (i + 1) as f32, (i + 2) as f32];
+        hnsw.insert(vector, 0);
+    }
+    
+    assert_eq!(hnsw.nodes.len(), 10);
+}
+
+#[test]
+fn test_hnsw_empty_search() {
+    let hnsw = HNSW::new(16, 100, 5, 0.7);
+    let query = vec![1.0, 2.0, 3.0];
+    let results = hnsw.search(&query, 5);
+    
+    assert_eq!(results.len(), 0);
+}
+
+#[tokio::test]
+async fn test_embedding_store_with_checksum() {
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("test_checksum");
+
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    hnsw.insert(vec![1.0, 2.0, 3.0, 4.0, 5.0], 0);
+
+    let mut store = EmbeddingStore::new(hnsw);
+
+    // Write to disk (should generate checksum)
+    store.write_to_disk(&file_path).await.unwrap();
+    
+    // Load it back and verify
+    let binary_path = format!("{}.bin", file_path.to_str().unwrap());
+    let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
+        .await
+        .unwrap();
+    
+    assert_eq!(loaded_store.hnsw_store.nodes.len(), 1);
+    assert_eq!(loaded_store.hnsw_store.nodes[0].vector.len(), 5);
+}
+
