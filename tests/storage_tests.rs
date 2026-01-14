@@ -5,7 +5,7 @@ use tempfile::tempdir;
 async fn test_embedding_store_creation() {
     // Create a new HNSW index
     let hnsw = HNSW::new(16, 100, 5, 0.7);
-    
+
     let store = EmbeddingStore::new(hnsw.clone());
 
     assert_eq!(store.hnsw_store.nodes.len(), 0);
@@ -23,17 +23,14 @@ async fn test_write_read_binary() {
     let mut hnsw = HNSW::new(16, 100, 5, 0.7);
     let vector1 = vec![1.0, 2.0, 3.0];
     let vector2 = vec![4.0, 5.0, 6.0];
-    
-    hnsw.insert(vector1.clone(),"null".to_string(),0);
-    hnsw.insert(vector2.clone(),"null".to_string(), 0);
+
+    hnsw.insert(vector1.clone(), "null".to_string(), 0);
+    hnsw.insert(vector2.clone(), "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
     // Write binary
-    store
-        .write_to_disk(&file_path)
-        .await
-        .unwrap();
+    store.write_to_disk(&file_path).await.unwrap();
 
     // Read binary back
     let binary_path = format!("{}.bin", file_path.to_str().unwrap());
@@ -41,8 +38,14 @@ async fn test_write_read_binary() {
         .await
         .unwrap();
 
-    assert_eq!(loaded_store.hnsw_store.nodes.len(), store.hnsw_store.nodes.len());
-    assert_eq!(loaded_store.hnsw_store.max_neighbors, store.hnsw_store.max_neighbors);
+    assert_eq!(
+        loaded_store.hnsw_store.nodes.len(),
+        store.hnsw_store.nodes.len()
+    );
+    assert_eq!(
+        loaded_store.hnsw_store.max_neighbors,
+        store.hnsw_store.max_neighbors
+    );
     assert_eq!(loaded_store.hnsw_store.nodes[0].vector, vector1);
     assert_eq!(loaded_store.hnsw_store.nodes[1].vector, vector2);
 }
@@ -55,17 +58,14 @@ async fn test_read_binary_multiple_files() {
 
     // Create multiple embedding stores with cumulative HNSW indices
     let mut cumulative_hnsw = HNSW::new(16, 100, 5, 0.7);
-    
+
     for i in 0..3 {
         let vector = vec![i as f32, (i + 1) as f32];
-        cumulative_hnsw.insert(vector,"null".to_string(),0);
-        
+        cumulative_hnsw.insert(vector, "null".to_string(), 0);
+
         let mut store = EmbeddingStore::new(cumulative_hnsw.clone());
         let file_path = embeddings_dir.join(format!("batch_{}", i));
-        store
-            .write_to_disk(&file_path)
-            .await
-            .unwrap();
+        store.write_to_disk(&file_path).await.unwrap();
     }
 
     // Read all files
@@ -167,19 +167,19 @@ fn test_vector_data_empty() {
 fn test_hnsw_search_basic() {
     // Test basic HNSW search functionality
     let mut hnsw = HNSW::new(16, 100, 5, 0.7);
-    
+
     let vector1 = vec![1.0, 0.0, 0.0];
     let vector2 = vec![0.0, 1.0, 0.0];
     let vector3 = vec![0.9, 0.1, 0.0]; // Similar to vector1
-    
-    hnsw.insert(vector1.clone(), "null".to_string(),0);
-    hnsw.insert(vector2.clone(), "null".to_string(),0);
-    hnsw.insert(vector3.clone(), "null".to_string(),0);
-    
+
+    hnsw.insert(vector1.clone(), "null".to_string(), 0);
+    hnsw.insert(vector2.clone(), "null".to_string(), 0);
+    hnsw.insert(vector3.clone(), "null".to_string(), 0);
+
     // Search for something similar to vector1
     let query = vec![1.0, 0.0, 0.0];
     let results = hnsw.search(&query, 2);
-    
+
     assert_eq!(results.len(), 2);
     // The most similar should be node 0 (exact match)
     assert_eq!(results[0].0, 0);
@@ -188,14 +188,14 @@ fn test_hnsw_search_basic() {
 #[test]
 fn test_hnsw_node_insertion() {
     let mut hnsw = HNSW::new(16, 100, 5, 0.7);
-    
+
     assert_eq!(hnsw.nodes.len(), 0);
     assert!(hnsw.entry_point.is_none());
-    
+
     let vector = vec![1.0, 2.0, 3.0];
     let level = 0;
-    let node_id = hnsw.insert(vector.clone(), "null".to_string(),level);
-    
+    let node_id = hnsw.insert(vector.clone(), "null".to_string(), level);
+
     assert_eq!(node_id, 0);
     assert_eq!(hnsw.nodes.len(), 1);
     assert_eq!(hnsw.entry_point, Some(0));
@@ -205,12 +205,12 @@ fn test_hnsw_node_insertion() {
 #[test]
 fn test_hnsw_multiple_insertions() {
     let mut hnsw = HNSW::new(16, 100, 5, 0.7);
-    
+
     for i in 0..10 {
         let vector = vec![i as f32, (i + 1) as f32, (i + 2) as f32];
         hnsw.insert(vector, "null".to_string(), 0);
     }
-    
+
     assert_eq!(hnsw.nodes.len(), 10);
 }
 
@@ -219,7 +219,7 @@ fn test_hnsw_empty_search() {
     let hnsw = HNSW::new(16, 100, 5, 0.7);
     let query = vec![1.0, 2.0, 3.0];
     let results = hnsw.search(&query, 5);
-    
+
     assert_eq!(results.len(), 0);
 }
 
@@ -229,20 +229,19 @@ async fn test_embedding_store_with_checksum() {
     let file_path = dir.path().join("test_checksum");
 
     let mut hnsw = HNSW::new(16, 100, 5, 0.7);
-    hnsw.insert(vec![1.0, 2.0, 3.0, 4.0, 5.0], "null".to_string(),0);
+    hnsw.insert(vec![1.0, 2.0, 3.0, 4.0, 5.0], "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
     // Write to disk (should generate checksum)
     store.write_to_disk(&file_path).await.unwrap();
-    
+
     // Load it back and verify
     let binary_path = format!("{}.bin", file_path.to_str().unwrap());
     let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
         .await
         .unwrap();
-    
+
     assert_eq!(loaded_store.hnsw_store.nodes.len(), 1);
     assert_eq!(loaded_store.hnsw_store.nodes[0].vector.len(), 5);
 }
-

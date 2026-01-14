@@ -9,7 +9,7 @@ use tokio::fs;
 #[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
 pub struct EmbeddingStore {
     pub hnsw_store: HNSW,
-    checksum: String,
+    pub checksum: String,
 }
 
 impl EmbeddingStore {
@@ -109,24 +109,29 @@ impl EmbeddingStore {
             p
         };
 
+        // First, serialize to bytes and calculate checksum
         let self_clone = self.clone(); // TODO: This is so Bad, find a better way
-
-        // Write and checksum calculation in blocking task, return checksum
         let checksum = tokio::task::spawn_blocking(move || -> Result<String> {
-            let mut file = std::fs::File::create(&formatted_path.clone())?;
-            bincode::encode_into_std_write(&self_clone, &mut file, bincode::config::standard())?;
-            file.sync_all()?;
-
-            let mut file = std::fs::File::open(&formatted_path)?;
+            let bytes = bincode::encode_to_vec(&self_clone, bincode::config::standard())?;
             let mut hasher = sha2::Sha256::new();
-            std::io::copy(&mut file, &mut hasher)?;
+            hasher.update(&bytes);
             let checksum = format!("{:x}", hasher.finalize());
-
             Ok(checksum)
         })
         .await??;
 
+        // Update checksum in self
         self.checksum = checksum;
+
+        // Now write the updated struct (with checksum) to disk
+        let self_clone = self.clone();
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let mut file = std::fs::File::create(&formatted_path)?;
+            bincode::encode_into_std_write(&self_clone, &mut file, bincode::config::standard())?;
+            file.sync_all()?;
+            Ok(())
+        })
+        .await??;
 
         Ok(())
     }
