@@ -18,18 +18,20 @@ async fn main() {
             stores.sort_by_key(|s| s.hnsw_store.nodes.len());
 
             let total_batches = stores.len();
-            let largest_store = stores.last().unwrap();
+            let lastest_index = stores.last().unwrap();
+            let checksum = stores.last().unwrap().checksum.clone();
 
             println!(
                 " Total batches loaded: {}",
                 total_batches.to_string().cyan()
             );
             println!(
-                " Total nodes in HNSW (latest index): {}",
-                largest_store.hnsw_store.nodes.len().to_string().cyan()
+                " Total nodes in HNSW (latest index): {}\n Checksum: {}",
+                lastest_index.hnsw_store.nodes.len().to_string().cyan(),
+                checksum.red()
             );
 
-            let hnsw = &largest_store.hnsw_store;
+            let hnsw = &lastest_index.hnsw_store;
             println!(
                 " HNSW max_neighbors: {}",
                 hnsw.max_neighbors.to_string().cyan()
@@ -52,20 +54,18 @@ async fn main() {
             // Display sample nodes from largest store
             println!(" {}", "Sample Nodes (first 3):".yellow().bold());
 
-            for (idx, node) in hnsw.nodes.iter().take(3).enumerate() {
-                println!();
-                println!("  {} {}", "Node".blue(), idx);
-                println!("    ID: {}", node.id);
-                println!("    Max Level: {}", node.max_level);
+            for (_idx, node) in hnsw.nodes.iter().take(3).enumerate() {
+                println!(" \nNode ID: {}", node.id.to_string().cyan());
+                println!(" Max Level: {}", node.max_level);
                 println!(
-                    "    Neighbors per layer: {:?}",
+                    " Neighbors per layer: {:?}",
                     node.neighbors.iter().map(|n| n.len()).collect::<Vec<_>>()
                 );
                 println!(
-                    "    Vector (first 5): {:?}",
+                    " Vector (first 5): {:?}",
                     &node.vector[..5.min(node.vector.len())]
                 );
-                println!("    Vector dimensions: {}", node.vector.len());
+                println!(" Vector dimensions: {}", node.vector.len());
                 println!("\nMetadata: {}", node.metadata.to_string().green().dimmed());
             }
         }

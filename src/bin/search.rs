@@ -1,4 +1,5 @@
 use blaze_db::prelude::*;
+use colored::Colorize;
 use std::path::PathBuf;
 use tokio::time::Instant;
 
@@ -24,7 +25,7 @@ pub async fn main() {
                 .expect("Failed to read embeddings directory");
 
             let mut latest_file: Option<PathBuf> = None;
-            let mut latest_number: i32 = -1;
+            let mut latest_number: usize = 0;
 
             while let Some(entry) = entries.next_entry().await.unwrap() {
                 let path = entry.path();
@@ -32,7 +33,7 @@ pub async fn main() {
                     if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
                         // Extract number from filename like "embeddings_batch_23"
                         if let Some(num_str) = filename.strip_prefix("embeddings_batch_") {
-                            if let Ok(num) = num_str.parse::<i32>() {
+                            if let Ok(num) = num_str.parse::<usize>() {
                                 if num > latest_number {
                                     latest_number = num;
                                     latest_file = Some(path.clone());
@@ -44,9 +45,7 @@ pub async fn main() {
             }
 
             let latest_index = latest_file.expect("No embedding files found in ./embeddings");
-            println!("Loading latest index: {:?}", latest_index);
-            println!();
-
+            println!("Loading latest index: {:?}", latest_index.file_name());
             let start = Instant::now();
             let store = EmbeddingStore::load_binary_file(&latest_index)
                 .await
@@ -54,6 +53,7 @@ pub async fn main() {
             let io_duration = start.elapsed();
 
             let hnsw = &store.hnsw_store;
+            println!("Checksum: {}", store.checksum.to_string().red());
             println!("Loaded HNSW index with {} nodes", hnsw.nodes.len());
             println!(
                 "Index parameters: M={}, ef_construction={}, layers={}",
@@ -70,12 +70,12 @@ pub async fn main() {
             let search_duration = search_start.elapsed();
 
             println!("Top {} similar chunks (HNSW):", top_k);
-            for (i, (node_id, similarity, metadata)) in results.iter().enumerate() {
-                println!("\nResult {}:", i + 1);
-                println!("Node ID: {}", node_id);
-                println!("Similarity: {:.4}", similarity);
+            for (_i, (node_id, similarity, metadata)) in results.iter().enumerate() {
+                println!();
+                println!("Node ID: {}", node_id.to_string().cyan());
+                println!("Similarity: {:.4}", similarity.to_string().yellow());
                 println!("Vector (first 5): {:?}", &hnsw.nodes[*node_id].vector[..5]);
-                println!("Metadata: {}", metadata);
+                println!("Metadata: {}", metadata.to_string().green().dimmed());
             }
 
             let total_duration = start.elapsed();
