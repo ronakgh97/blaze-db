@@ -44,14 +44,14 @@ pub async fn query_search(request: QueryRequest) -> Result<Vec<QueryResponse>> {
         request.top_k
     );
 
-    let result: Vec<(NodeId, f32)> = HNSW::search(&hnsw_index, &query_vector, request.top_k); // TODO: Search with metadata
+    let result: Vec<(NodeId, f32, String)> = HNSW::search_with_metadata(&hnsw_index, &query_vector, request.top_k);
     info!("Search complete, found {} results", result.len());
 
     // Map SearchResult to QueryResponse
     let responses = result
         .into_iter()
         .map(|r| QueryResponse {
-            chunk: r.0.to_string(), // TODO: Should be mapped to metadata
+            chunk: r.2.to_string(),
             score: r.1,
         })
         .collect();
