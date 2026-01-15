@@ -1,6 +1,5 @@
 use blaze_db::prelude::*;
 use colored::Colorize;
-use std::path::PathBuf;
 use tokio::time::Instant;
 
 #[tokio::main]
@@ -18,39 +17,16 @@ pub async fn main() {
             println!("Embedding (First 3): {:?}", &embeddings.embedding[0][..3]);
             println!();
 
+            let io_start = Instant::now();
             // Find the latest index file in embeddings directory
-            let embeddings_dir = PathBuf::from("./embeddings");
-            let mut entries = tokio::fs::read_dir(&embeddings_dir)
-                .await
-                .expect("Failed to read embeddings directory");
+            let (embeddings_store, index) =
+                EmbeddingStore::load_lastest_index("index_batch", "./embeddings")
+                    .await
+                    .expect("Failed to load embeddings from directory");
 
-            let mut latest_file: Option<PathBuf> = None;
-            let mut latest_number: usize = 0;
-
-            while let Some(entry) = entries.next_entry().await.unwrap() {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("bin") {
-                    if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
-                        // Extract number from filename like "embeddings_batch_23"
-                        if let Some(num_str) = filename.strip_prefix("embeddings_batch_") {
-                            if let Ok(num) = num_str.parse::<usize>() {
-                                if num > latest_number {
-                                    latest_number = num;
-                                    latest_file = Some(path.clone());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            let latest_index = latest_file.expect("No embedding files found in ./embeddings");
-            println!("Loading latest index: {:?}", latest_index.file_name());
-            let start = Instant::now();
-            let store = EmbeddingStore::load_binary_file(&latest_index)
-                .await
-                .expect("Failed to load index file");
-            let io_duration = start.elapsed();
+            let store = embeddings_store.expect("Failed to load index file");
+            println!("Lastest index file loaded: {}", index.to_string().cyan());
+            let io_duration = io_start.elapsed();
 
             let hnsw = &store.hnsw_store;
             println!("Checksum: {}", store.checksum.to_string().red());
@@ -78,7 +54,7 @@ pub async fn main() {
                 println!("Metadata: {}", metadata.to_string().green().dimmed());
             }
 
-            let total_duration = start.elapsed();
+            let total_duration = io_start.elapsed();
             println!(
                 "\nI/O took: {:?} to load {} nodes",
                 io_duration,

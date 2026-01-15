@@ -40,7 +40,7 @@ async fn main() {
 
                         let mut embedding_store = EmbeddingStore::new(hnsw.clone());
                         let filename =
-                            PathBuf::from(format!("./embeddings/embeddings_batch_{}", index));
+                            PathBuf::from(format!("./embeddings/index_batch_{}", index));
 
                         if let Err(e) = embedding_store.write_to_disk(&filename).await {
                             eprintln!("Failed to write embeddings to file: {}", e);
