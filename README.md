@@ -118,23 +118,25 @@ Top 10 nearest neighbors:
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance. `DONE (basic implementation)`
 - Fix Chunking for better meaningful text segments. `DONE, but kinda broken for now.`
-- Write/insert functionality for adding new vectors to the database. (Currently read-only, or rebuild entire DB)
-  `PARTIALLY DONE (only for flat files, not for HNSW)`
+- Write/insert functionality for adding new vectors to the database. `PARTIALLY DONE (Bad very Indexing performance)`
 - Make a storage engine, e.g SSTable or LSMTree based. (Actually, I have no idea how to do that. 😵‍💫)
-- Complete Refactor of storage and search modules for new HNSW architecture. `IN PROGRESS`
-- Gotta destroy/refactor the utils module. It's a mess. 😵‍💫 `IN PROGRESS`
-- Use gRPC/Protobuf for client-server communication?
+- Bad Indexing, Loading and Memory Explosion issues when inserting large batch of nodes. (HNSW) `NEED HElP`
+- Complete Refactor of storage and search modules for new HNSW architecture. `DONE`
+- Gotta destroy/refactor the utils module. It's a mess. `DONE`
+- Use gRPC/Protobuf for client-server communication?`
 - Complete HTTP API server for remote database access. `Insert endpoint is missing.`
-- Query filtering and metadata support.
-- Incremental updates without full reindex. (HNSW) `DONE (HNSW insert implemented)`
+- Better Database and Source Managing `NEED HELP`
+- Query filtering and metadata support. `DONE`
+- Incremental updates without full reindex. (HNSW) `DONE (Need better indexing matters)`
 - Distributed storage and sharding support.
-- Move hardcoded Values to separate config files.
-- HNSW DEMO and benchmarking.
+- Move hardcoded Values to separate config files. `API PROVIDER CONFIG LEFT`
+- HNSW DEMO and benchmarking. `Need to read Criterion docs`
 - Cloud deployment options. `What is cloud thingy?`
 
 ## References
 
 - [Curse of Dimensionality](https://en.wikipedia.org/wiki/Curse_of_dimensionality)
+- [Little HNSW Intro](https://www.pinecone.io/learn/series/faiss/hnsw/)
 
 ## Contributing
 
