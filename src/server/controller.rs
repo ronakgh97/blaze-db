@@ -109,7 +109,7 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
         Ok(response) => {
             info!(
                 "[POST /embed] Successfully embedded {} lines into database '{}'",
-                response.total_lines, response.database
+                response.total_entries, response.database
             );
             (StatusCode::OK, Json(response))
         }
@@ -122,7 +122,7 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(EmbedResponse {
                     database: "null".to_string(),
-                    total_lines: 0,
+                    total_entries: 0,
                 }),
             )
         }

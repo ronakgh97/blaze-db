@@ -26,7 +26,7 @@ pub async fn query_search(request: QueryRequest) -> Result<Vec<QueryResponse>> {
 
     info!("Loading vector data from database '{}'", from_database);
     let (embeddings_store, _max_index) =
-        load_embeddings_index_from_database(from_database.clone()).await?;
+        load_embeddings_index_from_database(from_database.clone()).await; //TODO: Should preload the index at startup
     let hnsw_index = match embeddings_store {
         Some(store) => store.hnsw_store,
         None => {
@@ -44,7 +44,8 @@ pub async fn query_search(request: QueryRequest) -> Result<Vec<QueryResponse>> {
         request.top_k
     );
 
-    let result: Vec<(NodeId, f32, String)> = HNSW::search_with_metadata(&hnsw_index, &query_vector, request.top_k);
+    let result: Vec<(NodeId, f32, String)> =
+        HNSW::search_with_metadata(&hnsw_index, &query_vector, request.top_k);
     info!("Search complete, found {} results", result.len());
 
     // Map SearchResult to QueryResponse

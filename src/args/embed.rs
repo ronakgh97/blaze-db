@@ -9,16 +9,18 @@ pub async fn embed_run(file_path: PathBuf, database: String, batch: Option<usize
 
     let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
 
-    let batch = batch.unwrap_or(512);
+    let batch = batch.unwrap_or(1024);
 
     let ingest = Ingestor::new(&file_path, batch);
 
-    // Use smart chunking instead of line-by-line for better semantic search
-    let content = ingest.read_chunks(100, 50)?;
+    let content = ingest.read_chunks(150, 50)?;
+
+    let total_chunks: usize = content.iter().map(|b| b.len()).sum();
 
     println!(
-        "Created {} batches of semantic chunks for embedding",
-        content.len()
+        "Created {} batches with {} total chunks for embedding",
+        content.len(),
+        total_chunks
     );
 
     let request_body = EmbedRequest {
@@ -36,8 +38,8 @@ pub async fn embed_run(file_path: PathBuf, database: String, batch: Option<usize
     if response.status().is_success() {
         let resp_json: EmbedResponse = response.json().await?;
         println!(
-            "Data embedded successfully. Totals embeddings: {}",
-            resp_json.total_lines
+            "Data embedded successfully. Total items: {}",
+            resp_json.total_entries
         );
     } else {
         println!("Failed to embed data. Status: {}", response.status());

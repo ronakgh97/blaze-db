@@ -109,31 +109,56 @@ impl EmbeddingStore {
             p
         };
 
-        // First, serialize to bytes and calculate checksum
-        let self_clone = self.clone(); // TODO: This is so Bad, find a better way
-        let checksum = tokio::task::spawn_blocking(move || -> Result<String> {
-            let bytes = bincode::encode_to_vec(&self_clone, bincode::config::standard())?;
-            let mut hasher = sha2::Sha256::new();
-            hasher.update(&bytes);
-            let checksum = format!("{:x}", hasher.finalize());
-            Ok(checksum)
-        })
-        .await??;
+        // Serialize to bytes and calculate checksum
+        let initial_bytes = bincode::encode_to_vec(&*self, bincode::config::standard())?;
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(&initial_bytes);
+        let checksum = format!("{:x}", hasher.finalize());
 
         // Update checksum in self
         self.checksum = checksum;
 
-        // Now write the updated struct (with checksum) to disk
-        let self_clone = self.clone();
-        tokio::task::spawn_blocking(move || -> Result<()> {
-            let mut file = std::fs::File::create(&formatted_path)?;
-            bincode::encode_into_std_write(&self_clone, &mut file, bincode::config::standard())?;
-            file.sync_all()?;
-            Ok(())
-        })
-        .await??;
+        // Serialize again (now with checksum) and write to disk
+        let final_bytes = bincode::encode_to_vec(&*self, bincode::config::standard())?;
+        fs::write(&formatted_path, &final_bytes)
+            .await
+            .with_context(|| format!("Failed to write file: {:?}", formatted_path))?;
 
         Ok(())
+    }
+
+    pub async fn load_lastest_index(prefix: &str, path: &str) -> Result<(Option<Self>, usize)> {
+        let (loaded_hnsw, max_index) = {
+            let mut latest_path: Option<PathBuf> = None;
+            let mut max_num = 0;
+            for entry in std::fs::read_dir(path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    // Check if it's an index file (e.g., hnsw_index_1.bin)
+                    if let Some(suffix) = file_name.strip_prefix(prefix) {
+                        // Remove .bin extension if present
+                        let suffix = suffix.strip_suffix(".bin").unwrap_or(suffix);
+                        let suffix = suffix.strip_prefix('_').unwrap_or(suffix);
+                        // Try to parse the number
+                        if let Ok(num) = suffix.parse::<usize>() {
+                            if num > max_num {
+                                max_num = num;
+                                latest_path = Some(path);
+                            }
+                        }
+                    }
+                }
+            }
+            let loaded = if let Some(path) = latest_path {
+                Some(EmbeddingStore::load_binary_file(&path).await?)
+            } else {
+                None
+            };
+            (loaded, max_num)
+        };
+
+        Ok((loaded_hnsw, max_index))
     }
 }
 

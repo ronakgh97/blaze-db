@@ -594,7 +594,7 @@ impl HNSW {
 
         results
     }
-    
+
     /// Search and return results with metadata
     /// Returns results as (NodeId, similarity, metadata) tuples sorted by similarity (highest first)
     pub fn search_with_metadata(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32, String)> {

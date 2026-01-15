@@ -42,7 +42,7 @@ pub struct EmbedRequest {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EmbedResponse {
     pub database: String,
-    pub total_lines: usize,
+    pub total_entries: usize,
 }
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct QueryRequest {
