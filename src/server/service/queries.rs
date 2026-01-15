@@ -2,13 +2,14 @@
 use crate::core::{HNSW, Metrics, NodeId};
 #[allow(unused)]
 use crate::prelude::{Provider, SearchQuery};
+use crate::server::dto::QueryResult;
 use crate::server::service::load_embeddings_index_from_database;
 use crate::server::{QueryRequest, QueryResponse};
 use crate::{error, info};
 use anyhow::Result;
 
 /// Executes a search query against the specified database and returns the top K similar chunks.
-pub async fn query_search(request: QueryRequest) -> Result<Vec<QueryResponse>> {
+pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
     let query = request.query;
     let from_database = request.database;
 
@@ -26,7 +27,7 @@ pub async fn query_search(request: QueryRequest) -> Result<Vec<QueryResponse>> {
 
     info!("Loading vector data from database '{}'", from_database);
     let (embeddings_store, _max_index) =
-        load_embeddings_index_from_database(from_database.clone()).await; //TODO: Should preload the index at startup
+        load_embeddings_index_from_database(from_database.clone()).await; // TODO: Should preload the index at startup
     let hnsw_index = match embeddings_store {
         Some(store) => store.hnsw_store,
         None => {
@@ -44,18 +45,29 @@ pub async fn query_search(request: QueryRequest) -> Result<Vec<QueryResponse>> {
         request.top_k
     );
 
+    let start_time = std::time::Instant::now();
     let result: Vec<(NodeId, f32, String)> =
         HNSW::search_with_metadata(&hnsw_index, &query_vector, request.top_k);
-    info!("Search complete, found {} results", result.len());
+    let duration_ms = start_time.elapsed().as_secs_f64();
+    info!(
+        "Search complete in {}s , found {} results",
+        duration_ms,
+        result.len()
+    );
 
     // Map SearchResult to QueryResponse
-    let responses = result
+    let result_map = result
         .into_iter()
-        .map(|r| QueryResponse {
+        .map(|r| QueryResult {
             chunk: r.2.to_string(),
             score: r.1,
         })
         .collect();
 
-    Ok(responses)
+    let response = QueryResponse {
+        results: result_map,
+        time_ms: duration_ms,
+    };
+
+    Ok(response)
 }

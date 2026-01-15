@@ -1,7 +1,7 @@
 use crate::server::service::{create_new_database, embed_run, list_databases, query_search};
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
-    HealthCheckResponse, ListDatabasesResponse, QueryRequest,
+    HealthCheckResponse, ListDatabasesResponse, QueryRequest, QueryResponse,
 };
 use crate::{error, info};
 use axum::extract::DefaultBodyLimit;
@@ -165,7 +165,7 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
         Ok(response) => {
             info!(
                 "[POST /query] Query successful, returning {} results",
-                response.len()
+                response.results.len()
             );
             (StatusCode::OK, Json(response))
         }
@@ -174,7 +174,13 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
                 "[POST /query] Query failed on database: {}",
                 payload.database.clone()
             );
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(vec![]))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(QueryResponse {
+                    results: vec![],
+                    time_ms: 0.0,
+                }),
+            )
         }
     }
 }

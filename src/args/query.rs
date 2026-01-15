@@ -1,6 +1,7 @@
 use crate::core::ClientConfig;
 use crate::server::{QueryRequest, QueryResponse};
 use anyhow::Result;
+use colored::Colorize;
 
 pub async fn query_run(database: String, query: String, top_k: usize) -> Result<()> {
     println!("Search querying the database...: {}", database);
@@ -20,14 +21,15 @@ pub async fn query_run(database: String, query: String, top_k: usize) -> Result<
         .await?;
 
     if response.status().is_success() {
-        let resp_result: Vec<QueryResponse> = response.json().await?;
+        let resp_result: QueryResponse = response.json().await?;
         println!("Query Results:");
 
-        for (i, item) in resp_result.iter().enumerate() {
+        for (i, item) in resp_result.results.iter().enumerate() {
             println!("\nResult {}:", i + 1);
-            println!("Chunk: {}", item.chunk);
-            println!("Score: {:.4}", item.score);
+            println!("Metadata: {}", item.chunk.to_string().green().dimmed());
+            println!("Score: {:.4}", item.score.to_string().cyan());
         }
+        println!("Time taken (sec): {}", resp_result.time_ms.to_string().on_bright_yellow());
     } else {
         println!("Failed to query database. Status: {}", response.status());
     }

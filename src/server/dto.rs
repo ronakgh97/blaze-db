@@ -52,6 +52,12 @@ pub struct QueryRequest {
 }
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct QueryResponse {
+    pub results: Vec<QueryResult>,
+    pub time_ms: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct QueryResult {
     pub chunk: String,
     pub score: f32,
 }
