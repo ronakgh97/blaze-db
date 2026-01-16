@@ -11,7 +11,7 @@ async fn main() -> Result<()> {
         }
 
         Some(ServerCommands::Serve { port, source }) => {
-            serve_run(port, &source).await?;
+            serve_run(port, source).await?;
         }
         None => {
             let _ = print_ascii().await;

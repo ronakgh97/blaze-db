@@ -4,9 +4,17 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::fs;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Source {
     pub source_name: Option<Vec<String>>,
+}
+
+impl Default for Source {
+    fn default() -> Self {
+        Self {
+            source_name: Some(vec![String::from("default_src")]),
+        }
+    }
 }
 
 impl Source {

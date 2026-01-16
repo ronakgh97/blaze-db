@@ -2,9 +2,17 @@ use crate::core::{ClientConfig, ServerConfig, save_config};
 use anyhow::Result;
 
 pub async fn init_run_server() -> Result<()> {
-    println!("Initializing dotfiles...");
+    println!("Initializing dotfiles/src...");
 
-    let config = ServerConfig::default();
+    let mut config = ServerConfig::default();
+
+    let mut get_source = ServerConfig::get_source(&config)?;
+    get_source.add_source("default_src".to_string())?; // Add default source
+    get_source.create_source_dir().await?;
+
+    // Update config with the modified source
+    config.update_source(get_source);
+
     save_config(ServerConfig::get_default_server_config_path()?, &config).await?;
 
     Ok(())

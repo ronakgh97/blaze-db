@@ -29,7 +29,10 @@ pub async fn query_run(database: String, query: String, top_k: usize) -> Result<
             println!("Metadata: {}", item.chunk.to_string().green().dimmed());
             println!("Score: {:.4}", item.score.to_string().cyan());
         }
-        println!("Time taken (sec): {}", resp_result.time_ms.to_string().on_bright_yellow());
+        println!(
+            "Time taken (sec): {}",
+            resp_result.time_ms.to_string().on_bright_yellow()
+        );
     } else {
         println!("Failed to query database. Status: {}", response.status());
     }

@@ -33,8 +33,8 @@ pub enum ServerCommands {
         #[arg(short, long)]
         port: Option<u16>,
 
-        /// Use specified database path
-        #[arg(short, long, required = true)]
-        source: String,
+        /// Use specified source path or use default-src
+        #[arg(short, long)]
+        source: Option<String>,
     },
 }
