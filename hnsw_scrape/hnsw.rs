@@ -700,7 +700,7 @@ async fn main() -> Result<()> {
         .par_iter()
         .map(|node_data| {
             let vector = node_data.vector.clone();
-            let metadata = "".to_string(); // Placeholder, no metadata in loaded data
+            let metadata = node_data.metadata.clone();
             let level = node_data.max_level;
             (vector, metadata, level)
         })
@@ -730,7 +730,7 @@ async fn main() -> Result<()> {
     let query_vector = query_embedding.embedding[0].clone();
     // let query_vector = generate_random_vector(1024);
     println!("\nQuery: {}", sample_query.to_string().yellow());
-    println!("Querying vector: {:?}...", &query_vector[..3]);
+    println!("Querying vector: {:?}...", &query_vector.as_slice()[..3]);
     let top_k = 5;
 
     let start = std::time::Instant::now();

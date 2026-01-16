@@ -73,7 +73,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 #[inline]
 #[allow(unused)]
 pub async fn load_sample_hnsw_index() -> EmbeddingStore {
-    let path_to_sample_index: PathBuf = PathBuf::from("./embeddings/embeddings_batch_23.bin");
+    let path_to_sample_index: PathBuf = PathBuf::from("./embeddings/index_batch_5.bin");
 
     let hnsw_index = EmbeddingStore::load_binary_file(&path_to_sample_index)
         .await
