@@ -9,13 +9,43 @@ embeddings.
 - Two binaries: `blaze-server` and `blaze-client`, for server and client operations respectively.
 - Uses Ollama API for generating vector embeddings.
 - Batch/Chunks processing for embedding generation.
-- Stores embeddings on disk in binary format.
-- Use memory-mapped files for fast loading of embeddings, rayon for parallel processing.
+- Stores/Index embeddings on disk in binary/JSON format.
+- Use memory-mapped files for fast loading of embeddings, rayon for parallel processing (where possible).
 - Uses semantic similarity search with multiple distance metrics (Cosine, Euclidean, Dot Product).
-- Async/await architecture for non-blocking operations.
-- Performance benchmarking suite (~3.7ms per search on War and Peace dataset).
+- Performance benchmarking suite (<1ms per search on War and Peace dataset, <1ms per search on Amazon Product Dataset).
 
-### SEARCH DEMO
+### SEARCH ON 2023 AMAZON PRODUCT DATASET (204800 Index)
+
+```shell
+Query: Wireless Bluetooth Headphones with Noise Cancellation
+Search completed in: 1.7936ms
+Top 10 search results for query: 'Wireless Bluetooth Headphones with Noise Cancellation'
+1. ID: 63233, Score: 0.93
+Title: AmazonCommercial Wireless Noise Cancelling Bluetooth Headphones
+2. ID: 67635, Score: 0.89
+Title: Bluetooth Active Noise Cancellation Headphone with Build in Microphone
+3. ID: 66738, Score: 0.89
+Title: Wireless Stereo Noise Cancelling Bluetooth Waterproof Earbuds with Charging Case
+4. ID: 66328, Score: 0.89
+Title: Wireless Earbuds Bluetooth 5.0 Waterproof Headset Headphones Noise Cancellation
+5. ID: 66488, Score: 0.88
+Title: Vsonus Noise Cancelling Headphones Wireless Bluetooth, Over Ear Bluetooth Headphones Noise Canceling with Microphone for Adults, 40H Playtime, Deep Bass Sound, Folding, Comfortable Earpads
+6. ID: 64430, Score: 0.88
+Title: Vsonus Noise Cancelling Headphones Wireless Bluetooth, Over Ear Bluetooth Headphones Noise Canceling with Microphone for Adults, 30H Playtime, Deep Bass Sound, Folding, Comfortable Earpads
+7. ID: 60323, Score: 0.87
+Title: Picun Active Noise Cancelling Headphones with ENC, 100 Hours Playing Time Wireless Bluetooth Headphones Over Ear Headphones for Travel, Home, Office
+8. ID: 63070, Score: 0.87
+Title: Wireless Headphones with Microphone, HD Stereo Sound & Noise Isolating Bluetooth Headset with Mute Button, Comfortable 25Hrs Playtime Hands Free On Ear Headphones for Cell Phone Calls Music Work
+9. ID: 66418, Score: 0.87
+Title: Sony Noise Cancelling Headphones WH1000XM2: Over Ear Wireless Bluetooth Headphones with Microphone - Hi Res Audio and Active Sound Cancellation - Black (2017 model)
+10. ID: 61815, Score: 0.87
+Title: Active Noise Cancelling Headphones,Wireless Noise Cancelling Headphone, Microphone 40 Hours Playtime Wireless Bluetooth Headphones 3D Low Bass Tone Fast Charge for Cellphone/Work/Gym/Travel (Blue)
+```
+
+- Had a classic dev moment here, was getting 28ms, until I realized that I was running in debug mode. 😶
+- Anyways, 1.79ms is pretty decent for 204800 vectors! 👨‍🍳🔥
+
+### SEARCH ON WAR AND PEACE DATASET
 
 ```shell
 Query: War and Peace
@@ -58,7 +88,7 @@ HNSW search took: 393.5µs for 5981 nodes
 Total took: 37.3125ms
 ```
 
-### NSW DEMO WITH BENCHMARKING
+### NSW DEMO WITH BENCHMARKING (RANDOM 50,000 VECTORS)
 
 ```shell
 Building NSW graph with 50000 nodes...
@@ -89,7 +119,7 @@ Result 5: Node Index: 8626, Similarity: 0.11
 - Beware: These are very random, high-dimensional vectors, so accuracy may be low, since finding true nearest neighbors
   in high dimensions is inherently difficult (curse of dimensionality).
 
-### HHSW DEMO WITH BENCHMARKING
+### HHSW DEMO WITH BENCHMARKING (RANDOM 50,000 VECTORS)
 
 ```shell
 Building HNSW graph with 50000 nodes...                                                                                 Indexing completed in 291.6110926s
