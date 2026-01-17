@@ -2,5 +2,5 @@
 /embeddings
 /.idea
 /docs
-/datasets
+/amazon_embeddings
 .gitattributes
