@@ -597,11 +597,11 @@ impl HNSW {
 
     /// Search and return results with metadata
     /// Returns results as (NodeId, similarity, metadata) tuples sorted by similarity (highest first)
-    pub fn search_with_metadata(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32, String)> {
+    pub fn search_with_metadata(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32, &str)> {
         let results = self.search(query, k);
         results
-            .into_par_iter()
-            .map(|(id, sim)| (id, sim, self.nodes[id].metadata.clone()))
+            .into_iter() // TODO:  parallel iterator not needed here?
+            .map(|(id, sim)| (id, sim, self.nodes[id].metadata.as_str()))
             .collect()
     }
 

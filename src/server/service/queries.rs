@@ -47,7 +47,7 @@ pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
     );
 
     let start_time = std::time::Instant::now();
-    let result: Vec<(NodeId, f32, String)> =
+    let result: Vec<(NodeId, f32, &str)> =
         HNSW::search_with_metadata(&hnsw_index, &query_vector, request.top_k);
     let duration_ms = start_time.elapsed().as_secs_f64();
     info!(
