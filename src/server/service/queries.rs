@@ -13,10 +13,11 @@ pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
     let query = request.query;
     let from_database = request.database;
 
-    //TODO: Provider should not be set on the fly
-    // Configure embedding provider
-    let url = "http://localhost:1234/v1/embeddings";
-    let model = "text-embedding-qwen3-embedding-0.6b";
+    // Configure embedding provider from env or use defaults
+    let url = std::env::var("EMBEDDING_API_URL")
+        .unwrap_or_else(|_| "http://localhost:1234/v1/embeddings".to_string());
+    let model = std::env::var("EMBEDDING_MODEL")
+        .unwrap_or_else(|_| "text-embedding-qwen3-embedding-0.6b".to_string());
     let provider = Provider::init(url, model);
 
     info!("Generating embedding for query: '{}'", query);
