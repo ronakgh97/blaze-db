@@ -1,4 +1,4 @@
-use crate::core::{ClientConfig, ServerConfig, save_config};
+use crate::core::{ClientConfig, ServerConfig, get_source_path, save_config};
 use anyhow::Result;
 
 pub async fn init_run_server() -> Result<()> {
@@ -7,6 +7,15 @@ pub async fn init_run_server() -> Result<()> {
     let mut config = ServerConfig::default();
 
     let mut get_source = ServerConfig::get_source(&config)?;
+
+    // Check if default source and default config already exists to avoid overwriting
+    if get_source_path()?.join("default_src").exists()
+        && ServerConfig::get_default_server_config_path()?.exists()
+    {
+        println!("Defaults already initialized at {:?}", get_source_path()?);
+        return Ok(());
+    }
+
     get_source.add_source("default_src".to_string())?; // Add default source
     get_source.create_source_dir().await?;
 

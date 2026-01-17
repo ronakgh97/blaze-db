@@ -29,11 +29,11 @@ pub async fn start_server(port: u16, source: String) {
     START_TIME.get_or_init(Instant::now);
     ACTIVE_SOURCE.get_or_init(|| source.clone());
 
-    info!("Server is running on http://127.0.0.1:{}", port);
+    info!("Server is running on http://0.0.0.0:{}", port);
     info!("Active source: {}", source);
 
     let app = create_router().await;
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("0.0.0.0:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
