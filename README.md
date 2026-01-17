@@ -15,37 +15,47 @@ embeddings.
 - Async/await architecture for non-blocking operations.
 - Performance benchmarking suite (~3.7ms per search on War and Peace dataset).
 
-### NORMAL SEARCH DEMO
+### SEARCH DEMO
 
 ```shell
-Chunk: What this book about?
-Embedding (First 3): [0.02176302, -0.05591798, -0.007288052]
+Query: War and Peace
+Embedding (First 3): [0.024166137, -0.016076643, -0.011579157]
 
-Top 5 similar chunks:
+Lastest index file loaded: 5
+Checksum: 2a9da1ce3b23bf82e3d01836a91e1128561374bede53ba06ed2d0b165ef45f33
+Loaded HNSW index with 5981 nodes
+Index parameters: M=18, ef_construction=200, layers=12
 
-Result 1:
-Chunk: had never grown. This active old servant was unpacking the traveler’s canteen and preparing tea. He brought in a boiling samovar. When everything was ready, the stranger opened his eyes, moved to the table, filled a tumbler with tea for himself and one for the beardless old man to whom he passed it. Pierre began to feel a sense of uneasiness, and the need, even the inevitability, of entering into conversation with this stranger. The servant brought back his tumbler turned upside down, * with an unfinished bit of nibbled sugar, and asked if anything more would be wanted. * To indicate he did not want more tea. “No. Give me the book,” said the stranger. The servant handed him a book which Pierre took to be a devotional work, and the traveler became absorbed in it. Pierre looked at him. All at
-Score: 0.3977
+Top 5 similar chunks (HNSW):
 
-Result 2:
-Chunk: crossed his gloved hands on his breast, and began to speak. “Now I must disclose to you the chief aim of our Order,” he said, “and if this aim coincides with yours, you may enter our Brotherhood with profit. The first and chief object of our Order, the foundation on which it rests and which no human power can destroy, is the preservation and handing on to posterity of a certain important mystery... which has come down to us from the remotest ages, even from the first man—a mystery on which perhaps the fate of mankind depends. But since this mystery is of such a nature that nobody can know or use it unless he be prepared by long and diligent self-purification, not everyone can hope to attain it quickly. Hence we have a secondary aim, that of preparing
-Score: 0.3956
+Node ID: 1
+Similarity: 0.56
+Vector (first 5): [0.10298232, 0.048900284, -0.007921904, -0.009048831, -0.01950096]
+Metadata: Author: graf Leo Tolstoy Translator: Aylmer Maude Louise Maude Release date: April 1, 2001 [eBook #2600] Most recently updated: June 14, 2022 Language: English Credits: An Anonymous Volunteer and David Widger *** START OF THE PROJECT GUTENBERG EBOOK WAR AND PEACE *** WAR AND PEACE By Leo Tolstoy/Tolstoi CHAPTER I “Well, Prince, so Genoa and Lucca are now just family estates of the Buonapartes. But I warn you, if you don’t tell me that this means war, if you still try to defend the infamies and horrors perpetrated by that Antichrist—I really believe he is Antichrist—I will have nothing more to do with you and you are no longer my friend, no longer my ‘faithful slave,’ as you call yourself! But how do you do? I see I have frightened you—sit down and tell me all the news.”
 
-Result 3:
-Chunk: that his relations’ choice has fallen. I don’t know what you will think of it, but I consider it my duty to let you know of it. He is said to be very handsome and a terrible scapegrace. That is all I have been able to find out about him. But enough of gossip. I am at the end of my second sheet of paper, and Mamma has sent for me to go and dine at the Apráksins’. Read the mystical book I am sending you; it has an enormous success here. Though there are things in it difficult for the feeble human mind to grasp, it is an admirable book which calms and elevates the soul. Adieu! Give my respects to monsieur your father and my compliments to Mademoiselle Bourienne. I embrace you as I love you. JULIE
-Score: 0.3902
+Node ID: 0
+Similarity: 0.53
+Vector (first 5): [0.036207102, 0.030403586, -0.004078724, -0.037874907, -0.022600956]
+Metadata: The Project Gutenberg eBook of War and Peace This ebook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this ebook or online at www.gutenberg.org. If you are not located in the United States, you will have to check the laws of the country where you are located before using this eBook. Title: War and Peace Author: graf Leo Tolstoy Translator: Aylmer Maude Louise Maude Release date: April 1, 2001 [eBook #2600] Most recently updated: June 14, 2022 Language: English Credits: An Anonymous Volunteer and David Widger *** START OF THE PROJECT GUTENBERG EBOOK WAR AND PEACE *** WAR AND PEACE By Leo Tolstoy/Tolstoi CHAPTER I
 
-Result 4:
-Chunk: what I desire most on earth, it would be to be poorer than the poorest beggar. A thousand thanks, dear friend, for the volume you have sent me and which has such success in Moscow. Yet since you tell me that among some good things it contains others which our weak human understanding cannot grasp, it seems to me rather useless to spend time in reading what is unintelligible and can therefore bear no fruit. I never could understand the fondness some people have for confusing their minds by dwelling on mystical books that merely awaken their doubts and excite their imagination, giving them a bent for exaggeration quite contrary to Christian simplicity. Let us rather read the Epistles and Gospels. Let us not seek to penetrate what mysteries they contain; for how can we, miserable sinners that we are, know the
-Score: 0.3849
+Node ID: 983
+Similarity: 0.48
+Vector (first 5): [0.08092821, -0.03397273, -0.013446445, -0.04074625, -0.0458255]
+Metadata: such a nation and would endeavor to be worthy of it. This rescript began with the words: “Sergéy Kuzmích, From all sides reports reach me,” etc. “Well, and so he never got farther than: ‘Sergéy Kuzmích’?” asked one of the ladies. “Exactly, not a hair’s breadth farther,” answered Prince Vasíli, laughing, “‘Sergéy Kuzmích... From all sides... From all sides... Sergéy Kuzmích...’ Poor Vyazmítinov could not get any farther! He began the rescript again and again, but as soon as he uttered ‘Sergéy’ he sobbed, ‘Kuz-mí-ch,’ tears, and ‘From all sides’ was smothered in sobs and he could get no farther. And again his handkerchief, and again: ‘Sergéy Kuzmích, From all sides,’... and tears, till at last somebody else was asked to read it.” “Kuzmích... From all sides... and then tears,” someone repeated laughing. “Don’t be unkind,” cried Anna Pávlovna from her end of the table
 
-Result 5:
-Chunk: satisfied with this answer. “Have you sought for means of attaining your aim in religion?” “No, I considered it erroneous and did not follow it,” said Pierre, so softly that the Rhetor did not hear him and asked him what he was saying. “I have been an atheist,” answered Pierre. “You are seeking for truth in order to follow its laws in your life, therefore you seek wisdom and virtue. Is that not so?” said the Rhetor, after a moment’s pause. “Yes, yes,” assented Pierre. The Rhetor cleared his throat, crossed his gloved hands on his breast, and began to speak. “Now I must disclose to you the chief aim of our Order,” he said, “and if this aim coincides with yours, you may enter our Brotherhood with profit. The first and chief object of our Order, the foundation on
-Score: 0.3800
+Node ID: 51
+Similarity: 0.48
+Vector (first 5): [0.024561673, -0.021977345, -0.009440806, 0.028978676, -0.02957123]
+Metadata: disapproved. “The means are ... the balance of power in Europe and the rights of the people,” the abbé was saying. “It is only necessary for one powerful nation like Russia—barbaric as she is said to be—to place herself disinterestedly at the head of an alliance having for its object the maintenance of the balance of power of Europe, and it would save the world!” “But how are you to get that balance?” Pierre was beginning. At that moment Anna Pávlovna came up and, looking severely at Pierre, asked the Italian how he stood Russian climate. The Italian’s face instantly changed and assumed an offensively affected, sugary expression, evidently habitual to him when conversing with women. “I am so enchanted by the brilliancy of the wit and culture of the society, more especially of the feminine society, in which I have had
 
-I/O took: 11.4964ms for 5981 vectors
-Search took: 3.2123ms for 5981 vectors
-Total took: 15.7322ms
+Node ID: 4575
+Similarity: 0.47
+Vector (first 5): [0.04066606, -0.019811766, -0.011853991, 0.023033887, -0.0025452946]
+Metadata: Pávlovna whispered the next words in advance, like an old woman muttering the prayer at Communion: “Let the bold and insolent Goliath...” she whispered. Prince Vasíli continued. “Let the bold and insolent Goliath from the borders of France encompass the realms of Russia with death-bearing terrors; humble Faith, the sling of the Russian David, shall suddenly smite his head in his bloodthirsty pride. This icon of the Venerable Sergius, the servant of God and zealous champion of old of our country’s weal, is offered to Your Imperial Majesty. I grieve that my waning strength prevents rejoicing in the sight of your most gracious presence. I raise fervent prayers to Heaven that the Almighty may exalt the race of the just, and mercifully fulfill the desires of Your Majesty.” “What force! What a style!” was uttered in approval both of reader and of author.
+
+I/O took: 32.6335ms to load 5981 nodes
+HNSW search took: 393.5µs for 5981 nodes
+Total took: 37.3125ms
 ```
 
 ### NSW DEMO WITH BENCHMARKING
@@ -112,7 +122,7 @@ Top 10 nearest neighbors:
 - Again, significant speedup with HNSW over brute-force search on 50k vectors!
 - Curse of dimensionality still applies.
 - HNSW implementation is basic and can be further optimized. (Which are beyond of my knowledge 😵‍💫)
-- Anyway, Look at that smooth exponential layer distribution! *chief kiss* 😼
+- Anyway, Look at that smooth exponential layer distribution! _chief kiss_ 😼
 
 ## TODO:
 
@@ -126,6 +136,7 @@ Top 10 nearest neighbors:
 - Use gRPC/Protobuf for client-server communication?`
 - Complete HTTP API server for remote database access. `Insert endpoint is missing.`
 - Better Database and Source Managing `NEED HELP`
+- Docker env and app config are conflicting `NEED HELP`
 - Query filtering and metadata support. `DONE`
 - Incremental updates without full reindex. (HNSW) `DONE (Need better indexing matters)`
 - Distributed storage and sharding support.

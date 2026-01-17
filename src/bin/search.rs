@@ -4,7 +4,7 @@ use tokio::time::Instant;
 
 #[tokio::main]
 pub async fn main() {
-    let sample_text = String::from("What is this about?");
+    let sample_text = String::from("War and Peace");
 
     let provider = Provider::init(
         "http://localhost:1234/v1/embeddings",
