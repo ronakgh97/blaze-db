@@ -44,7 +44,8 @@ Title: Active Noise Cancelling Headphones,Wireless Noise Cancelling Headphone, M
 
 - Had a classic dev moment here, was getting 28ms, until I realized that I was running in debug mode. 😶
 - Anyways, 1.79ms is pretty decent for 204800 vectors! 👨‍🍳🔥
-- Amazon product 2023 dataset: [link](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products?select=amazon_products.csv)
+- Amazon product 2023
+  dataset: [Source Link](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products?select=amazon_products.csv)
 
 ### SEARCH ON WAR AND PEACE DATASET
 
@@ -123,7 +124,7 @@ Result 5: Node Index: 8626, Similarity: 0.11
 ### HHSW DEMO WITH BENCHMARKING (RANDOM 50,000 VECTORS)
 
 ```shell
-Building HNSW graph with 50000 nodes...                                                                                 Indexing completed in 291.6110926s
+Building HNSW graph with 50000 nodes...
 Indexing completed in 291.6110926s
 
 HNSW Layer Statistics:
@@ -160,6 +161,8 @@ Top 10 nearest neighbors:
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance. `DONE (basic implementation)`
 - Fix Chunking for better meaningful text segments. `DONE, but kinda broken for now.`
 - Write/insert functionality for adding new vectors to the database. `PARTIALLY DONE (Bad very Indexing performance)`
+- Find a way to manage multiple sources during server startup and runtime, load index into memory during it.
+  `IN PROGRESS`
 - Make a storage engine, e.g SSTable or LSMTree based. (Actually, I have no idea how to do that. 😵‍💫)
 - Bad Indexing, Loading and Memory Explosion issues when inserting large batch of nodes. (HNSW) `NEED HElP`
 - Complete Refactor of storage and search modules for new HNSW architecture. `DONE`
