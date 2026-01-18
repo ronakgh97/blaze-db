@@ -3,5 +3,5 @@
 /.idea
 /docs
 /amazon_embeddings
-/datasets
+datasets/amazon_products.csv
 .gitattributes
