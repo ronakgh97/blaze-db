@@ -10,7 +10,7 @@ pub async fn create_run(name: String, dimensions: usize) -> Result<()> {
     let request_body = CreateDatabaseRequest { name, dimensions };
 
     let response = reqwest::Client::new()
-        .post(config.url + "/create")
+        .post(config.url + "/v1/blaze/create")
         .json(&request_body)
         .send()
         .await?;

@@ -61,3 +61,44 @@ pub struct QueryResult {
     pub chunk: String,
     pub score: f32,
 }
+
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// pub struct CreateSourceRequest {
+//     pub source_name: String,
+// }
+//
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// pub struct CreateSourceResponse {
+//     pub id: String,
+//     pub source: String,
+//     pub created_at: String,
+// }
+//
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// pub struct ListSourcesResponse {
+//     pub sources: Vec<String>,
+// }
+
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// pub struct SourceLoadRequest {
+//     pub source: String,
+// }
+//
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// pub struct SourceLoadResponse {
+//     pub source: String,
+//     pub database: String,
+//     pub total_index: usize,
+// }
+//
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// pub struct SourceUnloadRequest {
+//     pub source: String,
+// }
+//
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// pub struct SourceUnloadResponse {
+//     pub source: String,
+//     pub database: String,
+//     pub total_unloaded: usize,
+// }

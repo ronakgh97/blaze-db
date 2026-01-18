@@ -15,7 +15,7 @@ pub async fn query_run(database: String, query: String, top_k: usize) -> Result<
     };
 
     let response = reqwest::Client::new()
-        .post(config.url + "/query")
+        .post(config.url + "/v1/blaze/query")
         .json(&request_body)
         .send()
         .await?;

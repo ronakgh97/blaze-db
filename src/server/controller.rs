@@ -17,23 +17,23 @@ static ACTIVE_SOURCE: OnceLock<String> = OnceLock::new();
 
 async fn create_router() -> Router {
     Router::new()
-        .route("/health", get(health_check))
-        .route("/create", post(create_database))
-        .route("/embed", post(new_embeddings))
-        .route("/databases", get(get_databases))
-        .route("/query", post(search_query))
+        .route("/v1/blaze/health", get(health_check))
+        .route("/v1/blaze/create", post(create_database))
+        .route("/v1/blaze/embed", post(new_embeddings))
+        .route("/v1/blaze/databases/list", get(get_databases))
+        .route("/v1/blaze/query", post(search_query))
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
 }
 
 pub async fn start_server(port: u16, source: String) {
     START_TIME.get_or_init(Instant::now);
     ACTIVE_SOURCE.get_or_init(|| source.clone());
+    let addr = format!("0.0.0.0:{}", port);
 
-    info!("Server is running on http://0.0.0.0:{}", port);
+    info!("Server is running on http://{}", addr);
     info!("Active source: {}", source);
 
     let app = create_router().await;
-    let addr = format!("0.0.0.0:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
@@ -184,3 +184,32 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
         }
     }
 }
+
+// pub async fn list_sources() -> impl IntoResponse {
+//     (
+//         StatusCode::NOT_IMPLEMENTED,
+//         Json(ListSourcesResponse { sources: vec![] }),
+//     )
+// }
+//
+// pub async fn load_src(Json(_payload): Json<SourceLoadRequest>) -> impl IntoResponse {
+//     (
+//         StatusCode::NOT_IMPLEMENTED,
+//         Json(SourceLoadResponse {
+//             source: "".to_string(),
+//             database: "".to_string(),
+//             total_index: 0,
+//         }),
+//     )
+// }
+//
+// pub async fn unload_src(Json(_payload): Json<SourceUnloadRequest>) -> impl IntoResponse {
+//     (
+//         StatusCode::NOT_IMPLEMENTED,
+//         Json(SourceUnloadResponse {
+//             source: "".to_string(),
+//             database: "".to_string(),
+//             total_unloaded: 0,
+//         }),
+//     )
+// }

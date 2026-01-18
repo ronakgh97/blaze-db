@@ -30,7 +30,7 @@ pub async fn embed_run(file_path: PathBuf, database: String, batch: Option<usize
     };
 
     let response = reqwest::Client::new()
-        .post(config.url + "/embed")
+        .post(config.url + "/v1/blaze/embed")
         .json(&request_body)
         .send()
         .await?;

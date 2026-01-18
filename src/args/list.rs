@@ -8,7 +8,7 @@ pub async fn list_run() -> Result<()> {
     let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
 
     let response = reqwest::Client::new()
-        .get(config.url + "/databases")
+        .get(config.url + "/v1/blaze/databases/list")
         .send()
         .await?;
 
