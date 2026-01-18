@@ -44,6 +44,7 @@ Title: Active Noise Cancelling Headphones,Wireless Noise Cancelling Headphone, M
 
 - Had a classic dev moment here, was getting 28ms, until I realized that I was running in debug mode. 😶
 - Anyways, 1.79ms is pretty decent for 204800 vectors! 👨‍🍳🔥
+- Amazon product 2023 dataset: [link](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products?select=amazon_products.csv)
 
 ### SEARCH ON WAR AND PEACE DATASET
 
