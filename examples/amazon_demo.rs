@@ -169,15 +169,16 @@ async fn bench_search() -> Result<()> {
     let query = "Wireless Bluetooth Headphones with Noise Cancellation";
     let query_embedding = provider.fetch_embedding(query).await?;
 
+    let top_k = 100;
     let start_time = std::time::Instant::now();
     let search_results = embedding_store
         .hnsw_store
-        .search_with_metadata(&query_embedding.embedding[0], 10);
+        .search_with_metadata(&query_embedding.embedding[0], top_k);
     let duration = start_time.elapsed();
 
-    println!("Query: {}", query.to_string().blue());
+    println!("\nQuery: {}", query.to_string().blue());
     println!("Search completed in: {:?}", duration);
-    println!("Top 10 search results for query: '{}'", query);
+    println!("Top {} search results for query: '{}'", top_k, query);
     for (i, (node_id, score, metadata)) in search_results.iter().enumerate() {
         println!(
             "{}. ID: {}, Score: {:.4}\nTitle: {}",
@@ -188,7 +189,7 @@ async fn bench_search() -> Result<()> {
         );
     }
 
-    assert!(duration.as_millis() <= 10); // Ensure search is under 10ms
+    assert!(duration.as_millis() <= 5); // Ensure search is under 10ms
 
     Ok(())
 }
