@@ -127,11 +127,42 @@ impl EmbeddingStore {
         Ok(())
     }
 
-    pub async fn load_lastest_index(prefix: &str, path: &str) -> Result<(Option<Self>, usize)> {
+    #[allow(unused)]
+    pub async fn write_to_disk_json(&mut self, file_path: PathBuf) -> Result<()> {
+        // Add extension if not present
+        let formatted_path = if file_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext == "json")
+            .unwrap_or(false)
+        {
+            file_path.to_path_buf()
+        } else {
+            let mut p = file_path.to_path_buf();
+            p.set_extension("json");
+            p
+        };
+
+        let initial_json = serde_json::to_string_pretty(&self)?;
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(&initial_json);
+        let checksum = format!("{:x}", hasher.finalize());
+
+        self.checksum = checksum;
+
+        let final_json = serde_json::to_string_pretty(&self)?;
+        fs::write(&formatted_path, &final_json)
+            .await
+            .with_context(|| format!("Failed to write file: {:?}", formatted_path))?;
+
+        Ok(())
+    }
+
+    pub async fn load_lastest_index(prefix: &str, dir_path: &str) -> Result<(Option<Self>, usize)> {
         let (loaded_hnsw, max_index) = {
             let mut latest_path: Option<PathBuf> = None;
             let mut max_num = 0;
-            for entry in std::fs::read_dir(path)? {
+            for entry in std::fs::read_dir(dir_path)? {
                 let entry = entry?;
                 let path = entry.path();
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {

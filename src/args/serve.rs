@@ -21,7 +21,7 @@ pub async fn serve_run(port: Option<u16>, source: Option<String>) -> Result<()> 
 
     if check_source_valid(&source).await? {
         info!("Source: {} is valid", &source);
-        start_server(port, source.clone()).await;
+        start_server(port, source.clone()).await?;
         Ok(())
     } else {
         error!("Source: {} is not valid", &source);

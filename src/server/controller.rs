@@ -14,6 +14,7 @@ use std::time::Instant;
 
 static START_TIME: OnceLock<Instant> = OnceLock::new();
 static ACTIVE_SOURCE: OnceLock<String> = OnceLock::new();
+// static LOADED_INDEXES: OnceLock<Arc<Mutex<HashMap<&str, EmbeddingStore>>>> = OnceLock::new();
 
 async fn create_router() -> Router {
     Router::new()
@@ -25,17 +26,40 @@ async fn create_router() -> Router {
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
 }
 
-pub async fn start_server(port: u16, source: String) {
+pub async fn start_server(port: u16, source: String) -> anyhow::Result<()> {
     START_TIME.get_or_init(Instant::now);
     ACTIVE_SOURCE.get_or_init(|| source.clone());
-    let addr = format!("0.0.0.0:{}", port);
 
+    // TODO: Add SourceManager to manage multiple sources dynamically and load/unload indexes as needed
+
+    // // List all dbs from the source
+    // let all_dbs = list_databases().await?;
+    //
+    // let index_map: Arc<Mutex<HashMap<String, EmbeddingStore>>> =
+    //     Arc::new(Mutex::new(HashMap::new()));
+    //
+    // // Load all db index from the source
+    // for db in &all_dbs {
+    //     let dbs_in_source = &db.databases;
+    //     for db_name in dbs_in_source {
+    //         info!("Loading index for database: {}", db_name);
+    //         let embedding_store = EmbeddingStore::load_binary_file(&PathBuf::from(db_name)).await?;
+    //         index_map
+    //             .lock()
+    //             .await
+    //             .insert(db_name.clone(), embedding_store);
+    //     }
+    // }
+
+    let addr = format!("0.0.0.0:{}", port);
     info!("Server is running on http://{}", addr);
     info!("Active source: {}", source);
 
     let app = create_router().await;
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }
 
 /// Get the active source name for this server instance
