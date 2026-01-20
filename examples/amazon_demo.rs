@@ -166,7 +166,7 @@ async fn bench_search() -> Result<()> {
         "text-embedding-qwen3-embedding-0.6b",
     );
 
-    let query = "Wireless Bluetooth Headphones with Noise Cancellation";
+    let query = "Gaming RTX 4060 Laptop with 165Hz Display";
     let query_embedding = provider.fetch_embedding(query).await?;
 
     let top_k = 100;
@@ -189,7 +189,7 @@ async fn bench_search() -> Result<()> {
         );
     }
 
-    assert!(duration.as_millis() <= 5); // Ensure search is under 10ms
+    assert!(duration.as_millis() <= 5); // Ensure search is under 5ms
 
     Ok(())
 }
