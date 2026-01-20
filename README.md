@@ -1,18 +1,44 @@
 # Blaze-DB
 
 Blaze-DB is a high-performance vector database written in Rust, designed for efficient storage and fast retrieval of
-vector
-embeddings.
+embeddings using HNSW Indexing.
 
 ## Current State
 
 - Two binaries: `blaze-server` and `blaze-client`, for server and client operations respectively.
-- Uses Ollama API for generating vector embeddings.
-- Batch/Chunks processing for embedding generation.
+- Uses Ollama API for generating vector embeddings or Bring your own model embeddings using API Server.
+- Batch/Chunks processing for embedding generation (Only used in CLI Wrapper).
 - Stores/Index embeddings on disk in binary/JSON format.
-- Use memory-mapped files for fast loading of embeddings, rayon for parallel processing (where possible).
+- Use memory-mapped files for fast loading and concurrent reads, rayon for parallel processing (where possible).
 - Uses semantic similarity search with multiple distance metrics (Cosine, Euclidean, Dot Product).
 - Performance benchmarking suite (<1ms per search on War and Peace dataset, <1ms per search on Amazon Product Dataset).
+
+## Usage
+
+### Start the Server bin
+
+```shell
+blzsrv serve
+
+[14:15:46][INFO] Starting the Server...
+[14:15:46][INFO] Source: default_src is valid
+[14:15:46][INFO] Source: test_src is valid
+[14:15:46][INFO] Starting server with 2 valid source(s)
+[14:15:46][INFO] Server is running on http://0.0.0.0:8080
+[14:15:46][INFO] Using Sources: ["default_src", "test_src"]
+```
+
+- Donwload the Index
+  here: [Google Drive Link](https://drive.google.com/file/d/1s17EwtibF9F5UuOnjAVhJPLIOiNM1zgb/view?usp=sharing)
+- Extract to `~/.blaze/sources/default_src/amazon_products_2023/`
+
+### Query using CLI Client
+
+```shell
+blzdb query --database amazon_products_2023 --source default_src --search "Wireless Bluetooth Headphones with Noise Cancellation" --top_k 10
+```
+
+## Benchmarks
 
 ### SEARCH ON 2023 AMAZON PRODUCT DATASET (204800 Index)
 
@@ -163,13 +189,16 @@ Top 10 nearest neighbors:
 - Write/insert functionality for adding new vectors to the database. `PARTIALLY DONE (Bad very Indexing performance)`
 - Find a way to manage multiple sources during server startup and runtime, load index into memory during it.
   `IN PROGRESS`
-- Make a storage engine, e.g SSTable or LSMTree based. (Actually, I have no idea how to do that. 😵‍💫)
+- Similarity calculation caching for faster search queries. `IN PROGRESS`
+- Implement LRU for fast query. `IN PROGRESS`
+- Make a storage engine, e.g SSTable or LSMTree based. (Actually, I have no idea how to do that. 😵‍💫) `NEED HELP`
 - Bad Indexing, Loading and Memory Explosion issues when inserting large batch of nodes. (HNSW) `NEED HElP`
 - Complete Refactor of storage and search modules for new HNSW architecture. `DONE`
 - Gotta destroy/refactor the utils module. It's a mess. `DONE`
 - Use gRPC/Protobuf for client-server communication?`
+- Better API Error handling and logging. `IN PROGRESS`
 - Complete HTTP API server for remote database access. `Insert endpoint is missing.`
-- Better Database and Source Managing `NEED HELP`
+- Better Database and Source Managing `IN PROGRESS`
 - Docker env and app config are conflicting `NEED HELP`
 - Query filtering and metadata support. `DONE`
 - Incremental updates without full reindex. (HNSW) `DONE (Need better indexing matters)`
