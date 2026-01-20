@@ -245,3 +245,102 @@ async fn test_embedding_store_with_checksum() {
     assert_eq!(loaded_store.hnsw_store.nodes.len(), 1);
     assert_eq!(loaded_store.hnsw_store.nodes[0].vector.len(), 5);
 }
+
+#[tokio::test]
+async fn test_concurrent_file_loading_thread_safety() {
+    // This test verifies that memmap2-based loading is thread-safe
+    // by loading the same file multiple times concurrently
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("test_concurrent");
+
+    // Create a test file with some data
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    for i in 0..100 {
+        let vector = vec![i as f32, (i + 1) as f32, (i + 2) as f32];
+        hnsw.insert(vector, format!("chunk_{}", i), 0);
+    }
+
+    let mut store = EmbeddingStore::new(hnsw);
+    store.write_to_disk(&file_path).await.unwrap();
+
+    let binary_path = std::path::PathBuf::from(format!("{}.bin", file_path.to_str().unwrap()));
+
+    // Spawn multiple concurrent tasks to load the same file
+    let mut tasks = Vec::new();
+    for i in 0..10 {
+        let path = binary_path.clone();
+        let task = tokio::spawn(async move {
+            let loaded = EmbeddingStore::load_binary_file(&path).await.unwrap();
+            (i, loaded)
+        });
+        tasks.push(task);
+    }
+
+    // Await all tasks and verify they all loaded correctly
+    let mut results = Vec::new();
+    for task in tasks {
+        let (idx, store) = task.await.unwrap();
+        results.push((idx, store));
+    }
+
+    // Verify all 10 tasks loaded the same data correctly
+    assert_eq!(results.len(), 10);
+    for (_, loaded_store) in results {
+        assert_eq!(loaded_store.hnsw_store.nodes.len(), 100);
+        assert_eq!(loaded_store.hnsw_store.max_neighbors, 16);
+        assert_eq!(loaded_store.hnsw_store.nodes[0].vector.len(), 3);
+    }
+}
+
+#[tokio::test]
+async fn test_concurrent_different_files_loading() {
+    // This test verifies concurrent loading of different files
+    let dir = tempdir().unwrap();
+
+    // Create multiple test files
+    let mut file_paths = Vec::new();
+    for i in 0..5 {
+        let file_path = dir.path().join(format!("test_file_{}", i));
+        let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+
+        // Each file has a different number of vectors
+        for j in 0..((i + 1) * 10) {
+            let vector = vec![j as f32, (j + 1) as f32];
+            hnsw.insert(vector, format!("chunk_{}_{}", i, j), 0);
+        }
+
+        let mut store = EmbeddingStore::new(hnsw);
+        store.write_to_disk(&file_path).await.unwrap();
+
+        file_paths.push(std::path::PathBuf::from(format!(
+            "{}.bin",
+            file_path.to_str().unwrap()
+        )));
+    }
+
+    // Load all files concurrently
+    let mut tasks = Vec::new();
+    for (i, path) in file_paths.into_iter().enumerate() {
+        let task = tokio::spawn(async move {
+            let loaded = EmbeddingStore::load_binary_file(&path).await.unwrap();
+            (i, loaded)
+        });
+        tasks.push(task);
+    }
+
+    // Verify results
+    let mut results = Vec::new();
+    for task in tasks {
+        let (idx, store) = task.await.unwrap();
+        results.push((idx, store));
+    }
+
+    // Sort by index to ensure correct order
+    results.sort_by_key(|(idx, _)| *idx);
+
+    // Verify each file loaded the correct number of nodes
+    for (i, (idx, store)) in results.iter().enumerate() {
+        assert_eq!(i, *idx);
+        assert_eq!(store.hnsw_store.nodes.len(), (i + 1) * 10);
+    }
+}

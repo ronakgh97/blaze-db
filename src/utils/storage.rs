@@ -1,8 +1,10 @@
 use crate::core::HNSW;
 use anyhow::{Context, Result};
 use bincode::{Decode, Encode};
+use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
+use std::fs::File;
 use std::path::PathBuf;
 use tokio::fs;
 
@@ -26,19 +28,51 @@ impl EmbeddingStore {
         unimplemented!("get_info method not implemented yet");
     }
 
-    /// Load from a single binary file
+    /// Load from a single binary file using memory-mapped I/O for better performance.
+    ///
+    /// ### Thread Safe
+    /// This function is fully thread-safe:
+    /// - The mmap is created and destroyed within a `spawn_blocking` task
+    /// - Deserialization creates an owned copy of the data before returning
+    /// - No references to the mmap escape the blocking task
+    /// - Multiple concurrent calls are safe as each has its own mmap instance
+    ///
+    /// ### Performance
+    /// Uses `memmap2` for efficient file loading:
+    /// - Faster than reading entire file into memory
+    /// - Lower memory overhead for large files
+    /// - OS-level page cache optimization
+    ///
+    /// ### Safety
+    /// The unsafe `Mmap::map()` call is safe because:
+    /// - We only read from the mmap (no writes)
+    /// - The file is not modified during the mapping
+    /// - The mmap lifetime is scoped to the blocking task
     pub async fn load_binary_file(path: &PathBuf) -> Result<Self> {
         let path_clone = path.to_path_buf();
-        let bytes = fs::read(&path_clone)
-            .await
-            .with_context(|| format!("Failed to read file: {:?}", path_clone))?;
+        let path_for_error = path.to_path_buf();
 
-        let path_for_error = path_clone.clone();
-        let (store, _) = tokio::task::spawn_blocking(move || {
-            bincode::decode_from_slice(&bytes, bincode::config::standard())
+        let store = tokio::task::spawn_blocking(move || -> Result<Self> {
+            // Open file and create memory map
+            let file = File::open(&path_clone)
+                .with_context(|| format!("Failed to open file: {:?}", path_clone))?;
+
+            // Safety: We're only reading from the mmap, and the file won't be modified while mapped.
+            // The mmap is scoped to this blocking task, ensuring no concurrent access issues.
+            // The file handle keeps the file open for the duration of the mmap.
+            let mmap = unsafe { Mmap::map(&file) }
+                .with_context(|| format!("Failed to memory map file: {:?}", path_clone))?;
+
+            // Deserialize from the memory-mapped bytes
+            // This creates an owned copy of the data, so it's safe to return across thread boundaries
+            let (store, _) = bincode::decode_from_slice(&mmap[..], bincode::config::standard())
+                .with_context(|| format!("Failed to deserialize: {:?}", path_clone))?;
+
+            // mmap is automatically unmapped here when it goes out of scope
+            Ok(store)
         })
-        .await?
-        .with_context(|| format!("Failed to deserialize: {:?}", path_for_error))?;
+        .await
+        .with_context(|| format!("Blocking task panicked while loading: {:?}", path_for_error))??;
 
         Ok(store)
     }
