@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Response DTO for health check
+/// Response DTO for health chec
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HealthCheckResponse {
     pub status: String,
@@ -12,6 +12,7 @@ pub struct HealthCheckResponse {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CreateDatabaseRequest {
     pub name: String,
+    pub source: String,
     pub dimensions: usize,
 }
 
@@ -25,9 +26,10 @@ pub struct CreateDatabaseResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ListDatabasesResponse {
+pub struct ListResponse {
     pub from_sources: String,
     pub databases: Vec<String>,
+    // pub indexes: Vec<String>, //TODO: Maybe return index details later? like size, entries, etc.
 }
 
 /// Request DTO for embedding data
@@ -35,6 +37,7 @@ pub struct ListDatabasesResponse {
 pub struct EmbedRequest {
     pub file_content: Vec<Vec<String>>,
     pub database: String,
+    pub source: String,
     pub batch: usize,
 }
 
@@ -42,12 +45,14 @@ pub struct EmbedRequest {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EmbedResponse {
     pub database: String,
+    pub source: String,
     pub total_entries: usize,
 }
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct QueryRequest {
     pub query: String,
     pub database: String,
+    pub source: String,
     pub top_k: usize,
 }
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -62,22 +67,17 @@ pub struct QueryResult {
     pub score: f32,
 }
 
-// #[derive(Debug, Deserialize, Serialize, Clone)]
-// pub struct CreateSourceRequest {
-//     pub source_name: String,
-// }
-//
-// #[derive(Debug, Deserialize, Serialize, Clone)]
-// pub struct CreateSourceResponse {
-//     pub id: String,
-//     pub source: String,
-//     pub created_at: String,
-// }
-//
-// #[derive(Debug, Deserialize, Serialize, Clone)]
-// pub struct ListSourcesResponse {
-//     pub sources: Vec<String>,
-// }
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CreateSourceRequest {
+    pub source_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CreateSourceResponse {
+    pub id: String,
+    pub source: String,
+    pub created_at: String,
+}
 
 // #[derive(Debug, Deserialize, Serialize, Clone)]
 // pub struct SourceLoadRequest {

@@ -1,5 +1,5 @@
 use crate::core::ClientConfig;
-use crate::server::ListDatabasesResponse;
+use crate::server::ListResponse;
 use anyhow::Result;
 
 pub async fn list_run() -> Result<()> {
@@ -8,12 +8,12 @@ pub async fn list_run() -> Result<()> {
     let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
 
     let response = reqwest::Client::new()
-        .get(config.url + "/v1/blaze/databases/list")
+        .get(config.url + "/v1/blaze/list")
         .send()
         .await?;
 
     if response.status().is_success() {
-        let databases: Vec<ListDatabasesResponse> = response.json().await?;
+        let databases: Vec<ListResponse> = response.json().await?;
 
         if databases.is_empty() {
             println!("No databases found.");

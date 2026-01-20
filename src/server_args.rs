@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "blaze_db",
     version = "1.0.0-beta",
-    about = "Blaze-DB: A high-performance vector database for embeddings",
+    about = "Blaze-DB: A high-performance vector database",
     long_about = "A CLI server for managing Blaze-DB vector databases"
 )]
 pub struct ServerArgs {
@@ -33,8 +33,8 @@ pub enum ServerCommands {
         #[arg(short, long)]
         port: Option<u16>,
 
-        /// Use specified source path or use default-src
+        /// Use specified source path or use all [sources] if not provided, during server startup
         #[arg(short, long)]
-        source: Option<String>,
+        source: Option<Vec<String>>, //TODO: Will use this later, very very later...
     },
 }

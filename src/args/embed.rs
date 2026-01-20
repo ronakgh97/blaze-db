@@ -4,7 +4,12 @@ use crate::server::{EmbedRequest, EmbedResponse};
 use anyhow::Result;
 use std::path::PathBuf;
 
-pub async fn embed_run(file_path: PathBuf, database: String, batch: Option<usize>) -> Result<()> {
+pub async fn embed_run(
+    file_path: PathBuf,
+    database: String,
+    src: String,
+    batch: Option<usize>,
+) -> Result<()> {
     println!("Embedding data into database...: {}", &database);
 
     let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
@@ -26,6 +31,7 @@ pub async fn embed_run(file_path: PathBuf, database: String, batch: Option<usize
     let request_body = EmbedRequest {
         file_content: content,
         database,
+        source: src,
         batch,
     };
 

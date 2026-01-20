@@ -11,6 +11,7 @@ use anyhow::Result;
 /// Executes a search query against the specified database and returns the top K similar chunks.
 pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
     let query = request.query;
+    let source = request.source;
     let from_database = request.database;
 
     // Configure embedding provider from env or use defaults
@@ -28,7 +29,7 @@ pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
 
     info!("Loading vector data from database '{}'", from_database);
     let (embeddings_store, _max_index) =
-        load_embeddings_index_from_database(from_database.clone()).await; // TODO: Should preload the index at startup
+        load_embeddings_index_from_database(from_database.clone(), source).await; // TODO: Should preload the index at startup or something else, Like TTL caching
     let hnsw_index = match embeddings_store {
         Some(store) => store.hnsw_store,
         None => {
@@ -39,6 +40,7 @@ pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
             ));
         }
     };
+
     info!("Loaded HNSW Index with {} entries", hnsw_index.nodes.len());
 
     info!(

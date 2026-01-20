@@ -1,7 +1,10 @@
-use crate::server::service::{create_new_database, embed_run, list_databases, query_search};
+use crate::server::dto::{CreateSourceRequest, CreateSourceResponse, ListResponse};
+use crate::server::service::{
+    create_new_database, create_new_source, embed_run, list_source, query_search,
+};
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
-    HealthCheckResponse, ListDatabasesResponse, QueryRequest, QueryResponse,
+    HealthCheckResponse, QueryRequest, QueryResponse,
 };
 use crate::{error, info};
 use axum::extract::DefaultBodyLimit;
@@ -9,62 +12,50 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use std::sync::OnceLock;
+use lazy_static::lazy_static;
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
+use tokio::sync::{Mutex, RwLock};
 
 static START_TIME: OnceLock<Instant> = OnceLock::new();
-static ACTIVE_SOURCE: OnceLock<String> = OnceLock::new();
-// static LOADED_INDEXES: OnceLock<Arc<Mutex<HashMap<&str, EmbeddingStore>>>> = OnceLock::new();
+
+// pub static LOADED_INDEXES: OnceLock<Arc<Mutex<HashMap<tring, EmbeddingStore>>>> = OnceLock::new();
+
+lazy_static! {
+    /// Per-database write locks to ensure only one write operation happens at a time per database
+    /// Multiple databases can be written to concurrently, but only one write per database
+    pub static ref DB_WRITE_LOCKS: Arc<Mutex<HashMap<String, Arc<RwLock<()>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+}
 
 async fn create_router() -> Router {
     Router::new()
         .route("/v1/blaze/health", get(health_check))
-        .route("/v1/blaze/create", post(create_database))
+        .route("/v1/blaze/databases/create", post(create_database))
+        .route("/v1/blaze/sources/create", post(create_src))
+        .route("/v1/blaze/list", get(list_sources))
+        //.route("v1/blaze/insert", post(new_embeddings)) // TODO: For API use, where vectors is being passed directly instead generic file content
         .route("/v1/blaze/embed", post(new_embeddings))
-        .route("/v1/blaze/databases/list", get(get_databases))
         .route("/v1/blaze/query", post(search_query))
-        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
+        .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
 }
 
-pub async fn start_server(port: u16, source: String) -> anyhow::Result<()> {
+// Start the server with the given port and multiple sources or single source
+pub async fn start_server(port: u16, source: Vec<String>) -> anyhow::Result<()> {
     START_TIME.get_or_init(Instant::now);
-    ACTIVE_SOURCE.get_or_init(|| source.clone());
 
     // TODO: Add SourceManager to manage multiple sources dynamically and load/unload indexes as needed
 
-    // // List all dbs from the source
-    // let all_dbs = list_databases().await?;
-    //
-    // let index_map: Arc<Mutex<HashMap<String, EmbeddingStore>>> =
-    //     Arc::new(Mutex::new(HashMap::new()));
-    //
-    // // Load all db index from the source
-    // for db in &all_dbs {
-    //     let dbs_in_source = &db.databases;
-    //     for db_name in dbs_in_source {
-    //         info!("Loading index for database: {}", db_name);
-    //         let embedding_store = EmbeddingStore::load_binary_file(&PathBuf::from(db_name)).await?;
-    //         index_map
-    //             .lock()
-    //             .await
-    //             .insert(db_name.clone(), embedding_store);
-    //     }
-    // }
-
     let addr = format!("0.0.0.0:{}", port);
     info!("Server is running on http://{}", addr);
-    info!("Active source: {}", source);
+    info!("Using Sources: {:?}", source);
 
     let app = create_router().await;
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
-}
-
-/// Get the active source name for this server instance
-pub fn get_active_source() -> Option<&'static str> {
-    ACTIVE_SOURCE.get().map(|s| s.as_str())
 }
 
 /// Get the server uptime in hours
@@ -146,6 +137,7 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(EmbedResponse {
                     database: "null".to_string(),
+                    source: "null".to_string(),
                     total_entries: 0,
                 }),
             )
@@ -153,10 +145,10 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
     }
 }
 
-pub async fn get_databases() -> impl IntoResponse {
+pub async fn list_sources() -> impl IntoResponse {
     info!("[GET /databases] Request to list all databases");
 
-    match list_databases().await {
+    match list_source().await {
         Ok(response) => {
             let total_dbs: usize = response.iter().map(|r| r.databases.len()).sum();
             info!(
@@ -170,7 +162,7 @@ pub async fn get_databases() -> impl IntoResponse {
             error!("[GET /databases] Failed to list databases");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(vec![ListDatabasesResponse {
+                Json(vec![ListResponse {
                     from_sources: "null".to_string(),
                     databases: vec![],
                 }]),
@@ -203,6 +195,37 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
                 Json(QueryResponse {
                     results: vec![],
                     time_ms: 0.0,
+                }),
+            )
+        }
+    }
+}
+
+pub async fn create_src(Json(payload): Json<CreateSourceRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /sources/create] Request to create source: '{}'",
+        payload.source_name
+    );
+
+    match create_new_source(payload.clone()).await {
+        Ok(response) => {
+            info!(
+                "[POST /sources/create] Source '{}' created successfully",
+                payload.source_name
+            );
+            (StatusCode::OK, Json(response))
+        }
+        Err(_) => {
+            error!(
+                "[POST /sources/create] Failed to create source: {}",
+                payload.source_name.clone()
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CreateSourceResponse {
+                    id: "null".to_string(),
+                    source: "null".to_string(),
+                    created_at: "null".to_string(),
                 }),
             )
         }

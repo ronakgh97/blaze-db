@@ -50,7 +50,7 @@ impl ClientConfig {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ServerConfig {
-    pub server_connection: ConnectionConfig,
+    pub server_connection: ConnectionConfig, // TODO: Maybe rm this connection config, because server can have .env or args for that
     pub data_source: Source,
 }
 

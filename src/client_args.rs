@@ -5,8 +5,8 @@ use std::path::PathBuf;
 #[command(
     name = "blaze_db",
     version = "1.0.0-beta",
-    about = "Blaze-DB: A high-performance vector database for embeddings",
-    long_about = "A CLI client for managing Blaze-DB vector databases"
+    about = "Blaze-DB: A high-performance vector database",
+    long_about = "A CLI client wrapper for querying Blaze-DB vector database servers"
 )]
 pub struct ClientArgs {
     #[command(subcommand)]
@@ -24,6 +24,10 @@ pub enum ClientCommands {
 
     /// Create a new Blaze-DB database
     Create {
+        /// Source name where the database will be stored
+        #[arg(short, long)]
+        source: String,
+
         /// Name of the new database
         #[arg(short, long)]
         name: String,
@@ -39,6 +43,10 @@ pub enum ClientCommands {
         #[arg(short, long)]
         file: PathBuf,
 
+        /// Source name where the database will be stored
+        #[arg(short, long)]
+        source: String,
+
         /// Name of the target database to embed data into
         #[arg(short, long)]
         database: String,
@@ -50,6 +58,10 @@ pub enum ClientCommands {
 
     /// Query an existing Blaze-DB database for similar embeddings
     Query {
+        /// Source name where the database will be stored
+        #[arg(short, long)]
+        source: String,
+
         /// Name of the database to query
         #[arg(short, long)]
         database: String,
@@ -63,6 +75,6 @@ pub enum ClientCommands {
         top_k: usize,
     },
 
-    /// List existing Blaze-DB databases from the active server source
+    /// List existing Blaze-DB databases from the all server source
     Ls,
 }

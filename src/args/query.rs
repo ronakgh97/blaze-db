@@ -3,7 +3,7 @@ use crate::server::{QueryRequest, QueryResponse};
 use anyhow::Result;
 use colored::Colorize;
 
-pub async fn query_run(database: String, query: String, top_k: usize) -> Result<()> {
+pub async fn query_run(database: String, src: String, query: String, top_k: usize) -> Result<()> {
     println!("Search querying the database...: {}", database);
 
     let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
@@ -12,6 +12,7 @@ pub async fn query_run(database: String, query: String, top_k: usize) -> Result<
         database,
         query,
         top_k,
+        source: src,
     };
 
     let response = reqwest::Client::new()
