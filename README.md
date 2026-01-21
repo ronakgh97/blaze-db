@@ -197,6 +197,7 @@ Top 10 nearest neighbors:
 - Gotta destroy/refactor the utils module. It's a mess. `DONE`
 - Use gRPC/Protobuf for client-server communication?`
 - Better API Error handling and logging. `IN PROGRESS`
+- API Validation, so that a stupid user doesnt corrupted the HNSW index. 😶 `IN PROGRESS`
 - Complete HTTP API server for remote database access. `Insert endpoint is missing.`
 - Better Database and Source Managing `IN PROGRESS`
 - Docker env and app config are conflicting `NEED HELP`
