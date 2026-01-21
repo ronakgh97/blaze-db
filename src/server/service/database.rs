@@ -11,7 +11,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     let database_id = Uuid::new_v4().to_string();
     let timestamp = Utc::now().format("%Y%m%dT%H%M%S").to_string();
     let name = request.name;
-    let dimensions = &request.dimensions;
+    let dimensions = request.dimensions;
     let source = &request.source;
     let source_path = get_source_path()?;
 
@@ -30,9 +30,12 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     tokio::fs::create_dir_all(&database_path).await?;
     info!("Database '{}' initialized at: {:?}", name, database_path);
 
+    // TODO: Use `parse_database_name` to verify the created database name
+
     Ok(CreateDatabaseResponse {
         id: database_id,
         name,
+        dimensions,
         source: source.to_string(),
         created_at: timestamp,
     })

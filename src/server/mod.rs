@@ -5,6 +5,6 @@ mod service;
 pub use controller::start_server;
 pub use dto::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
-    HealthCheckResponse, ListResponse, QueryRequest, QueryResponse, InsertRequest, InsertResponse,
+    HealthCheckResponse, InsertRequest, InsertResponse, ListResponse, QueryRequest, QueryResponse,
 };
-pub use service::list_databases;
+pub use service::{list_databases, parse_database_name};

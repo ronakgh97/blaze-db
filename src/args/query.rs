@@ -4,7 +4,7 @@ use anyhow::Result;
 use colored::Colorize;
 
 pub async fn query_run(database: String, src: String, query: String, top_k: usize) -> Result<()> {
-    println!("Search querying the database...: {}", database);
+    println!("\nSearch querying the database: {}\n", database.yellow());
 
     let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
 
@@ -23,10 +23,9 @@ pub async fn query_run(database: String, src: String, query: String, top_k: usiz
 
     if response.status().is_success() {
         let resp_result: QueryResponse = response.json().await?;
-        println!("Query Results:");
 
         for (i, item) in resp_result.results.iter().enumerate() {
-            println!("\nResult {}:", i + 1);
+            println!("\nItem {}:", i + 1);
             println!("Metadata: {}", item.chunk.to_string().green().dimmed());
             println!("Score: {:.4}", item.score.to_string().cyan());
         }

@@ -105,6 +105,7 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
                 Json(CreateDatabaseResponse {
                     id: "null".to_string(),
                     name: "null".to_string(),
+                    dimensions: 0,
                     source: "null".to_string(),
                     created_at: "null".to_string(),
                 }),

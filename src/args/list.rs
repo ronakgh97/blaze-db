@@ -1,10 +1,10 @@
 use crate::core::ClientConfig;
+use crate::prelude::parse_database_name;
 use crate::server::ListResponse;
 use anyhow::Result;
+use colored::Colorize;
 
 pub async fn list_run() -> Result<()> {
-    println!("Listing databases from active source...");
-
     let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
 
     let response = reqwest::Client::new()
@@ -13,15 +13,20 @@ pub async fn list_run() -> Result<()> {
         .await?;
 
     if response.status().is_success() {
-        let databases: Vec<ListResponse> = response.json().await?;
+        let list: Vec<ListResponse> = response.json().await?;
 
-        if databases.is_empty() {
-            println!("No databases found.");
+        if list.is_empty() {
+            println!("No sources/databases found.");
         } else {
-            for source_data in databases {
-                println!("  Databases ({}):", source_data.databases.len());
+            for source_data in list {
+                println!("  Sources ({})", source_data.from_sources.yellow());
                 for db in source_data.databases {
-                    println!("    • {}", db);
+                    // Parse db to get db name
+                    let Some((db_name, _, _, _)) = parse_database_name(&db) else {
+                        println!("    • {}", db.cyan());
+                        continue;
+                    };
+                    println!("    • {}", db_name.cyan());
                 }
             }
         }

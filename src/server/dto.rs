@@ -21,6 +21,7 @@ pub struct CreateDatabaseRequest {
 pub struct CreateDatabaseResponse {
     pub id: String,
     pub name: String,
+    pub dimensions: usize,
     pub source: String,
     pub created_at: String,
 }
