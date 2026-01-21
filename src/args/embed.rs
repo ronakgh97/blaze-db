@@ -29,7 +29,7 @@ pub async fn embed_run(
     );
 
     let request_body = EmbedRequest {
-        file_content: content,
+        batch_content: content,
         database,
         source: src,
         batch,

@@ -35,7 +35,7 @@ pub struct ListResponse {
 /// Request DTO for embedding data
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EmbedRequest {
-    pub file_content: Vec<Vec<String>>,
+    pub batch_content: Vec<Vec<String>>,
     pub database: String,
     pub source: String,
     pub batch: usize,
@@ -48,6 +48,27 @@ pub struct EmbedResponse {
     pub source: String,
     pub total_entries: usize,
 }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct VectorData {
+    pub embedding: Vec<f32>,
+    pub metadata: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct InsertRequest {
+    pub vectors: Vec<VectorData>,
+    pub database: String,
+    pub source: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct InsertResponse {
+    pub database: String,
+    pub source: String,
+    pub total_inserted: usize,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct QueryRequest {
     pub query: String,

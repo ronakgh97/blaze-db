@@ -114,7 +114,7 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
 }
 
 pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoResponse {
-    let total_chunks: usize = payload.file_content.iter().map(|batch| batch.len()).sum();
+    let total_chunks: usize = payload.batch_content.iter().map(|batch| batch.len()).sum();
     info!(
         "[POST /embed] Request to embed {} chunks into database '{}' with batch size {}",
         total_chunks, payload.database, payload.batch

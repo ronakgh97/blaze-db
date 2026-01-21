@@ -1,7 +1,7 @@
 use crate::core::HNSW;
 use crate::server::controller::DB_WRITE_LOCKS;
 use crate::server::service::database::search_database;
-use crate::server::{EmbedRequest, EmbedResponse};
+use crate::server::{EmbedRequest, EmbedResponse, InsertRequest};
 use crate::utils::{EmbeddingStore, Provider};
 use crate::{error, info, warn};
 use anyhow::{Context, Result};
@@ -12,8 +12,13 @@ use tokio::sync::RwLock;
 /// Prefix for HNSW index files (batch-wise), for example: "hnsw_index_1", "hnsw_index_2", etc.
 pub const INDEX_FILE_NAME: &str = "HNSW_INDEX"; // TODO: Need to find other way to manage multiple indexes
 
+#[allow(unused)]
+pub async fn insert_run(request: InsertRequest, _hnsw: Option<HNSW>) -> Result<EmbedResponse> {
+    unimplemented!("Direct insert_run is not implemented yet");
+}
+
 pub async fn embed_run(request: EmbedRequest, _hnsw: Option<HNSW>) -> Result<EmbedResponse> {
-    let batch_content = request.file_content; // TODO: Maybe change it to Vec<String>?
+    let batch_content = request.batch_content; // TODO: Maybe change it to Vec<String>?
     let database_name = request.database.clone();
     let source = request.source.clone();
 
