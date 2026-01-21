@@ -1,7 +1,7 @@
 use crate::core::HNSW;
 use crate::server::controller::DB_WRITE_LOCKS;
 use crate::server::service::database::search_database;
-use crate::server::{EmbedRequest, EmbedResponse, InsertRequest};
+use crate::server::{EmbedRequest, EmbedResponse, InsertRequest, InsertResponse};
 use crate::utils::{EmbeddingStore, Provider};
 use crate::{error, info, warn};
 use anyhow::{Context, Result};
@@ -12,11 +12,90 @@ use tokio::sync::RwLock;
 /// Prefix for HNSW index files (batch-wise), for example: "hnsw_index_1", "hnsw_index_2", etc.
 pub const INDEX_FILE_NAME: &str = "HNSW_INDEX"; // TODO: Need to find other way to manage multiple indexes
 
-#[allow(unused)]
-pub async fn insert_run(request: InsertRequest, _hnsw: Option<HNSW>) -> Result<EmbedResponse> {
-    unimplemented!("Direct insert_run is not implemented yet");
+//TODO: Both insert_run and embed_run have a lot of duplicated code, need to refactor later
+
+/// Insert pre-computed embeddings into the specified database
+pub async fn insert_run(request: &InsertRequest, _hnsw: Option<HNSW>) -> Result<InsertResponse> {
+    let vector_data = &request.vectors;
+    let database_name = request.database.clone();
+    let source = request.source.clone();
+
+    let total_entries = vector_data.len();
+
+    // Locate the database directory
+    let database_path = match search_database(database_name.clone(), source.clone()).await {
+        Ok(path) => path,
+        Err(e) => {
+            error!("Database '{}' not found", database_name);
+            return Err(e).with_context(|| format!("Database '{}' not found", database_name));
+        }
+    };
+
+    // Load latest HNSW from database directory if it exists, otherwise create a new one
+    let (loaded_hnsw, max_index) =
+        load_embeddings_index_from_database(database_name.clone(), source.clone()).await;
+    let mut hnsw = match loaded_hnsw {
+        Some(store) => store.hnsw_store,
+        None => HNSW::new(18, 200, 12, 0.8),
+    };
+
+    // Get or create lock for this database
+    let lock = {
+        let mut locks = DB_WRITE_LOCKS.lock().await;
+        locks
+            .entry(database_name.clone())
+            .or_insert_with(|| Arc::new(RwLock::new(())))
+            .clone()
+    };
+
+    // Acquire write lock - this ensures only one write operation per database at a time
+    // Multiple databases can still be written to concurrently
+    let _write_guard = lock.write().await;
+    info!("Acquired write lock for database '{}'", database_name);
+
+    // TODO: Use batch-wise
+    // let mut total_embedded = 0;
+    for (_index, vector_data) in vector_data.iter().enumerate() {
+        // let batch_index = index;
+
+        // This is just inserting pre-computed embeddings, so no need to fetch from provider
+        let embeddings = &vector_data.embedding;
+        let metadata = &vector_data.metadata;
+
+        // Insert embeddings into HNSW index
+        let random_level = hnsw.get_random_level();
+        hnsw.insert(embeddings.clone(), metadata.clone(), random_level);
+    }
+
+    // TODO: Is there a better method to manage multiple index files? or merge them? or overwrite them lastest ones? or prune last 'N' indexes?
+    // Save the final cumulative index ONCE at the end
+    let final_index_number = max_index + 1;
+    let final_filename = database_path.join(format!("{}_{}", INDEX_FILE_NAME, final_index_number));
+
+    let mut embedding_store = EmbeddingStore::new(hnsw.clone());
+    embedding_store
+        .write_to_disk(&final_filename)
+        .await
+        .with_context(|| "Failed to write final index")?;
+
+    info!(
+        "Final index saved: {} nodes total → {:?}",
+        hnsw.nodes.len(),
+        final_filename.display()
+    );
+
+    // Write lock will be automatically released here when _write_guard goes out of scope
+    drop(_write_guard);
+    info!("Released write lock for database '{}'", database_name);
+
+    Ok(InsertResponse {
+        database: database_name,
+        source: source.clone(),
+        total_inserted: total_entries,
+    })
 }
 
+/// Embed the provided batch content into the specified database
 pub async fn embed_run(request: EmbedRequest, _hnsw: Option<HNSW>) -> Result<EmbedResponse> {
     let batch_content = request.batch_content; // TODO: Maybe change it to Vec<String>?
     let database_name = request.database.clone();

@@ -1,10 +1,10 @@
 use crate::server::dto::{CreateSourceRequest, CreateSourceResponse, ListResponse};
 use crate::server::service::{
-    create_new_database, create_new_source, embed_run, list_source, query_search,
+    create_new_database, create_new_source, embed_run, insert_run, list_source, query_search,
 };
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
-    HealthCheckResponse, QueryRequest, QueryResponse,
+    HealthCheckResponse, InsertRequest, InsertResponse, QueryRequest, QueryResponse,
 };
 use crate::{error, info};
 use axum::extract::DefaultBodyLimit;
@@ -35,7 +35,7 @@ async fn create_router() -> Router {
         .route("/v1/blaze/databases/create", post(create_database))
         .route("/v1/blaze/sources/create", post(create_src))
         .route("/v1/blaze/list", get(list_sources))
-        //.route("v1/blaze/insert", post(new_embeddings)) // TODO: For API use, where vectors is being passed directly instead generic file content
+        .route("/v1/blaze/insert", post(new_insert))
         .route("/v1/blaze/embed", post(new_embeddings))
         .route("/v1/blaze/query", post(search_query))
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
@@ -139,6 +139,38 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
                     database: "null".to_string(),
                     source: "null".to_string(),
                     total_entries: 0,
+                }),
+            )
+        }
+    }
+}
+
+pub async fn new_insert(Json(payload): Json<InsertRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /insert] Request to insert {} vectors into database '{}'",
+        payload.vectors.len(),
+        payload.database
+    );
+
+    match insert_run(&payload, None).await {
+        Ok(response) => {
+            info!(
+                "[POST /insert] Successfully inserted {} vectors into database '{}'",
+                response.total_inserted, response.database
+            );
+            (StatusCode::OK, Json(response))
+        }
+        Err(_) => {
+            error!(
+                "[POST /insert] Failed to insert vectors into database: {}",
+                payload.database.clone()
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(InsertResponse {
+                    database: "null".to_string(),
+                    source: "null".to_string(),
+                    total_inserted: 0,
                 }),
             )
         }

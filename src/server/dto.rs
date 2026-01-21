@@ -57,7 +57,7 @@ pub struct VectorData {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct InsertRequest {
-    pub vectors: Vec<VectorData>,
+    pub vectors: Vec<VectorData>, // TODO: Change to batch insert later
     pub database: String,
     pub source: String,
 }
