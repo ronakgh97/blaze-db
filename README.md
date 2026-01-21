@@ -28,8 +28,8 @@ blzsrv serve
 [14:15:46][INFO] Using Sources: ["default_src", "test_src"]
 ```
 
-- Donwload the Index
-  here: [Google Drive Link](https://drive.google.com/file/d/1s17EwtibF9F5UuOnjAVhJPLIOiNM1zgb/view?usp=sharing)
+- Download the Index here: [Google Drive Link](https://drive.google.com/file/d/1IbTRDUYr9FPWcPDcA-roXNoRKefGCZSg/view?usp=sharing)
+- Checksum (Sha256): **036DE4770939C4ED4515E2CBDD59C0B1A9B0827F7891CFD4291AA567C7C3C5B4**
 - Extract to `~/.blaze/sources/default_src/amazon_products_2023/`
 
 ### Query using CLI Client
