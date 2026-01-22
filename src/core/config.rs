@@ -50,19 +50,12 @@ impl ClientConfig {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ServerConfig {
-    pub server_connection: ConnectionConfig, // TODO: Maybe rm this connection config, because server can have .env or args for that
     pub data_source: Source,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ConnectionConfig {
-    pub port: u16,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            server_connection: ConnectionConfig { port: 8080 },
             data_source: { Source { source_name: None } },
         }
     }
@@ -94,10 +87,7 @@ impl ServerConfig {
     /// Get default server config path
     pub fn get_default_server_config_path() -> Result<PathBuf> {
         let home = dirs::home_dir().with_context(|| "No home directory?")?;
-        Ok(home
-            .join(".config")
-            .join("blaze")
-            .join("server_config.toml"))
+        Ok(home.join(".config").join("blaze").join("server_file.toml"))
     }
 }
 

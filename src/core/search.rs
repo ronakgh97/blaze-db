@@ -1,3 +1,4 @@
+#[deprecated(since = "0.1.0", note = "Use `HNSW::new` instead")]
 use crate::utils::VectorData;
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 use rayon::prelude::IntoParallelRefIterator;

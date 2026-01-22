@@ -15,7 +15,14 @@ pub async fn serve_run(port: Option<u16>, _source: Option<Vec<String>>) -> Resul
         vec!["default_src".to_string()]
     });
 
-    let port = port.unwrap_or(config.server_connection.port);
+    // Check env for port override
+    let env_port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok());
+    let port = env_port.or(port);
+
+    // Use 8080, if no one cares about port :)
+    let port = port.unwrap_or(8080);
 
     // // Get sources or use all sources from config
     // let source = if let Some(src) = source {

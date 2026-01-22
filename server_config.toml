@@ -1,5 +1,0 @@
-[server_connection]
-port = 8080
-
-[data_source]
-source_name = ["default_src"]
