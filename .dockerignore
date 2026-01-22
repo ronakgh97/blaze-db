@@ -1,0 +1,53 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+docs/
+LICENSE
+
+# Data directories (should be mounted as volumes)
+embeddings/
+datasets/
+sample/
+data/
+
+# Test files
+tests/
+benches/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Other
+Justfile
+*.md
+!Cargo.toml
+!Cargo.lock
+!docker-entrypoint.sh

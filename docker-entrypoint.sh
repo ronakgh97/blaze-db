@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+
+# Create necessary directories
+mkdir -p /home/blazedb/.config/blaze /home/blazedb/blaze/sources
+
+# Initialize config if it doesn't exist
+if [ ! -f "/home/blazedb/.config/blaze/server_file.toml" ]; then
+    echo "Server file not found. Running initialization..."
+    /app/blzsrv init
+    echo "Initialization complete."
+else
+    echo "Server file found. Skipping initialization."
+fi
+
+# Ensure source directory exists
+if [ ! -d "/home/blazedb/blaze/sources/default_src" ]; then
+    echo "Source directory not found. Creating default_src..."
+    mkdir -p /home/blazedb/blaze/sources/default_src
+    echo "Source directory created."
+else
+    echo "Source directory found."
+fi
+
+# Start the server
+# shellcheck disable=SC2145
+echo "Starting blzsrv with args: $@"
+exec /app/blzsrv "$@"
