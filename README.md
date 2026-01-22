@@ -10,6 +10,10 @@ embeddings using HNSW Indexing.
 - Batch/Chunks processing for embedding generation (Only used in CLI Wrapper).
 - Stores/Index embeddings on disk in binary/JSON format.
 - Use memory-mapped files for fast loading and concurrent reads, rayon for parallel processing (where possible).
+- Index caching (LRU), which gives 46x faster I/O with reads and writes lockings (thread-safe).
+- Implements HNSW (Hierarchical Navigable Small World) graph for approximate nearest neighbor search.
+- Basic HTTP API server for remote database access.
+- CLI client for local/remote database querying.
 - Uses semantic similarity search with multiple distance metrics (Cosine, Euclidean, Dot Product).
 - Performance benchmarking suite (<1ms per search on War and Peace dataset, <1ms per search on Amazon Product Dataset).
 
@@ -28,7 +32,8 @@ blzsrv serve
 [14:15:46][INFO] Using Sources: ["default_src", "test_src"]
 ```
 
-- Download the Index here: [Google Drive Link](https://drive.google.com/file/d/1IbTRDUYr9FPWcPDcA-roXNoRKefGCZSg/view?usp=sharing)
+- Download the Index
+  here: [Google Drive Link](https://drive.google.com/file/d/1IbTRDUYr9FPWcPDcA-roXNoRKefGCZSg/view?usp=sharing)
 - Checksum (Sha256): **036DE4770939C4ED4515E2CBDD59C0B1A9B0827F7891CFD4291AA567C7C3C5B4**
 - Extract to `~/.blaze/sources/default_src/amazon_products_2023/`
 
@@ -182,22 +187,70 @@ Top 10 nearest neighbors:
 - HNSW implementation is basic and can be further optimized. (Which are beyond of my knowledge 😵‍💫)
 - Anyway, Look at that smooth exponential layer distribution! _chief kiss_ 😼
 
+### Cache Benchmarking
+
+```shel
+[10:17:18][INFO] Acquired read lock for database 'test_db'
+[10:17:18][INFO] Released read lock for database 'test_db'
+[10:17:18][INFO] I/O operations for loading index or check cache took 0.0229236s
+[10:17:18][INFO] Loaded HNSW Index with 5981 entries
+[10:17:18][INFO] Performing search with Cosine metric (top_k=5)
+[10:17:18][INFO] Search complete in 0.0006869s , found 5 results
+[10:17:18][INFO] [POST /query] Query successful, returning 5 results
+[10:17:18][INFO] Cache HIT for database 'test_db'
+[10:17:18][INFO] Cache is valid for database 'test_db'
+[10:17:18][INFO] I/O operations for loading index or check cache took 0.0002841s
+[10:17:18][INFO] Loaded HNSW Index with 5981 entries
+[10:17:18][INFO] Performing search with Cosine metric (top_k=5)
+[10:17:18][INFO] Search complete in 0.0003899s , found 5 results
+[10:17:18][INFO] [POST /query] Query successful, returning 5 results
+```
+
+```shell
+cargo nextest run --test query_test --release --no-capture --run-ignored only
+   Compiling blaze-db v0.1.0 (C:\codes\blaze-db)
+    Finished `release` profile [optimized] target(s) in 36.42s
+────────────
+ Nextest run ID 963c240b-34fd-44a2-8452-d3a7e9f968d4 with nextest profile: default
+    Starting 1 test across 1 binary
+     Running [ 00:00:00] 0/1: 0 running, 0 passed, 0 skipped
+       START (1/1) blaze-db::query_test test_cache_and_bench
+
+running 1 test
+Total time without cache: 0.7177450999999999s (Client: 0.6924714s, Server: 0.0252737s)
+Total time with cache: 0.3565691s (Client: 0.3557929s, Server: 0.0007762s)
+Improvement factor (Server side): 32.56x
+test test_cache_and_bench ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.06s
+
+        PASS [   3.071s] (1/1) blaze-db::query_test test_cache_and_bench
+────────────
+     Summary [   3.071s] 1 test run: 1 passed, 0 skipped
+```
+
+- Almost around 46x faster (I/O) with cache hits on repeated queries on same index. 😭🔥
+- Although there is still I/O overhead during cache validation (reading checksum from metadata.json),but it's
+  significantly
+  reduced. Checkout this file: [Cache Impl](./src/server/service/queries.rs)
+
 ## TODO:
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance. `DONE (basic implementation)`
 - Fix Chunking for better meaningful text segments. `DONE, but kinda broken for now.`
-- Write/insert functionality for adding new vectors to the database. `PARTIALLY DONE (Bad very Indexing performance)`
+- Write/insert functionality for adding new vectors to the database. `PARTIALLY DONE (Raw vector insertion and query not implemented)`
 - Find a way to manage multiple sources during server startup and runtime, load index into memory during it.
-  `IN PROGRESS`
+  `PARTIALLY DONE (Done using LRU, but there is no startup loading)`
+- Too many clones across the codebase, memory explosion everywhere. `NEED HELP`
 - Similarity calculation caching for faster search queries. `IN PROGRESS`
-- Implement LRU for fast query. `IN PROGRESS`
+- Implement LRU for fast query. `DONE`
 - Make a storage engine, e.g SSTable or LSMTree based. (Actually, I have no idea how to do that. 😵‍💫) `NEED HELP`
 - Bad Indexing, Loading and Memory Explosion issues when inserting large batch of nodes. (HNSW) `NEED HElP`
 - Complete Refactor of storage and search modules for new HNSW architecture. `DONE`
 - Gotta destroy/refactor the utils module. It's a mess. `DONE`
 - Use gRPC/Protobuf for client-server communication?`
 - Better API Error handling and logging. `IN PROGRESS`
-- API Validation, so that a stupid user doesnt corrupted the HNSW index. 😶 `IN PROGRESS`
+- API Validation, so that a stupid user/me doesnt corrupted the HNSW index. 😶 `IN PROGRESS`
 - Complete HTTP API server for remote database access. `Insert endpoint is missing.`
 - Better Database and Source Managing `IN PROGRESS`
 - Docker env and app config are conflicting `NEED HELP`
