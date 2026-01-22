@@ -238,7 +238,8 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(QueryResponse {
                     results: vec![],
-                    time_sec: 0.0,
+                    search_time_sec: 0.0,
+                    io_time_sec: 0.0,
                 }),
             )
         }

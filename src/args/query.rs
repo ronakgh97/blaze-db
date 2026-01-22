@@ -31,7 +31,7 @@ pub async fn query_run(database: String, src: String, query: String, top_k: usiz
         }
         println!(
             "Time taken (sec): {}",
-            resp_result.time_sec.to_string().on_bright_yellow()
+            resp_result.search_time_sec.to_string().on_bright_yellow()
         );
     } else {
         println!("Failed to query database. Status: {}", response.status());

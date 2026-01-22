@@ -127,10 +127,10 @@ pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
         }
     };
 
-    let io_duration_ms = io_time_start.elapsed().as_secs_f64();
+    let io_duration_sec = io_time_start.elapsed().as_secs_f64();
     info!(
         "I/O operations for loading index or check cache took {}s",
-        io_duration_ms
+        io_duration_sec
     );
 
     // let (embeddings_store, _max_index) =
@@ -179,7 +179,8 @@ pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
 
     let response = QueryResponse {
         results: result_map,
-        time_sec: duration_sec,
+        search_time_sec: duration_sec,
+        io_time_sec: io_duration_sec,
     };
 
     Ok(response)

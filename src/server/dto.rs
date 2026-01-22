@@ -80,7 +80,8 @@ pub struct QueryRequest {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct QueryResponse {
     pub results: Vec<QueryResult>,
-    pub time_sec: f64,
+    pub io_time_sec: f64,
+    pub search_time_sec: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
