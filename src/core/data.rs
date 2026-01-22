@@ -43,7 +43,8 @@ impl Source {
     }
 }
 
-pub fn get_source_path() -> Result<PathBuf> { // TODO: Use configurable source path?
+pub fn get_source_path() -> Result<PathBuf> {
+    // TODO: Use configurable source path?
     let home_dir =
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
     let source_path = home_dir.join("blaze").join("sources");

@@ -2,17 +2,19 @@
 use crate::core::{HNSW, Metrics, NodeId};
 #[allow(unused)]
 use crate::prelude::{Provider, SearchQuery};
+use crate::server::controller::INDEX_CACHE;
 use crate::server::dto::QueryResult;
 use crate::server::service::load_embeddings_index_from_database;
 use crate::server::{QueryRequest, QueryResponse};
 use crate::{error, info};
 use anyhow::Result;
+use std::sync::Arc;
 
 /// Executes a search query against the specified database and returns the top K similar chunks.
 pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
-    let query = request.query;
-    let source = request.source;
-    let from_database = request.database;
+    let query = &request.query;
+    let source = &request.source;
+    let from_database = &request.database;
 
     // Configure embedding provider from env or use defaults
     let url = std::env::var("EMBEDDING_API_URL")
@@ -27,9 +29,40 @@ pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
     // TODO: Maybe take vector for explicit
     let query_vector = &provider.fetch_embedding(query.as_str()).await?.embedding[0];
 
-    info!("Loading vector data from database '{}'", from_database);
+    // info!("Loading vector data from database '{}'", from_database);
+
+    // TODO: Complete this
+    // Check cache first, if fails load from disk and update cache :) Simple!! :)
+    let cache_key = format!("{}_{}", &request.database, &request.source);
+    let _hnsw_index = {
+        let mut cache = INDEX_CACHE.write().await;
+
+        if let Some(cached) = cache.get(&cache_key) {
+            info!("Cache HIT for database '{}'", request.database);
+            cached.clone()
+        } else {
+            info!("Cache MISS for database '{}'", request.database);
+
+            // Load from disk
+            let (store, _) = load_embeddings_index_from_database(
+                request.database.clone(),
+                request.source.clone(),
+            )
+            .await;
+
+            let store = match store {
+                Some(s) => Arc::new(s),
+                None => return Err(anyhow::anyhow!("No index found")),
+            };
+
+            // Add to cache
+            cache.put(cache_key.clone(), store.clone());
+            store
+        }
+    };
+
     let (embeddings_store, _max_index) =
-        load_embeddings_index_from_database(from_database.clone(), source).await; // TODO: Should preload the index at startup or something else, Like TTL caching
+        load_embeddings_index_from_database(from_database.clone(), source.clone()).await; // TODO: Should preload the index at startup or something else, Like TTL caching
     let hnsw_index = match embeddings_store {
         Some(store) => store.hnsw_store,
         None => {

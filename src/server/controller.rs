@@ -6,6 +6,7 @@ use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
     HealthCheckResponse, InsertRequest, InsertResponse, QueryRequest, QueryResponse,
 };
+use crate::utils::EmbeddingStore;
 use crate::{error, info};
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
@@ -13,7 +14,9 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use lazy_static::lazy_static;
+use lru::LruCache;
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
@@ -27,6 +30,13 @@ lazy_static! {
     /// Multiple databases can be written to concurrently, but only one write per database
     pub static ref DB_WRITE_LOCKS: Arc<Mutex<HashMap<String, Arc<RwLock<()>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
+
+    /// LRU Cache for loaded indexes to limit memory usage during queries
+    /// Caches up to 10 databases in memory
+    pub static ref INDEX_CACHE: Arc<RwLock<LruCache<String, Arc<EmbeddingStore>>>> =
+        Arc::new(RwLock::new(LruCache::new(
+            NonZeroUsize::new(12).unwrap() // Cache 12 databases
+        )));
 }
 
 async fn create_router() -> Router {
