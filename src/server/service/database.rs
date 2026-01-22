@@ -90,7 +90,7 @@ pub async fn list_databases(source: String) -> Result<Vec<String>> {
     Ok(result)
 }
 
-/// Get a database by name in the specified source directory.
+/// Get a database dir by name in the specified source directory.
 pub async fn search_database(db_name: String, sources: String) -> Result<PathBuf> {
     info!("Searching for database '{}'", db_name);
     let source_path = get_source_path()?;

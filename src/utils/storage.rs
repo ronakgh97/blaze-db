@@ -14,7 +14,7 @@ pub struct EmbeddingStore {
     // pub checksum: String, What the hell i was thinking here? Stupid me
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct EmbeddingMetadata {
     pub checksum: String,
     pub total_vectors: usize,
@@ -255,11 +255,8 @@ impl EmbeddingStore {
     }
 }
 
-/// Write or update the EmbeddingMetadata on disk
-pub async fn write_or_update_metadata(
-    dir_path: &PathBuf,
-    metadata: &EmbeddingMetadata,
-) -> Result<()> {
+/// Write or update the EmbeddingMetadata on disk, this is auto called when writing the EmbeddingStore
+async fn write_or_update_metadata(dir_path: &PathBuf, metadata: &EmbeddingMetadata) -> Result<()> {
     let metadata_path = dir_path.join("metadata.json");
 
     let json_data = serde_json::to_string_pretty(metadata)

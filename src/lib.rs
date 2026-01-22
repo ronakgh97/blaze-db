@@ -16,7 +16,7 @@ pub mod prelude {
         check_source_valid, cosine_similarity, dot_product, euclidean_similarity, get_source_path,
         save_config,
     };
-    pub use crate::server::{list_databases, parse_database_name, start_server};
+    pub use crate::server::{list_databases, parse_database_name, start_server, QueryRequest, QueryResponse};
     pub use crate::server_args::{ServerArgs, ServerCommands};
     pub use crate::utils::{EmbeddingStore, Ingestor, Provider, VectorData, log};
 }

@@ -6,7 +6,7 @@ use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
     HealthCheckResponse, InsertRequest, InsertResponse, QueryRequest, QueryResponse,
 };
-use crate::utils::EmbeddingStore;
+use crate::utils::{EmbeddingMetadata, EmbeddingStore};
 use crate::{error, info};
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
@@ -31,9 +31,10 @@ lazy_static! {
     pub static ref DB_WRITE_LOCKS: Arc<Mutex<HashMap<String, Arc<RwLock<()>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
+    // TODO: Maybe use wrapper struct to keep most used metadata in memory too for faster access
     /// LRU Cache for loaded indexes to limit memory usage during queries
     /// Caches up to 10 databases in memory
-    pub static ref INDEX_CACHE: Arc<RwLock<LruCache<String, Arc<EmbeddingStore>>>> =
+    pub static ref INDEX_CACHE: Arc<RwLock<LruCache<String, (Arc<EmbeddingMetadata>, Arc<EmbeddingStore>)>>> =
         Arc::new(RwLock::new(LruCache::new(
             NonZeroUsize::new(12).unwrap() // Cache 12 databases
         )));
@@ -237,7 +238,7 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(QueryResponse {
                     results: vec![],
-                    time_ms: 0.0,
+                    time_sec: 0.0,
                 }),
             )
         }

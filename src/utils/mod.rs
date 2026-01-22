@@ -7,4 +7,4 @@ pub use embedder::Provider;
 pub use embedder::VectorData; // Use VectorData from embedder module
 pub use ingestor::Ingestor;
 pub use log::log;
-pub use storage::EmbeddingStore;
+pub use storage::{EmbeddingMetadata, EmbeddingStore, read_embeddings_metadata};
