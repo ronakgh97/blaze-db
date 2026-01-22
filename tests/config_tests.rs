@@ -103,8 +103,8 @@ async fn test_server_config_source_operations() {
     // Initially no source
     assert_eq!(config.data_source.source_name, None);
 
-    // Add a source
-    let mut source = Source::default();
+    // Add a source - start with empty source instead of default
+    let mut source = Source { source_name: None };
     source.add_source("test_source".to_string()).unwrap();
     config.update_source(source.clone());
 
@@ -123,7 +123,7 @@ async fn test_save_and_load_server_config() {
 
     // Create and save a server config
     let mut original_config = ServerConfig::default();
-    let mut source = Source::default();
+    let mut source = Source { source_name: None };
     source.add_source("test_db".to_string()).unwrap();
     source.add_source("prod_db".to_string()).unwrap();
     original_config.update_source(source);
@@ -204,7 +204,7 @@ async fn test_server_config_multiple_sources() {
 
     // Create config with multiple sources
     let mut config = ServerConfig::default();
-    let mut source = Source::default();
+    let mut source = Source { source_name: None };
     source.add_source("source_1".to_string()).unwrap();
     source.add_source("source_2".to_string()).unwrap();
     source.add_source("source_3".to_string()).unwrap();
@@ -300,7 +300,7 @@ async fn test_config_save_creates_parent_directories() {
 
 #[tokio::test]
 async fn test_source_add_single() {
-    let mut source = Source::default();
+    let mut source = Source { source_name: None };
 
     source.add_source("first_source".to_string()).unwrap();
 
@@ -309,7 +309,7 @@ async fn test_source_add_single() {
 
 #[tokio::test]
 async fn test_source_add_multiple() {
-    let mut source = Source::default();
+    let mut source = Source { source_name: None };
 
     source.add_source("first".to_string()).unwrap();
     source.add_source("second".to_string()).unwrap();
@@ -327,7 +327,7 @@ async fn test_source_create_directories() {
     let temp_dir = setup_temp_config_dir();
 
     // Set up source with multiple directories
-    let mut source = Source::default();
+    let mut source = Source { source_name: None };
     source.add_source("db_alpha".to_string()).unwrap();
     source.add_source("db_beta".to_string()).unwrap();
 
@@ -348,7 +348,7 @@ async fn test_server_config_serialization_roundtrip() {
     let mut original = ServerConfig::default();
     // original.server_connection.port = 7777;
 
-    let mut source = Source::default();
+    let mut source = Source { source_name: None };
     source.add_source("custom_db".to_string()).unwrap();
     original.update_source(source);
 
@@ -386,7 +386,7 @@ async fn test_configs_are_independent() {
     let client_path = temp_config_path(&temp_dir, "client.toml");
 
     // Create distinct configs
-    let mut server_config = ServerConfig::default();
+    let server_config = ServerConfig::default();
     // server_config.server_connection.port = 8888;
 
     let client_config = ClientConfig::new("http://distinct:8888".to_string(), 99);
@@ -400,7 +400,7 @@ async fn test_configs_are_independent() {
         .unwrap();
 
     // Load both and verify they're independent
-    let loaded_server = ServerConfig::load_config(&server_path).await.unwrap();
+    let _loaded_server = ServerConfig::load_config(&server_path).await.unwrap();
     let loaded_client = ClientConfig::load_config(&client_path).await.unwrap();
 
     // assert_eq!(loaded_server.server_connection.port, 8888);
@@ -423,7 +423,6 @@ async fn test_server_config_debug_format() {
     let debug_str = format!("{:?}", config);
 
     assert!(debug_str.contains("ServerConfig"));
-    assert!(debug_str.contains("server_connection"));
     assert!(debug_str.contains("data_source"));
 }
 
@@ -439,7 +438,7 @@ async fn test_client_config_debug_format() {
 
 #[tokio::test]
 async fn test_source_add_duplicate_rejected() {
-    let mut source = Source::default();
+    let mut source = Source { source_name: None };
 
     // Add first source successfully
     source.add_source("duplicate_test".to_string()).unwrap();
@@ -455,7 +454,7 @@ async fn test_source_add_duplicate_rejected() {
 
 #[tokio::test]
 async fn test_source_add_multiple_duplicates_rejected() {
-    let mut source = Source::default();
+    let mut source = Source { source_name: None };
 
     // Add multiple sources
     source.add_source("first".to_string()).unwrap();
