@@ -15,7 +15,11 @@ pub const INDEX_FILE_NAME: &str = "HNSW_INDEX"; // TODO: Need to find other way 
 //TODO: Both insert_run and embed_run have a lot of duplicated code, need to refactor later
 
 /// Insert pre-computed embeddings into the specified database
-pub async fn insert_run(request: &InsertRequest, _hnsw: Option<HNSW>) -> Result<InsertResponse> {
+pub async fn insert_run(
+    request: &InsertRequest,
+    _hnsw: Option<HNSW>,
+    _provider: &Provider,
+) -> Result<InsertResponse> {
     let vector_data = &request.vectors;
     let database_name = request.database.clone();
     let source = request.source.clone();
@@ -96,7 +100,11 @@ pub async fn insert_run(request: &InsertRequest, _hnsw: Option<HNSW>) -> Result<
 }
 
 /// Embed the provided batch content into the specified database
-pub async fn embed_run(request: EmbedRequest, _hnsw: Option<HNSW>) -> Result<EmbedResponse> {
+pub async fn embed_run(
+    request: EmbedRequest,
+    _hnsw: Option<HNSW>,
+    provider: &Provider,
+) -> Result<EmbedResponse> {
     let batch_content = request.batch_content; // TODO: Maybe change it to Vec<String>?
     let database_name = request.database.clone();
     let source = request.source.clone();
@@ -129,13 +137,6 @@ pub async fn embed_run(request: EmbedRequest, _hnsw: Option<HNSW>) -> Result<Emb
     // } else {
     //     warn!("No HNSW index provided, proceeding without it");
     // }
-
-    // Configure embedding provider from env or use defaults
-    let url = std::env::var("EMBEDDING_API_URL")
-        .unwrap_or_else(|_| "http://localhost:1234/v1/embeddings".to_string());
-    let model = std::env::var("EMBEDDING_MODEL")
-        .unwrap_or_else(|_| "text-embedding-qwen3-embedding-0.6b".to_string());
-    let provider = Provider::init(url, model);
 
     // Get or create lock for this database
     let lock = {

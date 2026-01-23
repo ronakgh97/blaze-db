@@ -1,10 +1,11 @@
 use crate::core::check_source_valid;
 use crate::prelude::ServerConfig;
 use crate::server::start_server;
+use crate::utils::Provider;
 use crate::{error, info, warn};
 use anyhow::Result;
 
-pub async fn serve_run(port: Option<u16>, _source: Option<Vec<String>>) -> Result<()> {
+pub async fn serve_run(port: Option<u16>, _source: Option<Vec<String>>) -> Result<Provider> {
     info!("Starting the Server...");
 
     let config =
@@ -23,6 +24,18 @@ pub async fn serve_run(port: Option<u16>, _source: Option<Vec<String>>) -> Resul
 
     // Use 8080, if no one cares about port :)
     let port = port.unwrap_or(8080);
+
+    let url = std::env::var("EMBEDDING_API_URL")
+        .unwrap_or_else(|_| "http://localhost:1234/v1/embeddings".to_string());
+
+    let model = std::env::var("EMBEDDING_MODEL")
+        .unwrap_or_else(|_| "text-embedding-qwen3-embedding-0.6b".to_string());
+
+    let api_key = std::env::var("EMBEDDING_API_KEY").unwrap_or_else(|_| "local".to_string());
+
+    // Init provider at the start of the server
+    let provider = Provider::init(url, model, api_key);
+    info!("Using Embedding Provider: \n{:?}", provider);
 
     // // Get sources or use all sources from config
     // let source = if let Some(src) = source {
@@ -55,7 +68,7 @@ pub async fn serve_run(port: Option<u16>, _source: Option<Vec<String>>) -> Resul
         "Starting server with {} valid source(s)",
         valid_sources.len()
     );
-    start_server(port, valid_sources).await?;
+    start_server(port, valid_sources, &provider).await?;
 
-    Ok(())
+    Ok(provider)
 }

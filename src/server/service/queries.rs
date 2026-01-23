@@ -13,20 +13,13 @@ use anyhow::Result;
 use std::sync::Arc;
 
 /// Executes a search query against the specified database and returns the top K similar chunks.
-pub async fn query_search(request: QueryRequest) -> Result<QueryResponse> {
+pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<QueryResponse> {
     let query = &request.query;
     let source = &request.source;
     let from_database = &request.database;
 
     // Get database directory path
     let db_path = search_database(from_database.clone(), source.clone()).await?;
-
-    // Configure embedding provider from env or use defaults
-    let url = std::env::var("EMBEDDING_API_URL")
-        .unwrap_or_else(|_| "http://localhost:1234/v1/embeddings".to_string());
-    let model = std::env::var("EMBEDDING_MODEL")
-        .unwrap_or_else(|_| "text-embedding-qwen3-embedding-0.6b".to_string());
-    let provider = Provider::init(url, model);
 
     info!("Generating embedding for query: '{}'", query);
 

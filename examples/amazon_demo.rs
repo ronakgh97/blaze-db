@@ -11,6 +11,7 @@ async fn main() -> Result<()> {
     let provider = Provider::init(
         "http://localhost:1234/v1/embeddings",
         "text-embedding-qwen3-embedding-0.6b",
+        "local",
     );
     let index_prefix = "amazon_product_index";
 
@@ -164,6 +165,7 @@ async fn bench_search() -> Result<()> {
     let provider = Provider::init(
         "http://localhost:1234/v1/embeddings",
         "text-embedding-qwen3-embedding-0.6b",
+        "local",
     );
 
     let query = "Gaming RTX 4060 Laptop with 165Hz Display";

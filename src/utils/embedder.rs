@@ -59,22 +59,25 @@ pub struct EmbeddingData {
 pub struct Provider {
     pub url: String,
     pub model: String,
+    pub api_key: String,
+    pub client: reqwest::Client,
 }
 
 impl Provider {
-    pub fn init(url: impl Into<String>, model: impl Into<String>) -> Self {
+    pub fn init(
+        url: impl Into<String>,
+        model: impl Into<String>,
+        api_key: impl Into<String>,
+    ) -> Self {
         let url = url.into();
         let model = model.into();
-        if model.is_empty() {
-            // Default model if none provided
-            let default_model = "text-embedding-nomic-embed-text-v1.5";
-            println!("Model not provided. Using default model: {}", default_model);
-            return Self {
-                url,
-                model: default_model.to_string(),
-            };
+        let api_key = api_key.into();
+        Self {
+            url,
+            model,
+            api_key,
+            client: reqwest::Client::new(),
         }
-        Self { url, model }
     }
 
     /// Fetch embedding for a single piece of text
@@ -89,9 +92,11 @@ impl Provider {
             "input": chunks,
         });
 
-        let response = reqwest::Client::new()
+        let response = self
+            .client
             .post(&self.url)
             .json(&body)
+            .header("Authorization", format!("Bearer {}", &self.api_key))
             .send()
             .await?;
 

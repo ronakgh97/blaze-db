@@ -723,6 +723,7 @@ async fn main() -> Result<()> {
     let provider = Provider::init(
         "http://localhost:1234/v1/embeddings",
         "text-embedding-qwen3-embedding-0.6b",
+        "local",
     );
     let sample_query = "What is this about?";
     let query_embedding = provider.fetch_embedding(sample_query).await?;

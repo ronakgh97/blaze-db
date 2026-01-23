@@ -6,7 +6,7 @@ use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
     HealthCheckResponse, InsertRequest, InsertResponse, QueryRequest, QueryResponse,
 };
-use crate::utils::{EmbeddingMetadata, EmbeddingStore};
+use crate::utils::{EmbeddingMetadata, EmbeddingStore, Provider};
 use crate::{error, info};
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
@@ -22,8 +22,9 @@ use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 
 static START_TIME: OnceLock<Instant> = OnceLock::new();
+static PROVIDER: OnceLock<Provider> = OnceLock::new();
 
-// pub static LOADED_INDEXES: OnceLock<Arc<Mutex<HashMap<tring, EmbeddingStore>>>> = OnceLock::new();
+// pub static LOADED_INDEXES: OnceLock<Arc<Mutex<HashMap<String, EmbeddingStore>>>> = OnceLock::new();
 
 lazy_static! {
     /// Per-database write locks to ensure only one write operation happens at a time per database
@@ -53,8 +54,13 @@ async fn create_router() -> Router {
 }
 
 // Start the server with the given port and multiple sources or single source
-pub async fn start_server(port: u16, source: Vec<String>) -> anyhow::Result<()> {
+pub async fn start_server(
+    port: u16,
+    source: Vec<String>,
+    provider: &Provider,
+) -> anyhow::Result<()> {
     START_TIME.get_or_init(Instant::now);
+    PROVIDER.set(provider.clone()).unwrap();
 
     // TODO: Add SourceManager to manage multiple sources dynamically and load/unload indexes as needed
 
@@ -132,7 +138,7 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
         total_chunks, payload.database, payload.batch
     );
 
-    match embed_run(payload.clone(), None).await {
+    match embed_run(payload.clone(), None, PROVIDER.wait()).await {
         Ok(response) => {
             info!(
                 "[POST /embed] Successfully embedded {} lines into database '{}'",
@@ -140,10 +146,11 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
             );
             (StatusCode::OK, Json(response))
         }
-        Err(_) => {
+        Err(e) => {
             error!(
-                "[POST /embed] Failed to embed data into database: {}",
-                payload.database.clone()
+                "[POST /embed] Failed to embed data into database: {} - Error: {:?}",
+                payload.database.clone(),
+                e
             );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -164,7 +171,7 @@ pub async fn new_insert(Json(payload): Json<InsertRequest>) -> impl IntoResponse
         payload.database
     );
 
-    match insert_run(&payload, None).await {
+    match insert_run(&payload, None, PROVIDER.wait()).await {
         Ok(response) => {
             info!(
                 "[POST /insert] Successfully inserted {} vectors into database '{}'",
@@ -172,10 +179,11 @@ pub async fn new_insert(Json(payload): Json<InsertRequest>) -> impl IntoResponse
             );
             (StatusCode::OK, Json(response))
         }
-        Err(_) => {
+        Err(e) => {
             error!(
-                "[POST /insert] Failed to insert vectors into database: {}",
-                payload.database.clone()
+                "[POST /insert] Failed to insert vectors into database: {} - Error: {:?}",
+                payload.database.clone(),
+                e
             );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -221,7 +229,7 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
         payload.database, payload.query, payload.top_k
     );
 
-    match query_search(payload.clone()).await {
+    match query_search(payload.clone(), PROVIDER.wait()).await {
         Ok(response) => {
             info!(
                 "[POST /query] Query successful, returning {} results",
@@ -229,10 +237,11 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
             );
             (StatusCode::OK, Json(response))
         }
-        Err(_) => {
+        Err(e) => {
             error!(
-                "[POST /query] Query failed on database: {}",
-                payload.database.clone()
+                "[POST /query] Query failed on database: {} - Error: {:?}",
+                payload.database.clone(),
+                e
             );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
