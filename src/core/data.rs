@@ -21,11 +21,10 @@ impl Source {
     pub fn add_source(&mut self, new_source: String) -> Result<&mut Self> {
         match &mut self.source_name {
             Some(source) => {
-                // Check for duplicates
-                if source.contains(&new_source) {
-                    anyhow::bail!("Source '{}' already exists", new_source);
+                // Check for duplicates - if exists, just return success
+                if !source.contains(&new_source) {
+                    source.push(new_source);
                 }
-                source.push(new_source);
             }
             None => self.source_name = Some(vec![new_source]),
         }
