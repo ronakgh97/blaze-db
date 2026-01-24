@@ -238,19 +238,21 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance. `DONE (basic implementation)`
 - Fix Chunking for better meaningful text segments. `DONE, but kinda broken for now.`
-- Write/insert functionality for adding new vectors to the database. `PARTIALLY DONE (Raw vector insertion and query not implemented)`
+- Write/insert functionality for adding new vectors to the database.
+  `PARTIALLY DONE (Raw vector insertion and query not implemented)`
 - Find a way to manage multiple sources during server startup and runtime, load index into memory during it.
   `PARTIALLY DONE (Done using LRU, but there is no startup loading)`
-- Too many clones across the codebase, memory explosion everywhere. `NEED HELP`
+- Too many clones across the codebase, memory explosion everywhere. `FIXED`
+- Too many code duplications across modules. `NEED HELP`
 - Similarity calculation caching for faster search queries. `IN PROGRESS`
 - Implement LRU for fast query. `DONE`
 - Make a storage engine, e.g SSTable or LSMTree based. (Actually, I have no idea how to do that. 😵‍💫) `NEED HELP`
-- Bad Indexing, Loading and Memory Explosion issues when inserting large batch of nodes. (HNSW) `NEED HElP`
+- Bad Indexing, Loading and Memory Explosion issues when inserting large batch of nodes. (HNSW) `SIGNIFICANTLY IMPROVED - HNSW insert now uses references`
 - Complete Refactor of storage and search modules for new HNSW architecture. `DONE`
 - Gotta destroy/refactor the utils module. It's a mess. `DONE`
 - Use gRPC/Protobuf for client-server communication?`
 - Better API Error handling and logging. `IN PROGRESS`
-- API Validation, so that a stupid user/me doesnt corrupted the HNSW index. 😶 `IN PROGRESS`
+- API Validation, so that a stupid user/me doesnt corrupted the HNSW index. 😶 `PARTIALLY DONE`
 - Complete HTTP API server for remote database access. `Insert endpoint is missing.`
 - Better Database and Source Managing `IN PROGRESS`
 - Docker env and app config are conflicting `NEED HELP`
