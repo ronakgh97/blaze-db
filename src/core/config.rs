@@ -63,8 +63,8 @@ impl Default for ServerConfig {
 
 impl ServerConfig {
     /// Get the data source object from config
-    pub fn get_source(&self) -> Result<Source> {
-        Ok(self.data_source.clone())
+    pub fn get_source(&self) -> &Source {
+        &self.data_source
     }
 
     /// Update the data source in config

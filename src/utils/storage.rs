@@ -55,7 +55,6 @@ impl EmbeddingStore {
     /// - The mmap lifetime is scoped to the blocking task
     pub async fn load_binary_file(path: &PathBuf) -> Result<Self> {
         let path_clone = path.to_path_buf();
-        let path_for_error = path.to_path_buf();
 
         let store = tokio::task::spawn_blocking(move || -> Result<Self> {
             // Open file and create memory map
@@ -77,7 +76,7 @@ impl EmbeddingStore {
             Ok(store)
         })
         .await
-        .with_context(|| format!("Blocking task panicked while loading: {:?}", path_for_error))??;
+        .with_context(|| format!("Blocking task panicked while loading: {:?}", path))??;
 
         Ok(store)
     }

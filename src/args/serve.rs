@@ -11,7 +11,7 @@ pub async fn serve_run(port: Option<u16>, _source: Option<Vec<String>>) -> Resul
     let config =
         ServerConfig::load_config(&ServerConfig::get_default_server_config_path()?).await?;
 
-    let source = config.data_source.source_name.clone().unwrap_or_else(|| {
+    let source = config.data_source.source_name.unwrap_or_else(|| {
         warn!("No source provided in config, using default source: default_src");
         vec!["default_src".to_string()]
     });

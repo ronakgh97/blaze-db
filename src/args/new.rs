@@ -14,7 +14,7 @@ pub async fn new_run(source_name: String) -> Result<()> {
 
     save_config(ServerConfig::get_default_server_config_path()?, &config).await?;
 
-    println!("Source: [`{}`] created successfully!", source_name.clone());
+    println!("Source: [`{}`] created successfully!", source_name);
 
     Ok(())
 }

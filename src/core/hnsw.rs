@@ -3,9 +3,11 @@ use bincode::{Decode, Encode};
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
+#[allow(unused)]
 use rayon::prelude::IntoParallelRefIterator;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+#[allow(unused)]
+use std::collections::{HashMap, HashSet};
 
 /// # Hierarchical Navigable Small World (HNSW)
 ///
@@ -78,7 +80,7 @@ impl HNSW {
     /// 1. If first node, just add it as entry point
     /// 2. Otherwise, search from top layer down to find nearest neighbors
     /// 3. Connect the new node to its neighbors at each layer
-    pub fn insert(&mut self, vector: Vec<f32>, metadata: String, max_level: usize) -> NodeId {
+    pub fn insert(&mut self, vector: &[f32], metadata: String, max_level: usize) -> NodeId {
         let node_id = self.nodes.len(); // TODO: Maybe use a better ID system later
 
         // println!(
@@ -95,7 +97,7 @@ impl HNSW {
         let node = Node {
             id: node_id,
             metadata,
-            vector,
+            vector: vector.to_vec(),
             neighbors: vec![
                 Vec::with_capacity(self.max_neighbors * self.max_layers);
                 max_level + 1
@@ -462,12 +464,13 @@ impl HNSW {
         // ))
         // .ok();
 
-        let node_vector = self.nodes[node_id].vector.clone();
-
         // Calculate similarities to all neighbors
         let mut neighbor_sims: Vec<(NodeId, f32)> = self.nodes[node_id].neighbors[layer]
             .par_iter()
-            .map(|&n| (n, self.similarity(&node_vector, &self.nodes[n].vector)))
+            .map(|&n| {
+                let sim = self.similarity(&self.nodes[node_id].vector, &self.nodes[n].vector);
+                (n, sim)
+            })
             .collect();
 
         // Keep only the M most similar

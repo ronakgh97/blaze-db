@@ -1,4 +1,4 @@
-use crate::core::{HNSW, check_source_valid, get_source_path};
+use crate::core::{HNSW, check_source_valid};
 use crate::server::controller::{DB_WRITE_LOCKS, ErrorTypes};
 use crate::server::dto::VectorDataDto;
 use crate::server::service::database::search_database;
@@ -36,16 +36,6 @@ pub async fn insert_run(
         return Err(ErrorTypes::SourceNotFound(format!("Source '{}' not found", source)).into());
     }
 
-    let database_path = get_source_path()?.join(&source).join(&database_name);
-    if !database_path.exists() {
-        error!("Database path does not exist: {:?}", database_path);
-        return Err(ErrorTypes::DatabaseNotFound(format!(
-            "Database path does not exist: {:?}",
-            database_path
-        ))
-        .into());
-    }
-
     // Check all vector dimensions consistency with database init (dimensions)
     let excepted_dimensions: usize = parse_database_name(&database_name)
         .ok_or_else(|| {
@@ -78,7 +68,18 @@ pub async fn insert_run(
     }
 
     // Locate the database directory
-    let database_path = search_database(&database_name, &source).await?;
+    let database_path = search_database(&database_name, &source)
+        .await
+        .map_err(|e| {
+            error!(
+                "Database '{}' not found in source '{}'",
+                database_name, source
+            );
+            ErrorTypes::DatabaseNotFound(format!(
+                "Database '{}' not found in source '{}': {}",
+                database_name, source, e
+            ))
+        })?;
 
     // Load latest HNSW from database directory if it exists, otherwise create a new one
     let (loaded_hnsw, max_index) =
@@ -113,7 +114,7 @@ pub async fn insert_run(
 
         // Insert embeddings into HNSW index
         let random_level = hnsw.get_random_level();
-        hnsw.insert(embeddings.clone(), metadata.clone(), random_level);
+        hnsw.insert(embeddings, metadata.clone(), random_level);
     }
 
     // TODO: Is there a better method to manage multiple index files? or merge them? or overwrite them lastest ones? or prune last 'N' indexes?
@@ -121,7 +122,8 @@ pub async fn insert_run(
     let final_index_number = max_index + 1;
     let final_filename = database_path.join(format!("{}_{}", INDEX_FILE_NAME, final_index_number));
 
-    let mut embedding_store = EmbeddingStore::new(hnsw.clone());
+    let node_count = hnsw.nodes.len();
+    let mut embedding_store = EmbeddingStore::new(hnsw);
     embedding_store
         .write_to_disk(&final_filename)
         .await
@@ -129,7 +131,7 @@ pub async fn insert_run(
 
     info!(
         "Final index saved: {} nodes total → {:?}",
-        hnsw.nodes.len(),
+        node_count,
         final_filename.display()
     );
 
@@ -162,24 +164,19 @@ pub async fn embed_run(
         return Err(ErrorTypes::SourceNotFound(format!("Source '{}' not found", source)).into());
     }
 
-    let database_path = get_source_path()?.join(&source).join(&database_name);
-    if !database_path.exists() {
-        error!("Database path does not exist: {:?}", database_path);
-        return Err(ErrorTypes::DatabaseNotFound(format!(
-            "Database path does not exist: {:?}",
-            database_path
-        ))
-        .into());
-    }
-
     // Locate the database directory
-    let database_path = match search_database(&database_name, &source).await {
-        Ok(path) => path,
-        Err(e) => {
-            error!("Database '{}' not found", database_name);
-            return Err(e).with_context(|| format!("Database '{}' not found", database_name));
-        }
-    };
+    let database_path = search_database(&database_name, &source)
+        .await
+        .map_err(|e| {
+            error!(
+                "Database '{}' not found in source '{}'",
+                database_name, source
+            );
+            ErrorTypes::DatabaseNotFound(format!(
+                "Database '{}' not found in source '{}': {}",
+                database_name, source, e
+            ))
+        })?;
 
     // Load latest HNSW from database directory if it exists, otherwise create a new one
     let (loaded_hnsw, max_index) =
@@ -226,7 +223,7 @@ pub async fn embed_run(
                 for (i, vector) in embeddings.embedding.iter().enumerate() {
                     let metadata = chunks.get(i).cloned().unwrap_or("[EMPTY]".to_string());
                     let random_level = hnsw.get_random_level();
-                    hnsw.insert(vector.clone(), metadata, random_level);
+                    hnsw.insert(&vector, metadata, random_level);
                 }
 
                 total_embedded += embedded_count;
@@ -247,7 +244,8 @@ pub async fn embed_run(
     let final_index_number = max_index + 1;
     let final_filename = database_path.join(format!("{}_{}", INDEX_FILE_NAME, final_index_number));
 
-    let mut embedding_store = EmbeddingStore::new(hnsw.clone());
+    let node_count = hnsw.nodes.len();
+    let mut embedding_store = EmbeddingStore::new(hnsw);
     embedding_store
         .write_to_disk(&final_filename)
         .await
@@ -255,7 +253,7 @@ pub async fn embed_run(
 
     info!(
         "Final index saved: {} nodes total → {:?}",
-        hnsw.nodes.len(),
+        node_count,
         final_filename.display()
     );
 

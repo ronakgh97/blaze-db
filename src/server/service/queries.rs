@@ -1,4 +1,3 @@
-use crate::core::get_source_path;
 #[allow(unused)]
 use crate::core::{HNSW, Metrics, NodeId};
 #[allow(unused)]
@@ -19,18 +18,19 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     let source = &request.source;
     let from_database = &request.database;
 
-    let database_path = get_source_path()?.join(&source).join(&from_database);
-    if !database_path.exists() {
-        error!("Database path does not exist: {:?}", database_path);
-        return Err(ErrorTypes::DatabaseNotFound(format!(
-            "Database path does not exist: {:?}",
-            database_path
-        ))
-        .into());
-    }
-
     // Get database directory path
-    let db_path = search_database(&from_database, &source).await?;
+    let db_path = search_database(&from_database, &source)
+        .await
+        .map_err(|e| {
+            error!(
+                "Database '{}' not found in source '{}'",
+                from_database, source
+            );
+            ErrorTypes::DatabaseNotFound(format!(
+                "Database '{}' not found in source '{}': {}",
+                from_database, source, e
+            ))
+        })?;
 
     info!("Generating embedding for query: '{}'", query);
 
@@ -126,7 +126,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
             };
 
             // Add to cache
-            cache.put(cache_key.clone(), (metadata.clone(), store.clone()));
+            cache.put(cache_key, (Arc::clone(&metadata), Arc::clone(&store)));
             (metadata, store)
         }
     };

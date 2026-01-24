@@ -38,7 +38,7 @@ impl SearchQuery {
             .map(|(idx, vector)| {
                 let score = self.metric.calculate(&self.query_vector, vector);
                 SearchResult {
-                    chunk: data.chunk[idx].clone(),
+                    chunk: data.chunk[idx].to_string(),
                     score,
                 }
             })

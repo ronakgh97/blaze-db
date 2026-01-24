@@ -452,10 +452,11 @@ pub async fn new_insert(Json(payload): Json<InsertRequest>) -> impl IntoResponse
                     _ => {}
                 }
             }
+
+            let db_name = &payload.database;
             error!(
                 "[POST /insert] Failed to insert vectors into database: {} - Error: {:?}",
-                payload.database.clone(),
-                e
+                db_name, e
             );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -517,7 +518,8 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
         );
     }
 
-    match query_search(payload.clone(), PROVIDER.wait()).await {
+    let db_name = payload.database.clone(); // Clone only the string for error logging
+    match query_search(payload, PROVIDER.wait()).await {
         Ok(response) => {
             info!(
                 "[POST /query] Query successful, returning {} results",
@@ -528,8 +530,7 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
         Err(e) => {
             error!(
                 "[POST /query] Query failed on database: {} - Error: {:?}",
-                payload.database.clone(),
-                e
+                db_name, e
             );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

@@ -6,7 +6,7 @@ pub async fn init_run_server() -> Result<()> {
 
     let mut config = ServerConfig::default();
 
-    let mut get_source = ServerConfig::get_source(&config)?;
+    let mut get_source = config.get_source().clone();
 
     // Check if default source and default config already exists to avoid overwriting
     if get_source_path()?.join("default_src").exists()

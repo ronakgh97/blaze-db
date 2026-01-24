@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
         for (i, vector) in vector_embeddings.embedding.iter().enumerate() {
             let data_point = &batch[i];
             let random_level = hnsw_index.get_random_level();
-            hnsw_index.insert(vector.clone(), data_point.title.clone(), random_level);
+            hnsw_index.insert(vector, data_point.title.clone(), random_level);
         }
 
         // for data_point in batch {

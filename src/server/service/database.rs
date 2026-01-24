@@ -24,7 +24,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     }
 
     // Check if a database with the same name already exists in this source
-    let existing_databases = list_databases(source.clone()).await?;
+    let existing_databases = list_databases(source).await?;
     for existing_db in &existing_databases {
         if let Some((existing_name, _, _, _)) = parse_database_name(existing_db) {
             if existing_name == *name {
@@ -78,7 +78,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
 
     Ok(CreateDatabaseResponse {
         id: database_id,
-        name: name.clone(),
+        name: name.to_string(),
         dimensions: *dimensions,
         source: source.to_string(),
         created_at: timestamp,
@@ -87,7 +87,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
 
 /// List all databases from a source directories.
 /// Return a vector of database names found in the specified sources, or an empty vector if none are found.
-pub async fn list_databases(source: String) -> Result<Vec<String>> {
+pub async fn list_databases(source: &String) -> Result<Vec<String>> {
     // TODO: Maybe return Option type
     let base_src_path = get_source_path()?;
 

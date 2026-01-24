@@ -23,11 +23,19 @@ pub async fn create_new_source(request: CreateSourceRequest) -> Result<CreateSou
     }
 
     // Update the server file accordingly
-    config.data_source.add_source(source_name.clone())?;
+    config.data_source.add_source(source_name)?;
 
     config.data_source.create_source_dir().await?;
 
     save_config(ServerConfig::get_default_server_config_path()?, &config).await?;
+
+    let source_name = config
+        .data_source
+        .source_name
+        .as_ref()
+        .and_then(|s| s.last())
+        .map(|s| s.to_string())
+        .unwrap_or_default();
 
     Ok(CreateSourceResponse {
         id: src_id,

@@ -14,16 +14,14 @@ pub async fn create_run(
 ) -> Result<()> {
     let dim = dimensions.unwrap_or(1024);
 
+    // I dont care, lets server handle whatever it can.
+
     if name.is_none() {
         // Create source only
-        create_source(&src).await?;
+        let _ = create_source(&src).await;
         Ok(())
     } else {
-        // TODO: FUCKKKKKKKKKKKKKKKKKKKKK THIS IS UGLY AS HELL, IM SO FUCKING ANGRY AND SAD TODAY
-        // TODO: FIX THIS LATER, THIS SHOULD A SERVER SIDE CHECK
-        // Try to create source first (server will skip if it exists)
-        let _ = create_source(&src).await; // Ignore error if source already exists
-        // Create database within source
+        let _ = create_source(&src).await;
         create_database(name.unwrap(), &src, dim).await?;
         Ok(())
     }
@@ -44,7 +42,7 @@ async fn create_database(name: String, src: &String, dimensions: usize) -> Resul
 
     // Check for duplicate database names could be added here
 
-    let dbs = list_databases(src.clone()).await?;
+    let dbs = list_databases(src).await?;
 
     if dbs.contains(&request_body.name) {
         anyhow::bail!(
@@ -80,7 +78,7 @@ async fn create_source(name: &String) -> Result<()> {
     let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
 
     let request_body = CreateSourceRequest {
-        source_name: name.clone(),
+        source_name: name.to_string(),
     };
 
     let response = reqwest::Client::new()
