@@ -38,7 +38,14 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 panic = "abort"
-strip = false
+strip = true
+incremental = false
+debug = false
+
+[profile.release.package."*"]
+opt-level = 3
+codegen-units = 1
+strip = true
 incremental = false
 debug = false
 
