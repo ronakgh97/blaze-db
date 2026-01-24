@@ -25,8 +25,8 @@ async fn test_ingest_to_storage_pipeline() {
     let vector1 = vec![1.0, 2.0, 3.0];
     let vector2 = vec![4.0, 5.0, 6.0];
 
-    hnsw.insert(vector1.clone(), "null".to_string(), 0);
-    hnsw.insert(vector2.clone(), "null".to_string(), 0);
+    hnsw.insert(&*vector1, "null".to_string(), 0);
+    hnsw.insert(&*vector2, "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -69,14 +69,14 @@ async fn test_multiple_batch_processing() {
     // Create cumulative HNSW index for first batch (8 vectors)
     let mut hnsw1 = HNSW::new(16, 100, 5, 0.7);
     for i in 0..8 {
-        hnsw1.insert(vec![i as f32, (i + 1) as f32], "null".to_string(), 0);
+        hnsw1.insert(&*vec![i as f32, (i + 1) as f32], "null".to_string(), 0);
     }
     let mut store1 = EmbeddingStore::new(hnsw1.clone());
 
     // Create cumulative HNSW index for second batch (8 + 2 = 10 vectors)
     let mut hnsw2 = hnsw1.clone();
     for i in 8..10 {
-        hnsw2.insert(vec![i as f32, (i + 1) as f32], "null".to_string(), 0);
+        hnsw2.insert(&*vec![i as f32, (i + 1) as f32], "null".to_string(), 0);
     }
     let mut store2 = EmbeddingStore::new(hnsw2);
 
@@ -128,9 +128,9 @@ async fn test_unicode_text_processing() {
 
     // Create HNSW index with test vectors
     let mut hnsw = HNSW::new(16, 100, 5, 0.7);
-    hnsw.insert(vec![1.0, 2.0], "null".to_string(), 0);
-    hnsw.insert(vec![3.0, 4.0], "null".to_string(), 0);
-    hnsw.insert(vec![5.0, 6.0], "null".to_string(), 0);
+    hnsw.insert(&*vec![1.0, 2.0], "null".to_string(), 0);
+    hnsw.insert(&*vec![3.0, 4.0], "null".to_string(), 0);
+    hnsw.insert(&*vec![5.0, 6.0], "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -165,7 +165,7 @@ async fn test_large_embedding_dimensions() {
     let embedding_vector = (0..1536).map(|i| i as f32 * 0.01).collect::<Vec<f32>>();
 
     let mut hnsw = HNSW::new(16, 100, 5, 0.7);
-    hnsw.insert(embedding_vector.clone(), "null".to_string(), 0);
+    hnsw.insert(&*embedding_vector, "null".to_string(), 0);
 
     assert_eq!(hnsw.nodes.len(), 1);
     assert_eq!(hnsw.nodes[0].vector.len(), 1536);

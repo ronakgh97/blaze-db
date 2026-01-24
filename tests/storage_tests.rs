@@ -24,8 +24,8 @@ async fn test_write_read_binary() {
     let vector1 = vec![1.0, 2.0, 3.0];
     let vector2 = vec![4.0, 5.0, 6.0];
 
-    hnsw.insert(vector1.clone(), "null".to_string(), 0);
-    hnsw.insert(vector2.clone(), "null".to_string(), 0);
+    hnsw.insert(&*vector1, "null".to_string(), 0);
+    hnsw.insert(&*vector2, "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -61,7 +61,7 @@ async fn test_read_binary_multiple_files() {
 
     for i in 0..3 {
         let vector = vec![i as f32, (i + 1) as f32];
-        cumulative_hnsw.insert(vector, "null".to_string(), 0);
+        cumulative_hnsw.insert(&*vector, "null".to_string(), 0);
 
         let mut store = EmbeddingStore::new(cumulative_hnsw.clone());
         let file_path = embeddings_dir.join(format!("batch_{}", i));
@@ -172,9 +172,9 @@ fn test_hnsw_search_basic() {
     let vector2 = vec![0.0, 1.0, 0.0];
     let vector3 = vec![0.9, 0.1, 0.0]; // Similar to vector1
 
-    hnsw.insert(vector1.clone(), "null".to_string(), 0);
-    hnsw.insert(vector2.clone(), "null".to_string(), 0);
-    hnsw.insert(vector3.clone(), "null".to_string(), 0);
+    hnsw.insert(&*vector1, "null".to_string(), 0);
+    hnsw.insert(&*vector2, "null".to_string(), 0);
+    hnsw.insert(&*vector3, "null".to_string(), 0);
 
     // Search for something similar to vector1
     let query = vec![1.0, 0.0, 0.0];
@@ -194,7 +194,7 @@ fn test_hnsw_node_insertion() {
 
     let vector = vec![1.0, 2.0, 3.0];
     let level = 0;
-    let node_id = hnsw.insert(vector.clone(), "null".to_string(), level);
+    let node_id = hnsw.insert(&*vector, "null".to_string(), level);
 
     assert_eq!(node_id, 0);
     assert_eq!(hnsw.nodes.len(), 1);
@@ -208,7 +208,7 @@ fn test_hnsw_multiple_insertions() {
 
     for i in 0..10 {
         let vector = vec![i as f32, (i + 1) as f32, (i + 2) as f32];
-        hnsw.insert(vector, "null".to_string(), 0);
+        hnsw.insert(&*vector, "null".to_string(), 0);
     }
 
     assert_eq!(hnsw.nodes.len(), 10);
@@ -229,7 +229,7 @@ async fn test_embedding_store_with_checksum() {
     let file_path = dir.path().join("test_checksum");
 
     let mut hnsw = HNSW::new(16, 100, 5, 0.7);
-    hnsw.insert(vec![1.0, 2.0, 3.0, 4.0, 5.0], "null".to_string(), 0);
+    hnsw.insert(&*vec![1.0, 2.0, 3.0, 4.0, 5.0], "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -257,7 +257,7 @@ async fn test_concurrent_file_loading_thread_safety() {
     let mut hnsw = HNSW::new(16, 100, 5, 0.7);
     for i in 0..100 {
         let vector = vec![i as f32, (i + 1) as f32, (i + 2) as f32];
-        hnsw.insert(vector, format!("chunk_{}", i), 0);
+        hnsw.insert(&*vector, format!("chunk_{}", i), 0);
     }
 
     let mut store = EmbeddingStore::new(hnsw);
@@ -306,7 +306,7 @@ async fn test_concurrent_different_files_loading() {
         // Each file has a different number of vectors
         for j in 0..((i + 1) * 10) {
             let vector = vec![j as f32, (j + 1) as f32];
-            hnsw.insert(vector, format!("chunk_{}_{}", i, j), 0);
+            hnsw.insert(&*vector, format!("chunk_{}_{}", i, j), 0);
         }
 
         let mut store = EmbeddingStore::new(hnsw);

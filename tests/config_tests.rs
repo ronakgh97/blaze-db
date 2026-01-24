@@ -109,7 +109,7 @@ async fn test_server_config_source_operations() {
     config.update_source(source.clone());
 
     // Verify source was updated
-    let retrieved_source = config.get_source().unwrap();
+    let retrieved_source = config.get_source();
     assert_eq!(
         retrieved_source.source_name,
         Some(vec!["test_source".to_string()])

@@ -29,7 +29,7 @@ async fn test_concurrent_writes_different_databases() {
                 let vector: Vec<f32> = (0..1024).map(|x| (x + i) as f32 / 1000.0).collect();
                 let metadata = format!("db_{}_vector_{}", db_idx, i);
                 let level = hnsw.get_random_level();
-                hnsw.insert(vector, metadata, level);
+                hnsw.insert(&*vector, metadata, level);
             }
 
             // Save to disk
@@ -119,7 +119,7 @@ async fn test_concurrent_writes_same_database() {
                     .collect();
                 let metadata = format!("writer_{}_vector_{}", writer_idx, i);
                 let level = hnsw.get_random_level();
-                hnsw.insert(vector, metadata, level);
+                hnsw.insert(&*vector, metadata, level);
             }
 
             // Save to disk
@@ -185,7 +185,7 @@ async fn test_concurrent_reads_with_write() {
         let vector: Vec<f32> = (0..1024).map(|x| (x + i) as f32 / 1000.0).collect();
         let metadata = format!("initial_vector_{}", i);
         let level = hnsw.get_random_level();
-        hnsw.insert(vector, metadata, level);
+        hnsw.insert(&*vector, metadata, level);
     }
 
     let index_path = db_path.join("HNSW_INDEX_1");
@@ -257,7 +257,7 @@ async fn test_concurrent_reads_with_write() {
             let vector: Vec<f32> = (0..1024).map(|x| (x + i) as f32 / 1000.0).collect();
             let metadata = format!("new_vector_{}", i);
             let level = store.hnsw_store.get_random_level();
-            store.hnsw_store.insert(vector, metadata, level);
+            store.hnsw_store.insert(&*vector, metadata, level);
         }
 
         // Save
@@ -348,7 +348,7 @@ async fn test_cumulative_writes() {
                 .collect();
             let metadata = format!("batch_{}_vector_{}", batch_idx, i);
             let level = hnsw.get_random_level();
-            hnsw.insert(vector, metadata, level);
+            hnsw.insert(&*vector, metadata, level);
         }
 
         // Save with incremented index
