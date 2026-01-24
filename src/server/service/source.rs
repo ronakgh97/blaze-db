@@ -1,4 +1,5 @@
 use crate::core::{ServerConfig, get_source_path, save_config};
+use crate::server::controller::ErrorTypes;
 use crate::server::dto::{CreateSourceRequest, CreateSourceResponse, ListResponse};
 use anyhow::Result;
 
@@ -9,6 +10,17 @@ pub async fn create_new_source(request: CreateSourceRequest) -> Result<CreateSou
 
     let mut config =
         ServerConfig::load_config(&ServerConfig::get_default_server_config_path()?).await?;
+
+    // Check if source already exists
+    if let Some(existing_sources) = &config.data_source.source_name {
+        if existing_sources.contains(&source_name) {
+            return Err(ErrorTypes::SourceAlreadyExists(format!(
+                "Source '{}' already exists",
+                source_name
+            ))
+            .into());
+        }
+    }
 
     // Update the server file accordingly
     config.data_source.add_source(source_name.clone())?;

@@ -17,7 +17,9 @@ pub mod prelude {
         save_config,
     };
     pub use crate::server::{
-        QueryRequest, QueryResponse, list_databases, parse_database_name, start_server,
+        CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse,
+        EmbedRequest, EmbedResponse, InsertRequest, InsertResponse, ListResponse, QueryRequest,
+        QueryResponse, VectorDataDto, list_databases, parse_database_name, start_server,
     };
     pub use crate::server_args::{ServerArgs, ServerCommands};
     pub use crate::utils::{EmbeddingStore, Ingestor, Provider, VectorData, log};

@@ -22,19 +22,19 @@ pub enum ClientCommands {
         url: Option<String>,
     },
 
-    /// Create a new Blaze-DB database
+    /// Create a new database or a new source in Blaze-DB
     Create {
         /// Source name where the database will be stored
-        #[arg(short, long)]
+        #[arg(short, long, required = true)]
         source: String,
 
         /// Name of the new database
         #[arg(short, long)]
-        name: String,
+        name: Option<String>,
 
         /// Number of dimensions for the database embeddings
         #[arg(short, long)]
-        dimensions: usize,
+        dimensions: Option<usize>,
     },
 
     /// Embed data into an existing Blaze-DB database

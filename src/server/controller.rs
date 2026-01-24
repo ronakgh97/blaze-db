@@ -15,7 +15,9 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use lazy_static::lazy_static;
 use lru::LruCache;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
@@ -50,6 +52,7 @@ async fn create_router() -> Router {
         .route("/v1/blaze/insert", post(new_insert))
         .route("/v1/blaze/embed", post(new_embeddings))
         .route("/v1/blaze/query", post(search_query))
+        //.route("/v1/blaze/query/vector", post(search_vector)) TODO: Endpoint for direct vector queries
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
 }
 
@@ -104,18 +107,94 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
         payload.name, payload.dimensions
     );
 
+    // Checks here
+    if !validate_empty_string(&payload.name)
+        || !validate_empty_string(&payload.source)
+        || payload.dimensions < 768
+    {
+        error!(
+            "[POST /create] Invalid database creation request: name or source is empty or dimensions < 768"
+        );
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(CreateDatabaseResponse {
+                id: "null".to_string(),
+                name: "null".to_string(),
+                dimensions: 0,
+                source: "null".to_string(),
+                created_at: "null".to_string(),
+            }),
+        );
+    }
+
     match create_new_database(payload.clone()).await {
         Ok(response) => {
             info!(
                 "[POST /create] Database '{}' created successfully with ID: {}",
                 response.name, response.id
             );
-            (StatusCode::OK, Json(response))
+            (StatusCode::CREATED, Json(response))
         }
-        Err(_) => {
+        Err(e) => {
+            if let Some(error_type) = e.downcast_ref::<ErrorTypes>() {
+                match error_type {
+                    ErrorTypes::SourceNotFound(msg) => {
+                        error!(
+                            "[POST /create] Source not found error during database creation: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NOT_FOUND,
+                            Json(CreateDatabaseResponse {
+                                id: "null".to_string(),
+                                name: "null".to_string(),
+                                dimensions: 0,
+                                source: "null".to_string(),
+                                created_at: "null".to_string(),
+                            }),
+                        );
+                    }
+                    ErrorTypes::DatabaseAlreadyExists(msg) => {
+                        error!(
+                            "[POST /create] Database already exists error during database creation: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::CONFLICT,
+                            Json(CreateDatabaseResponse {
+                                id: "null".to_string(),
+                                name: "null".to_string(),
+                                dimensions: 0,
+                                source: "null".to_string(),
+                                created_at: "null".to_string(),
+                            }),
+                        );
+                    }
+                    ErrorTypes::InvalidField(msg) => {
+                        error!(
+                            "[POST /create] Invalid field error during database creation: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(CreateDatabaseResponse {
+                                id: "null".to_string(),
+                                name: "null".to_string(),
+                                dimensions: 0,
+                                source: "null".to_string(),
+                                created_at: "null".to_string(),
+                            }),
+                        );
+                    }
+
+                    _ => {}
+                }
+            }
+
             error!(
-                "[POST /create] Failed to create database: {}",
-                payload.name.clone()
+                "[POST /create] Failed to create database: {} - Error: {:?}",
+                payload.name.clone(),
+                e
             );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -131,12 +210,121 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
     }
 }
 
+pub async fn create_src(Json(payload): Json<CreateSourceRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /sources/create] Request to create source: '{}'",
+        payload.source_name
+    );
+
+    // Check empty source name
+    if !validate_empty_string(&payload.source_name) {
+        error!("[POST /sources/create] Invalid source creation request: source name is empty");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(CreateSourceResponse {
+                id: "null".to_string(),
+                source: "null".to_string(),
+                created_at: "null".to_string(),
+            }),
+        );
+    }
+
+    match create_new_source(payload.clone()).await {
+        Ok(response) => {
+            info!(
+                "[POST /sources/create] Source '{}' created successfully",
+                payload.source_name
+            );
+            (StatusCode::CREATED, Json(response))
+        }
+        Err(e) => {
+            if let Some(error_type) = e.downcast_ref::<ErrorTypes>() {
+                match error_type {
+                    ErrorTypes::SourceAlreadyExists(msg) => {
+                        error!(
+                            "[POST /sources/create] Source already exists error during source creation: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::CONFLICT,
+                            Json(CreateSourceResponse {
+                                id: "null".to_string(),
+                                source: "null".to_string(),
+                                created_at: "null".to_string(),
+                            }),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+
+            error!(
+                "[POST /sources/create] Failed to create source: {} - Error: {:?}",
+                payload.source_name.clone(),
+                e
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CreateSourceResponse {
+                    id: "null".to_string(),
+                    source: "null".to_string(),
+                    created_at: "null".to_string(),
+                }),
+            )
+        }
+    }
+}
+
 pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoResponse {
     let total_chunks: usize = payload.batch_content.iter().map(|batch| batch.len()).sum();
     info!(
         "[POST /embed] Request to embed {} chunks into database '{}' with batch size {}",
         total_chunks, payload.database, payload.batch
     );
+
+    // Check for empty's
+    if payload.batch_content.is_empty() {
+        error!("[POST /embed] Invalid embed request: batch_content is empty");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(EmbedResponse {
+                database: "null".to_string(),
+                source: "null".to_string(),
+                total_entries: 0,
+            }),
+        );
+    }
+
+    if !validate_empty_string(&payload.database) || !validate_empty_string(&payload.source) {
+        error!("[POST /embed] Invalid embed request: database or source is empty");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(EmbedResponse {
+                database: "null".to_string(),
+                source: "null".to_string(),
+                total_entries: 0,
+            }),
+        );
+    }
+
+    // TODO: Maybe this is little overhead
+    if payload
+        .batch_content
+        .par_iter()
+        .any(|batch| batch.is_empty())
+    {
+        error!(
+            "[POST /embed] Invalid embed request: one or more batches in batch_content is empty"
+        );
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(EmbedResponse {
+                database: "null".to_string(),
+                source: "null".to_string(),
+                total_entries: 0,
+            }),
+        );
+    }
 
     match embed_run(payload.clone(), None, PROVIDER.wait()).await {
         Ok(response) => {
@@ -171,6 +359,44 @@ pub async fn new_insert(Json(payload): Json<InsertRequest>) -> impl IntoResponse
         payload.database
     );
 
+    // Check for empty's
+    if payload.vectors.is_empty() {
+        error!("[POST /insert] Invalid insert request: vectors array is empty");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(InsertResponse {
+                database: "null".to_string(),
+                source: "null".to_string(),
+                total_inserted: 0,
+            }),
+        );
+    }
+
+    if !validate_empty_string(&payload.database) || !validate_empty_string(&payload.source) {
+        error!("[POST /insert] Invalid insert request: database or source is empty");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(InsertResponse {
+                database: "null".to_string(),
+                source: "null".to_string(),
+                total_inserted: 0,
+            }),
+        );
+    }
+
+    // TODO: Maybe this is little overhead
+    if payload.vectors.par_iter().any(|v| v.embedding.is_empty()) {
+        error!("[POST /insert] Invalid insert request: one or more vectors have empty embeddings");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(InsertResponse {
+                database: "null".to_string(),
+                source: "null".to_string(),
+                total_inserted: 0,
+            }),
+        );
+    }
+
     match insert_run(&payload, None, PROVIDER.wait()).await {
         Ok(response) => {
             info!(
@@ -180,6 +406,52 @@ pub async fn new_insert(Json(payload): Json<InsertRequest>) -> impl IntoResponse
             (StatusCode::OK, Json(response))
         }
         Err(e) => {
+            if let Some(error_type) = e.downcast_ref::<ErrorTypes>() {
+                match error_type {
+                    ErrorTypes::DatabaseNotFound(msg) => {
+                        error!(
+                            "[POST /insert] Database not found error during insert: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NOT_FOUND,
+                            Json(InsertResponse {
+                                database: "null".to_string(),
+                                source: "null".to_string(),
+                                total_inserted: 0,
+                            }),
+                        );
+                    }
+
+                    ErrorTypes::SourceNotFound(msg) => {
+                        error!(
+                            "[POST /insert] Source not found error during insert: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NOT_FOUND,
+                            Json(InsertResponse {
+                                database: "null".to_string(),
+                                source: "null".to_string(),
+                                total_inserted: 0,
+                            }),
+                        );
+                    }
+
+                    ErrorTypes::InvalidField(msg) => {
+                        error!("[POST /insert] Invalid field error during insert: {}", msg);
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(InsertResponse {
+                                database: "null".to_string(),
+                                source: "null".to_string(),
+                                total_inserted: 0,
+                            }),
+                        );
+                    }
+                    _ => {}
+                }
+            }
             error!(
                 "[POST /insert] Failed to insert vectors into database: {} - Error: {:?}",
                 payload.database.clone(),
@@ -229,6 +501,22 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
         payload.database, payload.query, payload.top_k
     );
 
+    // Check for empty's
+    if !validate_empty_string(&payload.query)
+        || !validate_empty_string(&payload.database)
+        || !validate_empty_string(&payload.source)
+    {
+        error!("[POST /query] Invalid query request: query, database, or source is empty");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(QueryResponse {
+                results: vec![],
+                search_time_sec: 0.0,
+                io_time_sec: 0.0,
+            }),
+        );
+    }
+
     match query_search(payload.clone(), PROVIDER.wait()).await {
         Ok(response) => {
             info!(
@@ -249,37 +537,6 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
                     results: vec![],
                     search_time_sec: 0.0,
                     io_time_sec: 0.0,
-                }),
-            )
-        }
-    }
-}
-
-pub async fn create_src(Json(payload): Json<CreateSourceRequest>) -> impl IntoResponse {
-    info!(
-        "[POST /sources/create] Request to create source: '{}'",
-        payload.source_name
-    );
-
-    match create_new_source(payload.clone()).await {
-        Ok(response) => {
-            info!(
-                "[POST /sources/create] Source '{}' created successfully",
-                payload.source_name
-            );
-            (StatusCode::OK, Json(response))
-        }
-        Err(_) => {
-            error!(
-                "[POST /sources/create] Failed to create source: {}",
-                payload.source_name.clone()
-            );
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(CreateSourceResponse {
-                    id: "null".to_string(),
-                    source: "null".to_string(),
-                    created_at: "null".to_string(),
                 }),
             )
         }
@@ -314,3 +571,35 @@ pub async fn create_src(Json(payload): Json<CreateSourceRequest>) -> impl IntoRe
 //         }),
 //     )
 // }
+
+#[derive(Debug)]
+pub enum ErrorTypes {
+    DatabaseNotFound(String),
+    SourceNotFound(String),
+    DatabaseAlreadyExists(String),
+    SourceAlreadyExists(String),
+    InvalidField(String),
+}
+
+impl Display for ErrorTypes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ErrorTypes::DatabaseNotFound(msg) => write!(f, "Database not found: {}", msg),
+            ErrorTypes::SourceNotFound(msg) => write!(f, "Source not found: {}", msg),
+            ErrorTypes::DatabaseAlreadyExists(msg) => {
+                write!(f, "Database already exists: {}", msg)
+            }
+            ErrorTypes::SourceAlreadyExists(msg) => write!(f, "Source already exists: {}", msg),
+            ErrorTypes::InvalidField(msg) => write!(f, "Invalid field: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for ErrorTypes {}
+
+fn validate_empty_string(field: &str) -> bool {
+    if field.trim().is_empty() {
+        return false;
+    }
+    true
+}

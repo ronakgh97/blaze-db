@@ -1,10 +1,14 @@
-use crate::core::HNSW;
-use crate::server::controller::DB_WRITE_LOCKS;
+use crate::core::{HNSW, check_source_valid, get_source_path};
+use crate::server::controller::{DB_WRITE_LOCKS, ErrorTypes};
+use crate::server::dto::VectorDataDto;
 use crate::server::service::database::search_database;
-use crate::server::{EmbedRequest, EmbedResponse, InsertRequest, InsertResponse};
+use crate::server::{
+    EmbedRequest, EmbedResponse, InsertRequest, InsertResponse, parse_database_name,
+};
 use crate::utils::{EmbeddingStore, Provider};
 use crate::{error, info, warn};
 use anyhow::{Context, Result};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -21,19 +25,60 @@ pub async fn insert_run(
     _provider: &Provider,
 ) -> Result<InsertResponse> {
     let vector_data = &request.vectors;
-    let database_name = request.database.clone();
-    let source = request.source.clone();
+    let database_name = &request.database;
+    let source = &request.source;
 
     let total_entries = vector_data.len();
 
+    // Checks source and database existence
+    if !check_source_valid(&source).await? {
+        error!("Source '{}' not found", source);
+        return Err(ErrorTypes::SourceNotFound(format!("Source '{}' not found", source)).into());
+    }
+
+    let database_path = get_source_path()?.join(&source).join(&database_name);
+    if !database_path.exists() {
+        error!("Database path does not exist: {:?}", database_path);
+        return Err(ErrorTypes::DatabaseNotFound(format!(
+            "Database path does not exist: {:?}",
+            database_path
+        ))
+        .into());
+    }
+
+    // Check all vector dimensions consistency with database init (dimensions)
+    let excepted_dimensions: usize = parse_database_name(&database_name)
+        .ok_or_else(|| {
+            ErrorTypes::InvalidField(format!(
+                "Failed to parse database name: '{}'",
+                database_name
+            ))
+        })?
+        .2 // 2nd index is dimensions (String)
+        .parse()?;
+
+    // DO THIS LAST TO AVOID WASTING TIME
+    // VERY IMPORTANT, OR ELSE IT WILL CORRUPT THE INDEX WITH INCONSISTENT DIMENSIONS
+    // Fast check in parallel using rayon
+    let inconsistent_vectors: Vec<&VectorDataDto> = vector_data
+        .par_iter()
+        .filter(|vec_data| vec_data.embedding.len() != excepted_dimensions)
+        .collect();
+
+    if !inconsistent_vectors.is_empty() {
+        error!(
+            "Found {} vectors with inconsistent dimensions",
+            inconsistent_vectors.len(),
+        );
+        return Err(ErrorTypes::InvalidField(format!(
+            "Inconsistent vector dimensions found. Expected: {}, but some vectors have different dimensions.",
+            excepted_dimensions
+        ))
+        .into());
+    }
+
     // Locate the database directory
-    let database_path = match search_database(database_name.clone(), source.clone()).await {
-        Ok(path) => path,
-        Err(e) => {
-            error!("Database '{}' not found", database_name);
-            return Err(e).with_context(|| format!("Database '{}' not found", database_name));
-        }
-    };
+    let database_path = search_database(&database_name, &source).await?;
 
     // Load latest HNSW from database directory if it exists, otherwise create a new one
     let (loaded_hnsw, max_index) =
@@ -93,7 +138,7 @@ pub async fn insert_run(
     info!("Released write lock for database '{}'", database_name);
 
     Ok(InsertResponse {
-        database: database_name,
+        database: database_name.clone(),
         source: source.clone(),
         total_inserted: total_entries,
     })
@@ -105,14 +150,30 @@ pub async fn embed_run(
     _hnsw: Option<HNSW>,
     provider: &Provider,
 ) -> Result<EmbedResponse> {
-    let batch_content = request.batch_content; // TODO: Maybe change it to Vec<String>?
-    let database_name = request.database.clone();
-    let source = request.source.clone();
+    let batch_content = &request.batch_content; // TODO: Maybe change it to Vec<String>?
+    let database_name = &request.database;
+    let source = &request.source;
 
     let total_items: usize = batch_content.iter().map(|batch| batch.len()).sum();
 
+    // Checks source and database existence
+    if !check_source_valid(&source).await? {
+        error!("Source '{}' not found", source);
+        return Err(ErrorTypes::SourceNotFound(format!("Source '{}' not found", source)).into());
+    }
+
+    let database_path = get_source_path()?.join(&source).join(&database_name);
+    if !database_path.exists() {
+        error!("Database path does not exist: {:?}", database_path);
+        return Err(ErrorTypes::DatabaseNotFound(format!(
+            "Database path does not exist: {:?}",
+            database_path
+        ))
+        .into());
+    }
+
     // Locate the database directory
-    let database_path = match search_database(database_name.clone(), source.clone()).await {
+    let database_path = match search_database(&database_name, &source).await {
         Ok(path) => path,
         Err(e) => {
             error!("Database '{}' not found", database_name);
@@ -203,7 +264,7 @@ pub async fn embed_run(
     info!("Released write lock for database '{}'", database_name);
 
     Ok(EmbedResponse {
-        database: database_name,
+        database: database_name.clone(),
         source: source.clone(),
         total_entries: total_items,
     })
@@ -217,7 +278,7 @@ pub async fn load_embeddings_index_from_database(
     source: String,
 ) -> (Option<EmbeddingStore>, usize) {
     info!("Reading embeddings from database '{}'", database);
-    let database_name = match search_database(database.clone(), source).await {
+    let database_name = match search_database(&database, &source).await {
         Ok(path) => path,
         Err(e) => {
             error!("Database '{}' not found, e: {}", database, e.to_string());

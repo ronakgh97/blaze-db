@@ -1,8 +1,9 @@
+use crate::core::get_source_path;
 #[allow(unused)]
 use crate::core::{HNSW, Metrics, NodeId};
 #[allow(unused)]
 use crate::prelude::{Provider, SearchQuery};
-use crate::server::controller::INDEX_CACHE;
+use crate::server::controller::{ErrorTypes, INDEX_CACHE};
 use crate::server::dto::QueryResult;
 use crate::server::service::database::search_database;
 use crate::server::service::load_embeddings_index_from_database;
@@ -18,8 +19,18 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     let source = &request.source;
     let from_database = &request.database;
 
+    let database_path = get_source_path()?.join(&source).join(&from_database);
+    if !database_path.exists() {
+        error!("Database path does not exist: {:?}", database_path);
+        return Err(ErrorTypes::DatabaseNotFound(format!(
+            "Database path does not exist: {:?}",
+            database_path
+        ))
+        .into());
+    }
+
     // Get database directory path
-    let db_path = search_database(from_database.clone(), source.clone()).await?;
+    let db_path = search_database(&from_database, &source).await?;
 
     info!("Generating embedding for query: '{}'", query);
 

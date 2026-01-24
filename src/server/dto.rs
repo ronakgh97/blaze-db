@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Response DTO for health chec
+/// Response DTO for health check
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HealthCheckResponse {
     pub status: String,
@@ -51,14 +51,14 @@ pub struct EmbedResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct VectorData {
+pub struct VectorDataDto {
     pub embedding: Vec<f32>,
     pub metadata: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct InsertRequest {
-    pub vectors: Vec<VectorData>, // TODO: Change to batch insert later
+    pub vectors: Vec<VectorDataDto>, // TODO: Change to batch insert later
     pub database: String,
     pub source: String,
 }

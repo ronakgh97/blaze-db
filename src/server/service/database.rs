@@ -1,4 +1,5 @@
 use crate::core::{check_source_valid, get_source_path};
+use crate::server::controller::ErrorTypes;
 use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse};
 use crate::{info, warn};
 use anyhow::Result;
@@ -10,8 +11,8 @@ use uuid::Uuid;
 pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<CreateDatabaseResponse> {
     let database_id = Uuid::new_v4().to_string();
     let timestamp = Utc::now().format("%Y%m%dT%H%M%S").to_string();
-    let name = request.name;
-    let dimensions = request.dimensions;
+    let name = &request.name;
+    let dimensions = &request.dimensions;
     let source = &request.source;
     let source_path = get_source_path()?;
 
@@ -19,23 +20,66 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     if check_source_valid(source).await? {
         info!("Using provided source: {}", source);
     } else {
-        return Err(anyhow::anyhow!("Source '{}' is not valid", source));
+        return Err(ErrorTypes::SourceNotFound(format!("Source '{}' is not valid", source)).into());
+    }
+
+    // Check if a database with the same name already exists in this source
+    let existing_databases = list_databases(source.clone()).await?;
+    for existing_db in &existing_databases {
+        if let Some((existing_name, _, _, _)) = parse_database_name(existing_db) {
+            if existing_name == *name {
+                warn!(
+                    "Database '{}' already exists in source '{}' (found: {})",
+                    name, source, existing_db
+                );
+                return Err(ErrorTypes::DatabaseAlreadyExists(format!(
+                    "Database '{}' already exists in source '{}'",
+                    name, source
+                ))
+                .into());
+            }
+        }
     }
 
     let file_name = format!("#{}_#{}_#{}_#{}", name, database_id, dimensions, timestamp);
 
-    let database_path = source_path.join(source).join(&file_name);
-    // TODO: Check if database already exists
+    let database_path = source_path.join(&source).join(&file_name);
+
+    // Check if database directory path already exists (should not happen with UUID)
+    if database_path.exists() {
+        return Err(ErrorTypes::DatabaseAlreadyExists(format!(
+            "Database directory already exists at: {:?}",
+            database_path
+        ))
+        .into());
+    }
+
     info!("Creating database directory: {:?}", database_path);
     tokio::fs::create_dir_all(&database_path).await?;
     info!("Database '{}' initialized at: {:?}", name, database_path);
 
-    // TODO: Use `parse_database_name` to verify the created database name
+    // Use `parse_database_name` to verify the created database name
+
+    if let Some((parsed_name, _, _, _)) = parse_database_name(&file_name) {
+        if parsed_name != *name {
+            return Err(ErrorTypes::InvalidField(format!(
+                "Parsed database name '{}' does not match requested name '{}'",
+                parsed_name, name
+            ))
+            .into());
+        }
+    } else {
+        return Err(ErrorTypes::InvalidField(format!(
+            "Failed to parse database name from '{}'",
+            file_name
+        ))
+        .into());
+    }
 
     Ok(CreateDatabaseResponse {
         id: database_id,
-        name,
-        dimensions,
+        name: name.clone(),
+        dimensions: *dimensions,
         source: source.to_string(),
         created_at: timestamp,
     })
@@ -91,7 +135,7 @@ pub async fn list_databases(source: String) -> Result<Vec<String>> {
 }
 
 /// Get a database dir by name in the specified source directory.
-pub async fn search_database(db_name: String, sources: String) -> Result<PathBuf> {
+pub async fn search_database(db_name: &String, sources: &String) -> Result<PathBuf> {
     info!("Searching for database '{}'", db_name);
     let source_path = get_source_path()?;
     let dir_path = source_path.join(sources);
@@ -101,7 +145,7 @@ pub async fn search_database(db_name: String, sources: String) -> Result<PathBuf
     while let Some(entry) = read_dir.next_entry().await? {
         let file_name = entry.file_name().into_string().unwrap_or_default();
         if let Some((parsed_name, _, _, _)) = parse_database_name(&file_name)
-            && parsed_name == db_name
+            && parsed_name == *db_name
         {
             info!("Database '{}' found at: {:?}", db_name, entry.path());
             return Ok(entry.path());
