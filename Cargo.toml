@@ -66,6 +66,7 @@ indicatif = "0.18.3"
 sysinfo = "0.37.2"
 lazy_static = "1.5.0"
 lru = "0.16.3"
+# thiserror = "2.0.18"
 
 [dev-dependencies]
 criterion = "0.8.0"
