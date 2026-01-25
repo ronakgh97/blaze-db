@@ -1,7 +1,6 @@
 use crate::core::ClientConfig;
 use crate::server::{
-    CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse,
-    list_databases,
+    CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse
 };
 use anyhow::Result;
 use colored::Colorize;
@@ -37,20 +36,6 @@ async fn create_database(name: String, src: &String, dimensions: usize) -> Resul
         source: src.clone(),
         dimensions,
     };
-
-    // TODO: ALL Checks should be done server-side, fix this later
-
-    // Check for duplicate database names could be added here
-
-    let dbs = list_databases(src).await?;
-
-    if dbs.contains(&request_body.name) {
-        anyhow::bail!(
-            "Database with name '{}' already exists in source '{}'",
-            request_body.name,
-            src
-        );
-    }
 
     let response = reqwest::Client::new()
         .post(config.url + "/v1/blaze/databases/create")
