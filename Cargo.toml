@@ -18,11 +18,11 @@ path = "src/bin/server.rs"
 
 [[bin]]
 name = "nsw"
-path = "hnsw_scrape/nsw.rs"
+path = "sandbox/nsw.rs"
 
 [[bin]]
 name = "hnsw"
-path = "hnsw_scrape/hnsw.rs"
+path = "sandbox/hnsw.rs"
 
 [[bench]]
 name = "benchmark"

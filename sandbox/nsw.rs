@@ -227,7 +227,7 @@ impl Node {
 async fn main() -> anyhow::Result<()> {
     let mut nsw = NSW::new(5555, 16);
 
-    // Generate 50K random vectors
+    // Generate 20K random vectors
     let num_vectors = 20_000;
 
     for i in 0..num_vectors {
@@ -268,18 +268,18 @@ async fn main() -> anyhow::Result<()> {
     let duration = start_time.elapsed().as_secs_f64();
     println!("Rearranged in {}s", duration.to_string().yellow());
 
-    // Perform a query
-    let provider = Provider::init(
-        "http://localhost:1234/v1/embeddings",
-        "text-embedding-qwen3-embedding-0.6b",
-        "local",
-    );
-    let sample_query = "What is this about?";
-    let query_embedding = provider.fetch_embedding(sample_query).await?;
+    // // Perform a query
+    // let provider = Provider::init(
+    //     "http://localhost:1234/v1/embeddings",
+    //     "text-embedding-qwen3-embedding-0.6b",
+    //     "local",
+    // );
+    // let sample_query = "What is this about?";
+    // let query_embedding = provider.fetch_embedding(sample_query).await?;
 
-    let query_vector = query_embedding.embedding[0].clone();
-    // let query_vector = generate_random_vector(1024);
-    println!("\nQuery: {}", sample_query.to_string().yellow());
+    // let query_vector = query_embedding.embedding[0].clone();
+    let query_vector = generate_random_vector(1024);
+    // println!("\nQuery: {}", sample_query.to_string().yellow());
     println!("Querying vector: {:?}...", &query_vector[..3]);
     let top_k = 5;
 

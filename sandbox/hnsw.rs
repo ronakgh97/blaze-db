@@ -3,7 +3,6 @@ mod utils;
 #[allow(unused)]
 use crate::utils::{cosine_similarity, generate_random_vector, load_sample_hnsw_index};
 use anyhow::Result;
-use blaze_db::prelude::Provider;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng;
@@ -89,7 +88,7 @@ impl HNSW {
     /// 1. If first node, just add it as entry point
     /// 2. Otherwise, search from top layer down to find nearest neighbors
     /// 3. Connect the new node to its neighbors at each layer
-    pub fn insert(&mut self, vector: Vec<f32>, metadata: String, max_level: usize) -> NodeId {
+    pub fn insert(&mut self, vector: &[f32], metadata: String, max_level: usize) -> NodeId {
         let node_id = self.nodes.len(); // TODO: Maybe use a better ID system later
 
         // println!(
@@ -106,7 +105,7 @@ impl HNSW {
         let node = Node {
             id: node_id,
             metadata,
-            vector,
+            vector: vector.to_vec(),
             neighbors: vec![
                 Vec::with_capacity(self.max_neighbors * self.max_layers);
                 max_level + 1
@@ -184,7 +183,7 @@ impl HNSW {
             // .ok();
 
             // But only connect to max_neighbors of them
-            let selected: Vec<NodeId> = candidates
+            let selected: Vec<blaze_db::prelude::NodeId> = candidates
                 .into_par_iter()
                 .take(self.max_neighbors)
                 .collect();
@@ -458,7 +457,7 @@ impl HNSW {
     }
 
     /// Remove connections to keep only the M closest neighbors
-    fn prune_connections(&mut self, node_id: NodeId, layer: usize) {
+    fn prune_connections(&mut self, node_id: blaze_db::prelude::NodeId, layer: usize) {
         // println!(
         //     "\n[PRUNE] Pruning node {} at layer {} (currently has {} neighbors)",
         //     node_id,
@@ -473,12 +472,14 @@ impl HNSW {
         // ))
         // .ok();
 
-        let node_vector = self.nodes[node_id].vector.clone();
-
         // Calculate similarities to all neighbors
-        let mut neighbor_sims: Vec<(NodeId, f32)> = self.nodes[node_id].neighbors[layer]
+        let mut neighbor_sims: Vec<(blaze_db::prelude::NodeId, f32)> = self.nodes[node_id]
+            .neighbors[layer]
             .par_iter()
-            .map(|&n| (n, self.similarity(&node_vector, &self.nodes[n].vector)))
+            .map(|&n| {
+                let sim = self.similarity(&self.nodes[node_id].vector, &self.nodes[n].vector);
+                (n, sim)
+            })
             .collect();
 
         // Keep only the M most similar
@@ -582,7 +583,7 @@ impl HNSW {
         // ))
         // .ok();
 
-        let candidates = self.search_layer_knn(query, current, k * 2, 0); //TODO Higher ef? Maybe ef_search as param?
+        let candidates = self.search_layer_knn(query, current, k * 2, 0);
 
         // println!("[SEARCH] Found {} candidates at layer 0", candidates.len());
         // log_debug_message(&format!(
@@ -592,7 +593,7 @@ impl HNSW {
         // .ok();
 
         // Return with similarities
-        let mut results: Vec<(NodeId, f32)> = candidates
+        let mut results: Vec<(blaze_db::prelude::NodeId, f32)> = candidates
             .into_par_iter()
             .map(|id| (id, self.similarity(query, &self.nodes[id].vector)))
             .collect();
@@ -608,11 +609,11 @@ impl HNSW {
 
     /// Search and return results with metadata
     /// Returns results as (NodeId, similarity, metadata) tuples sorted by similarity (highest first)
-    pub fn search_with_metadata(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32, String)> {
+    pub fn search_with_metadata(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32, &str)> {
         let results = self.search(query, k);
         results
-            .into_par_iter()
-            .map(|(id, sim)| (id, sim, self.nodes[id].metadata.clone()))
+            .into_iter() // TODO:  parallel iterator not needed here?
+            .map(|(id, sim)| (id, sim, self.nodes[id].metadata.as_str()))
             .collect()
     }
 
@@ -657,18 +658,17 @@ impl Node {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // M=16, ef_construction=200, layers=6
     let mut hnsw = HNSW::new(16, 200, 6, 0.8);
 
     // create_debug_log_file().await?;
 
     // get_level_math_debug(&hnsw).await?;
 
-    let loaded_vector_data = load_sample_hnsw_index().await;
+    // let loaded_vector_data = load_sample_hnsw_index().await;
 
-    // let node_count = 20_000;
-    let node_count = loaded_vector_data.hnsw_store.nodes.len();
-    // let dimension = 1024;
+    let node_count = 20_000;
+    // let node_count = loaded_vector_data.hnsw_store.nodes.len();
+    let dimension = 1024;
 
     println!(
         "\nBuilding HNSW graph with {} nodes...",
@@ -684,33 +684,12 @@ async fn main() -> Result<()> {
     );
 
     let load_time = std::time::Instant::now();
-    // for i in 0..node_count {
-    //     //let vector = generate_random_vector(dimension);
-    //     let vector = loaded_vector_data.embedding[i].clone();
-    //     let level = hnsw.get_random_level();
-    //     let metadata = loaded_vector_data.chunk[i].clone();
-    //     progress_bar.inc(1);
-    //     hnsw.insert(vector, metadata, level);
-    // }
-    // progress_bar.finish_and_clear();
-
-    let nodes_data: Vec<_> = loaded_vector_data
-        .hnsw_store
-        .nodes
-        .par_iter()
-        .map(|node_data| {
-            let vector = node_data.vector.clone();
-            let metadata = node_data.metadata.clone();
-            let level = node_data.max_level;
-            (vector, metadata, level)
-        })
-        .collect();
-
-    // TODO: Shouldn't be indexing again here, but load from saved index, need to move metadata feature to core module
-
-    for (vector, metadata, level) in nodes_data {
-        hnsw.insert(vector, metadata, level);
+    for _i in 0..node_count {
+        let vector = generate_random_vector(dimension);
+        let level = hnsw.get_random_level();
+        let metadata = "what a nice vector".to_string();
         progress_bar.inc(1);
+        hnsw.insert(&*vector, metadata, level);
     }
     progress_bar.finish_and_clear();
 
@@ -720,17 +699,17 @@ async fn main() -> Result<()> {
     print_layer_stats(&hnsw);
 
     // Perform a query
-    let provider = Provider::init(
-        "http://localhost:1234/v1/embeddings",
-        "text-embedding-qwen3-embedding-0.6b",
-        "local",
-    );
-    let sample_query = "What is this about?";
-    let query_embedding = provider.fetch_embedding(sample_query).await?;
+    // let provider = Provider::init(
+    //     "http://localhost:1234/v1/embeddings",
+    //     "text-embedding-qwen3-embedding-0.6b",
+    //     "local",
+    // );
+    // let sample_query = "What is this about?";
+    // let query_embedding = provider.fetch_embedding(sample_query).await?;
 
-    let query_vector = query_embedding.embedding[0].clone();
-    // let query_vector = generate_random_vector(1024);
-    println!("\nQuery: {}", sample_query.to_string().yellow());
+    // let query_vector = query_embedding.embedding[0].clone();
+    let query_vector = generate_random_vector(1024);
+    // println!("\nQuery: {}", sample_query.to_string().yellow());
     println!("Querying vector: {:?}...", &query_vector.as_slice()[..3]);
     let top_k = 5;
 
