@@ -29,10 +29,6 @@ name = "benchmark"
 path = "benches/benchmark.rs"
 harness = false
 
-[[example]]
-name = "amazon_demo"
-path = "examples/amazon_demo.rs"
-
 [profile.release]
 opt-level = 3
 lto = "fat"

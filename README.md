@@ -45,36 +45,34 @@ blzdb query --database amazon_products_2023 --source default_src --search "Wirel
 
 ## Benchmarks
 
-### SEARCH ON 2023 AMAZON PRODUCT DATASET (204800 Index)
+### SEARCH ON 2023 AMAZON PRODUCT DATASET (278528 Index)
 
 ```shell
-Query: Wireless Bluetooth Headphones with Noise Cancellation
-Search completed in: 1.7936ms
-Top 10 search results for query: 'Wireless Bluetooth Headphones with Noise Cancellation'
-1. ID: 63233, Score: 0.93
-Title: AmazonCommercial Wireless Noise Cancelling Bluetooth Headphones
-2. ID: 67635, Score: 0.89
-Title: Bluetooth Active Noise Cancellation Headphone with Build in Microphone
-3. ID: 66738, Score: 0.89
-Title: Wireless Stereo Noise Cancelling Bluetooth Waterproof Earbuds with Charging Case
-4. ID: 66328, Score: 0.89
-Title: Wireless Earbuds Bluetooth 5.0 Waterproof Headset Headphones Noise Cancellation
-5. ID: 66488, Score: 0.88
-Title: Vsonus Noise Cancelling Headphones Wireless Bluetooth, Over Ear Bluetooth Headphones Noise Canceling with Microphone for Adults, 40H Playtime, Deep Bass Sound, Folding, Comfortable Earpads
-6. ID: 64430, Score: 0.88
-Title: Vsonus Noise Cancelling Headphones Wireless Bluetooth, Over Ear Bluetooth Headphones Noise Canceling with Microphone for Adults, 30H Playtime, Deep Bass Sound, Folding, Comfortable Earpads
-7. ID: 60323, Score: 0.87
-Title: Picun Active Noise Cancelling Headphones with ENC, 100 Hours Playing Time Wireless Bluetooth Headphones Over Ear Headphones for Travel, Home, Office
-8. ID: 63070, Score: 0.87
-Title: Wireless Headphones with Microphone, HD Stereo Sound & Noise Isolating Bluetooth Headset with Mute Button, Comfortable 25Hrs Playtime Hands Free On Ear Headphones for Cell Phone Calls Music Work
-9. ID: 66418, Score: 0.87
-Title: Sony Noise Cancelling Headphones WH1000XM2: Over Ear Wireless Bluetooth Headphones with Microphone - Hi Res Audio and Active Sound Cancellation - Black (2017 model)
-10. ID: 61815, Score: 0.87
-Title: Active Noise Cancelling Headphones,Wireless Noise Cancelling Headphone, Microphone 40 Hours Playtime Wireless Bluetooth Headphones 3D Low Bass Tone Fast Charge for Cellphone/Work/Gym/Travel (Blue)
+Query: Gaming RTX 4060 Laptop with 165Hz Display
+Search completed in: 4.5457ms
+Top 100 search results for query: 'Gaming RTX 4060 Laptop with 165Hz Display'
+1. ID: 134406, Score: 0.81
+Title: Razer Blade 16 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 16" Dual Mode Mini LED (4K UHD+ 120Hz & FHD+ 240Hz) - 32GB RAM - 2TB SSD - Compact GaN Charger - Windows 11
+2. ID: 134757, Score: 0.80
+Title: Razer Blade 18 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 18" QHD+ 240Hz - 32GB RAM - 2TB SSD - CNC Aluminum - Compact GaN Charger - Windows 11 - Chroma RGB
+3. ID: 193739, Score: 0.78
+Title: ASUS ROG Swift PG32UQR 32” 4K HDR 144Hz DSC HDMI 2.1 Gaming Monitor - UHD (3840 x 2160), IPS, 1ms, G-SYNC Compatible, Extreme Low Motion Blur Sync, Eye Care, DisplayPort, USB, DisplayHDR 600,BLACK
+4. ID: 195982, Score: 0.78
+Title: Alienware M15 R7 Gaming Laptop, 15.6 inch QHD 240Hz 2ms Display, AMD Ryzen R7 6800H, GeForce RTX 3070Ti, 32GB DDR5 RAM, 1TB NVMe SSD, USB-C, Wi-Fi 6, RGB LED Lighting, Windows 11, Black
+5. ID: 195699, Score: 0.78
+Title: Dell 24 Inch Gaming Monitor, 1ms response time, Overclocked 144Hz AMD FreeSync
+6. ID: 193756, Score: 0.78
+Title: "LG 32GK650F-B 32" QHD Gaming Monitor with 144Hz Refresh Rate and Radeon FreeSync Technology", Black
+7. ID: 193865, Score: 0.78
+Title: Alienware AW2521H 25" Full HD LED LCD Monitor - 16:9
+8. ID: 193691, Score: 0.77
+Title: ASUS ROG Swift 32” 4K HDR 144Hz DSC Gaming Monitor (PG32UQX) - UHD (3840 x 2160), Mini-LED IPS, G-SYNC Ultimate, Local dimming, Quantum Dot technology, DisplayHDR 1400, Eye Care, DisplayPort, HDMI
+9. ID: 193465, Score: 0.77
+Title: ASUS ROG Swift 27” 1440P Gaming Monitor (PG279QM) - WQHD, Fast IPS, 240Hz, 1ms, G-SYNC, NVIDIA Reflex Latency Analyzer, DisplayHDR400, Eye Care, HDMI, DisplayPort, USB, Height Adjustable,BLACK
 ```
 
-- Had a classic dev moment here, was getting 28ms, until I realized that I was running in debug mode. 😶
-- Anyways, 1.79ms is pretty decent for 204800 vectors! 👨‍🍳🔥
+- Had a classic moment here, was getting 28ms, until I realized that I was running in debug mode. 😶
+- Anyways, 4.5ms is pretty good for 278528 vectors! 👨‍🍳🔥
 - Amazon product 2023
   dataset: [Source Link](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products?select=amazon_products.csv)
 
@@ -209,27 +207,27 @@ Top 10 nearest neighbors:
 ```shell
 cargo nextest run --test query_test --release --no-capture --run-ignored only
    Compiling blaze-db v0.1.0 (C:\codes\blaze-db)
-    Finished `release` profile [optimized] target(s) in 36.42s
+    Finished `release` profile [optimized] target(s) in 22.88s
 ────────────
- Nextest run ID 963c240b-34fd-44a2-8452-d3a7e9f968d4 with nextest profile: default
+ Nextest run ID 6e42b62d-a8d3-45b4-beb6-fe239aea1be6 with nextest profile: default
     Starting 1 test across 1 binary
      Running [ 00:00:00] 0/1: 0 running, 0 passed, 0 skipped
        START (1/1) blaze-db::query_test test_cache_and_bench
 
 running 1 test
-Total time without cache: 0.7177450999999999s (Client: 0.6924714s, Server: 0.0252737s)
-Total time with cache: 0.3565691s (Client: 0.3557929s, Server: 0.0007762s)
-Improvement factor (Server side): 32.56x
+Total time without cache: 2.8621101s (Client: 1.7749911s, Server: 1.0871190000000002s)
+Total time with cache: 0.0400475s (Client: 0.0378031s, Server: 0.0022443999999999997s)
+Improvement factor (Server side): 484.37x
 test test_cache_and_bench ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.06s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.82s
 
-        PASS [   3.071s] (1/1) blaze-db::query_test test_cache_and_bench
+        PASS [   3.849s] (1/1) blaze-db::query_test test_cache_and_bench
 ────────────
-     Summary [   3.071s] 1 test run: 1 passed, 0 skipped
+     Summary [   3.850s] 1 test run: 1 passed, 0 skipped
 ```
 
-- Almost around 46x faster (I/O) with cache hits on repeated queries on same index. 😭🔥
+- Almost around 480x faster (I/O) with cache hits on repeated queries on same index. 😭🔥
 - Although there is still I/O overhead during cache validation (reading checksum from metadata.json),but it's
   significantly
   reduced. Checkout this file: [Cache Impl](./src/server/service/queries.rs)
@@ -247,7 +245,8 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - Similarity calculation caching for faster search queries. `IN PROGRESS`
 - Implement LRU for fast query. `DONE`
 - Make a storage engine, e.g SSTable or LSMTree based. (Actually, I have no idea how to do that. 😵‍💫) `NEED HELP`
-- Bad Indexing, Loading and Memory Explosion issues when inserting large batch of nodes. (HNSW) `SIGNIFICANTLY IMPROVED - HNSW insert now uses references`
+- Bad Indexing, Loading and Memory Explosion issues when inserting large batch of nodes. (HNSW)
+  `SIGNIFICANTLY IMPROVED - HNSW insert now uses references`
 - Complete Refactor of storage and search modules for new HNSW architecture. `DONE`
 - Gotta destroy/refactor the utils module. It's a mess. `DONE`
 - Use gRPC/Protobuf for client-server communication?`
@@ -266,7 +265,8 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 ## References
 
 - [Curse of Dimensionality](https://en.wikipedia.org/wiki/Curse_of_dimensionality)
-- [Little HNSW Intro](https://www.pinecone.io/learn/series/faiss/hnsw/)
+- [Little Intro](https://www.pinecone.io/learn/series/faiss/hnsw/)
+- [Arvix HNSW Paper](https://arxiv.org/abs/2512.06636)
 
 ## Contributing
 

@@ -2,6 +2,6 @@
 /embeddings
 /.idea
 /docs
-/amazon_embeddings
+/examples/amazon_index
 datasets/amazon_products.csv
 .gitattributes
