@@ -1,106 +1,54 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use blaze_db::prelude::*;
-use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use std::path::PathBuf;
 
+#[allow(unused)]
+const BATCH_SIZE: usize = 4096;
+
+// TODO: Implement Resume logic and batch-wise indexing
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut hnsw_index = HNSW::new(100, 200, 16, 0.8);
-    let provider = Provider::init(
-        "http://localhost:1234/v1/embeddings",
-        "text-embedding-qwen3-embedding-0.6b",
-        "local",
+    let vector_data =
+        VectorData::read_from_disk(&PathBuf::from("embeddings/EMBEDDINGS.json")).await?;
+
+    // Post-load sanity check
+    assert_eq!(
+        vector_data.embedding.len(),
+        vector_data.chunk.len(),
+        "Embeddings and Chunks length mismatch!"
     );
-    let index_prefix = "amazon_product_index";
 
-    let batch_size = 4096;
-
-    let data_points = load_amazon_reviews_csv("datasets/amazon_products.csv").await?;
-
-    // Batch the data_points
-    let batched_data: Vec<Vec<CsvDataPoint>> = data_points
-        .chunks(batch_size)
-        .map(|chunk| chunk.to_vec())
-        .collect();
-
-    println!("\nTotal data points: {}", data_points.len());
-    println!("Total batches: {}", batched_data.len());
+    println!("Total embeddings: {}", vector_data.embedding.len());
 
     // Progress bar setup
-    let progress_bar = ProgressBar::new(batched_data.len() as u64);
+    let progress_bar = ProgressBar::new(vector_data.chunk.len() as u64);
     progress_bar.set_style(
         ProgressStyle::default_bar()
             .template("Batch: [{bar:60.cyan/blue}] {pos}/{len} ({percent}%)")?
             .progress_chars("●●-"),
     );
 
-    // Create a directory to store embeddings if it doesn't exist
-    let dir_path = PathBuf::from("amazon_embeddings");
-    if !dir_path.exists() {
-        tokio::fs::create_dir_all(&dir_path).await?;
-    }
+    let mut hnsw = HNSW::new(128, 200, 16, 0.8);
 
-    for (idx, batch) in batched_data.iter().enumerate() {
-        let _batch_vector_count = batch.len();
+    let index_path = PathBuf::from("examples/amazon_index/amazon_index_0");
 
-        // Get embeddings for the entire batch
-        let vector_embeddings = provider
-            .fetch_embeddings(
-                &batch
-                    .iter()
-                    .map(|data_point| data_point.title.clone())
-                    .collect::<Vec<String>>(),
-            )
-            .await?;
-
-        // Insert each embedding from batch into HNSW index
-        for (i, vector) in vector_embeddings.embedding.iter().enumerate() {
-            let data_point = &batch[i];
-            let random_level = hnsw_index.get_random_level();
-            hnsw_index.insert(vector, data_point.title.clone(), random_level);
-        }
-
-        // for data_point in batch {
-        //     let vector_embedding =
-        //         provider.fetch_embedding(&data_point.title).await?.embedding[0].clone();
-        //     let random_level = hnsw_index.get_random_level();
-        //     hnsw_index.insert(vector_embedding, data_point.title.clone(), random_level);
-        // }
-
-        let mut embedding_store = EmbeddingStore::new(hnsw_index.clone());
-
-        let filename = dir_path.join(format!("{}_{}", index_prefix, idx));
-
-        embedding_store
-            .write_to_disk(&filename)
-            .await
-            .with_context(|| format!("Failed to write batch {}", idx))?;
-
-        // println!(
-        //     "Batch {} saved ({} vectors, {} total nodes in HNSW)",
-        //     idx,
-        //     batch_vector_count,
-        //     hnsw_index.nodes.len()
-        // );
-
+    let start_indexing = std::time::Instant::now();
+    // Just DUMP embeddings into HNSW index 😒
+    for (embedding, metadata) in vector_data.embedding.iter().zip(vector_data.chunk.iter()) {
+        let random_level = hnsw.get_random_level();
+        hnsw.insert(embedding, metadata.to_string(), random_level);
         progress_bar.inc(1);
     }
 
-    progress_bar.finish_with_message("Done");
-    // println!();
-    // println!("Total data points embedded: {}", data_points.len());
-    // println!("Final HNSW index size: {} nodes", hnsw_index.nodes.len());
+    let mut index_store = EmbeddingStore::new(hnsw);
 
-    Ok(())
-}
+    index_store.write_to_disk(&index_path).await?;
 
-#[allow(unused)]
-async fn explore_csv() -> Result<()> {
-    let data_points = load_amazon_reviews_csv("datasets/amazon_products.csv").await?;
-    println!("Loaded {} data points from CSV", data_points.len());
-
+    let duration = start_indexing.elapsed();
+    progress_bar.finish_with_message("Index Completed");
+    println!("Took: {:?}", duration);
     Ok(())
 }
 
@@ -110,6 +58,7 @@ struct CsvDataPoint {
     title: String,
 }
 
+#[allow(unused)]
 async fn load_amazon_reviews_csv(file_path: &str) -> Result<Vec<CsvDataPoint>> {
     let mut rdr = csv::Reader::from_path(file_path)?;
     let mut data_points = Vec::with_capacity(10_000_000);
@@ -124,9 +73,8 @@ async fn load_amazon_reviews_csv(file_path: &str) -> Result<Vec<CsvDataPoint>> {
 
 #[tokio::test]
 async fn index_health_check() -> Result<()> {
-    let index_prefix = "amazon_product_index";
-    let (lastest_index, max_index) =
-        EmbeddingStore::load_lastest_index(index_prefix, "amazon_embeddings").await?;
+    let (lastest_index, _max_index) =
+        EmbeddingStore::load_lastest_index("amazon_index", "examples/amazon_index").await?;
 
     let hnsw_index = match lastest_index {
         Some(index) => index,
@@ -137,12 +85,62 @@ async fn index_health_check() -> Result<()> {
     };
 
     println!(
-        "Total nodes: {} in HNSW index: {}",
+        "Total nodes: {} in HNSW index",
         hnsw_index.hnsw_store.nodes.len(),
-        max_index
     );
 
-    assert_eq!(hnsw_index.hnsw_store.nodes.len(), 50 * 4096); // 50 batches of 4096
+    let batch_num = hnsw_index.hnsw_store.nodes.len() / BATCH_SIZE;
+
+    let csv_points = load_amazon_reviews_csv("datasets/amazon_products.csv").await?;
+
+    // Take first N * BATCH_SIZE rows from csv
+    let check_points = csv_points[..batch_num * BATCH_SIZE].to_vec();
+
+    // Get all metadata from index
+    let metadata_vec: Vec<String> = hnsw_index
+        .hnsw_store
+        .nodes
+        .clone()
+        .iter()
+        .map(|v| v.metadata.clone())
+        .collect();
+
+    use rayon::prelude::*;
+    check_points.par_iter().enumerate().for_each(|(i, point)| {
+        let matches = metadata_vec
+            .iter()
+            .filter(|meta| *meta == &point.title)
+            .count();
+        if matches == 0 {
+            panic!("Missing metadata in index: {}", point.title);
+        } else if matches > 1 {
+            println!(
+                "Warning: Duplicate metadata for point {}: {}",
+                i, point.title
+            );
+        }
+    });
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn check_csv() -> Result<()> {
+    let csv_points = load_amazon_reviews_csv("datasets/amazon_products.csv").await?;
+
+    use std::collections::HashSet;
+    let mut seen_titles = HashSet::new();
+    let mut duplicate_count = 0;
+
+    for point in &csv_points {
+        if !seen_titles.insert(&point.title) {
+            duplicate_count += 1;
+        }
+    }
+
+    println!("\nTotal unique titles: {}", seen_titles.len());
+    println!("Total duplicate titles: {}", duplicate_count);
+    println!("Total CSV rows: {}", csv_points.len());
 
     Ok(())
 }
@@ -150,9 +148,9 @@ async fn index_health_check() -> Result<()> {
 /// HOLY CRAP THIS IS FAST
 #[tokio::test]
 async fn bench_search() -> Result<()> {
-    let index_prefix = "amazon_product_index";
+    use colored::Colorize;
     let (lastest_index, _max_index) =
-        EmbeddingStore::load_lastest_index(index_prefix, "amazon_embeddings").await?;
+        EmbeddingStore::load_lastest_index("amazon_index", "examples/amazon_index").await?;
 
     let embedding_store = match lastest_index {
         Some(index) => index,

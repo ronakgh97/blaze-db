@@ -621,6 +621,32 @@ impl HNSW {
     pub fn get_metadata(&self, node_id: NodeId) -> Option<&String> {
         self.nodes.get(node_id).map(|node| &node.metadata)
     }
+
+    pub fn brute_force_search(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32)> {
+        let mut results: Vec<(NodeId, f32)> = self
+            .nodes
+            .par_iter()
+            .enumerate()
+            .map(|(id, node)| (id, self.similarity(query, &node.vector)))
+            .collect();
+
+        results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap()); // Higher similarity first
+        results.truncate(k);
+
+        results
+    }
+
+    pub fn brute_force_search_with_metadata(
+        &self,
+        query: &[f32],
+        k: usize,
+    ) -> Vec<(NodeId, f32, &str)> {
+        let results = self.brute_force_search(query, k);
+        results
+            .into_iter() // TODO:  parallel iterator not needed here?
+            .map(|(id, sim)| (id, sim, self.nodes[id].metadata.as_str()))
+            .collect()
+    }
 }
 
 /// Unique identifier for a node in the HNSW graph.
@@ -666,7 +692,7 @@ async fn main() -> Result<()> {
 
     // let loaded_vector_data = load_sample_hnsw_index().await;
 
-    let node_count = 20_000;
+    let node_count = 50_000;
     // let node_count = loaded_vector_data.hnsw_store.nodes.len();
     let dimension = 1024;
 
@@ -679,8 +705,8 @@ async fn main() -> Result<()> {
     let progress_bar = ProgressBar::new(node_count as u64);
     progress_bar.set_style(
         ProgressStyle::default_bar()
-            .template("[{bar:60.cyan/blue}] {pos}/{len} ({percent}%)")?
-            .progress_chars("●●-"),
+            .template("{spinner:.green} [{bar:60.cyan/blue}] {pos}/{len} ({percent}%)")?
+            .progress_chars("●●•-"),
     );
 
     let load_time = std::time::Instant::now();
@@ -721,6 +747,30 @@ async fn main() -> Result<()> {
     println!("\nTop {} nearest neighbors:", top_k);
 
     for (i, (node_id, similarity, _metadata)) in results.iter().enumerate() {
+        println!(
+            "  {}. Node {:5} - similarity: {:.4}\n Metadata: {}",
+            i + 1,
+            node_id.to_string().yellow(),
+            similarity.to_string().green(),
+            HNSW::get_metadata(&hnsw, *node_id)
+                .unwrap()
+                .to_string()
+                .dimmed()
+                .green()
+        );
+    }
+
+    let start_brute = std::time::Instant::now();
+    let brute_results = hnsw.brute_force_search_with_metadata(&query_vector, top_k);
+    let brute_time = start_brute.elapsed().as_secs_f64();
+    println!(
+        "\nBrute-force search completed in: {}s",
+        brute_time.to_string().yellow()
+    );
+
+    println!("\nTop {} nearest neighbors (Brute-force):", top_k);
+
+    for (i, (node_id, similarity, _metadata)) in brute_results.iter().enumerate() {
         println!(
             "  {}. Node {:5} - similarity: {:.4}\n Metadata: {}",
             i + 1,

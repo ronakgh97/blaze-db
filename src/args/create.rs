@@ -1,6 +1,6 @@
 use crate::core::ClientConfig;
 use crate::server::{
-    CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse
+    CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse,
 };
 use anyhow::Result;
 use colored::Colorize;

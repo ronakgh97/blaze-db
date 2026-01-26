@@ -41,6 +41,9 @@ fn main() -> Result<()> {
             unique_records.push(record);
         } else {
             duplicate_count += 1;
+            if duplicate_count <= 20 {
+                println!("Duplicate #{}: {}", duplicate_count, record.title);
+            }
         }
     }
 
