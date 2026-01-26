@@ -1,6 +1,6 @@
 use blaze_db::prelude::{QueryRequest, QueryResponse};
 
-// This test requires for server to be running, and have War and peace index created.
+// This test requires for server to be running, and amazon product index created.
 #[ignore]
 #[tokio::test]
 async fn test_cache_and_bench() -> anyhow::Result<()> {
@@ -8,9 +8,9 @@ async fn test_cache_and_bench() -> anyhow::Result<()> {
     let client = reqwest::Client::new();
 
     let query_request = QueryRequest {
-        query: "War and Peace".to_string(),
+        query: "Gaming RTX 4060 Laptop with 165Hz Display ".to_string(),
         database: "test_db".to_string(),
-        source: "test_src".to_string(),
+        source: "default_src".to_string(),
         top_k: 5,
     };
 

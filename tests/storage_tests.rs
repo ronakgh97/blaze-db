@@ -144,7 +144,7 @@ fn test_vector_data_memory_usage() {
         dimensions: 100,
     };
 
-    let memory_mb = vector_data.memory_usage_mb();
+    let memory_mb = vector_data.data_size_mb();
     assert!(memory_mb > 0.0);
     // Should be approximately 400 bytes (100 * 4) + 4 bytes for "test" = ~0.0004 MB
     assert!(memory_mb < 1.0); // Should be less than 1MB
@@ -160,7 +160,7 @@ fn test_vector_data_empty() {
 
     assert_eq!(vector_data.get_vector(0), None);
     assert_eq!(vector_data.get_chunk(0), None);
-    assert_eq!(vector_data.memory_usage_mb(), 0.0);
+    assert_eq!(vector_data.data_size_mb(), 0.0);
 }
 
 #[test]

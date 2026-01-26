@@ -2,6 +2,7 @@ use anyhow::Result;
 use bincode::{Decode, Encode};
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 // A Bridge Wrapper struct to hold vector data and associated metadata, for outside module usage
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -12,6 +13,14 @@ pub struct VectorData {
 }
 
 impl VectorData {
+    /// Create an empty VectorData
+    pub fn new() -> Self {
+        Self {
+            chunk: Vec::new(),
+            embedding: Vec::new(),
+            dimensions: 0,
+        }
+    }
     /// Get a specific vector by index
     pub fn get_vector(&self, index: usize) -> Option<&[f32]> {
         self.embedding.get(index).map(|v| v.as_slice())
@@ -22,8 +31,9 @@ impl VectorData {
         self.chunk.get(index).map(|s| s.as_str())
     }
 
-    /// Memory usage estimate in MB
-    pub fn memory_usage_mb(&self) -> f64 {
+    /// Calculate the raw data size in MB (vectors + metadata strings only)
+    /// This represents the actual memory footprint of the data, not the serialized file size.
+    pub fn data_size_mb(&self) -> f64 {
         let vector_bytes: usize = self
             .embedding
             .par_iter()
@@ -35,6 +45,36 @@ impl VectorData {
             .map(|c| c.len() * size_of::<u8>())
             .sum();
         (vector_bytes + metadata_bytes) as f64 / (1024.0 * 1024.0)
+    }
+
+    /// Total number of embeddings
+    pub fn len(&self) -> usize {
+        self.embedding.len()
+    }
+
+    /// Check if empty
+    pub fn is_empty(&self) -> bool {
+        self.embedding.is_empty()
+    }
+
+    // Read VectorData from disk JSON file (Memory mapped)
+    pub async fn read_from_disk(path: &PathBuf) -> Result<Self> {
+        let path = path.clone();
+        let json_data = tokio::task::spawn_blocking(move || -> Result<Self> {
+            let file = std::fs::File::open(path)?;
+            let mmap = unsafe { memmap2::Mmap::map(&file)? };
+            let data_str = std::str::from_utf8(&mmap)?;
+            let vector_data: VectorData = serde_json::from_str(data_str)?;
+            Ok(vector_data)
+        });
+        Ok(json_data.await??)
+    }
+
+    // Write VectorData to disk as a JSON file
+    pub async fn write_to_disk(&self, path: &PathBuf) -> Result<()> {
+        let json_data = serde_json::to_string_pretty(self)?;
+        tokio::fs::write(path, json_data).await?;
+        Ok(())
     }
 }
 
