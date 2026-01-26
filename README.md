@@ -33,13 +33,15 @@ blzsrv serve
 ```
 
 - Download the Index
-  here: [Google Drive Link](https://drive.google.com/file/d/1IbTRDUYr9FPWcPDcA-roXNoRKefGCZSg/view?usp=sharing)
-- Checksum (Sha256): **036DE4770939C4ED4515E2CBDD59C0B1A9B0827F7891CFD4291AA567C7C3C5B4**
+  here: [Google Drive Link](https://drive.google.com/file/d/1rnnpMNYzbwkOr9dIetZW83JeF5WCV5cL/view?usp=sharing)
+- Checksum (Sha256): **20e7ec6fb00fc7d6988daa0a67349a76898a44dfd46c899cc841f937f0d429b8**
 - Extract to `~/.blaze/sources/default_src/amazon_products_2023/`
 
 ### Query using CLI Client
 
 ```shell
+blzdb create --database amazon_products_2023 --source default_src
+
 blzdb query --database amazon_products_2023 --source default_src --search "Wireless Bluetooth Headphones with Noise Cancellation" --top_k 10
 ```
 
