@@ -3,8 +3,8 @@ set -e
 
 # Create necessary directories with proper permissions
 mkdir -p /home/blazedb/.config/blaze /home/blazedb/blaze/sources
-chmod -R 777 /home/blazedb/blaze/sources
-chmod -R 777 /home/blazedb/.config/blaze
+chmod -R 755 /home/blazedb/blaze/sources
+chmod -R 755 /home/blazedb/.config/blaze
 
 # Initialize config if it doesn't exist
 if [ ! -f "/home/blazedb/.config/blaze/server_file.toml" ]; then
@@ -19,7 +19,7 @@ fi
 if [ ! -d "/home/blazedb/blaze/sources/default_src" ]; then
     echo "Source directory not found. Creating default_src..."
     mkdir -p /home/blazedb/blaze/sources/default_src
-    chmod -R 777 /home/blazedb/blaze/sources/default_src
+    chmod -R 755 /home/blazedb/blaze/sources/default_src
     echo "Source directory created."
 else
     echo "Source directory found."
