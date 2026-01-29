@@ -522,14 +522,58 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
     match query_search(payload, PROVIDER.wait()).await {
         Ok(response) => {
             info!(
-                "[POST /query] Query successful, returning {} results",
+                "[POST /query] Query successful on database {}, returning {} results",
+                db_name,
                 response.results.len()
             );
             (StatusCode::OK, Json(response))
         }
         Err(e) => {
+            if let Some(error_type) = e.downcast_ref::<ErrorTypes>() {
+                match error_type {
+                    ErrorTypes::DatabaseNotFound(msg) => {
+                        error!(
+                            "[POST /query] Database not found error during query: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NOT_FOUND,
+                            Json(QueryResponse {
+                                results: vec![],
+                                search_time_sec: 0.0,
+                                io_time_sec: 0.0,
+                            }),
+                        );
+                    }
+
+                    ErrorTypes::SourceNotFound(msg) => {
+                        error!("[POST /query] Source not found error during query: {}", msg);
+                        return (
+                            StatusCode::NOT_FOUND,
+                            Json(QueryResponse {
+                                results: vec![],
+                                search_time_sec: 0.0,
+                                io_time_sec: 0.0,
+                            }),
+                        );
+                    }
+
+                    ErrorTypes::IndexNotFound(msg) => {
+                        error!("[POST /query] Index not found error during query: {}", msg);
+                        return (
+                            StatusCode::NOT_FOUND,
+                            Json(QueryResponse {
+                                results: vec![],
+                                search_time_sec: 0.0,
+                                io_time_sec: 0.0,
+                            }),
+                        );
+                    }
+                    _ => {}
+                }
+            }
             error!(
-                "[POST /query] Query failed on database: {} - Error: {:?}",
+                "[POST /query] Failed to query database: {} - Error: {:?}",
                 db_name, e
             );
             (
@@ -577,6 +621,7 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
 pub enum ErrorTypes {
     DatabaseNotFound(String),
     SourceNotFound(String),
+    IndexNotFound(String),
     DatabaseAlreadyExists(String),
     SourceAlreadyExists(String),
     InvalidField(String),
@@ -587,6 +632,7 @@ impl Display for ErrorTypes {
         match self {
             ErrorTypes::DatabaseNotFound(msg) => write!(f, "Database not found: {}", msg),
             ErrorTypes::SourceNotFound(msg) => write!(f, "Source not found: {}", msg),
+            ErrorTypes::IndexNotFound(msg) => write!(f, "Index not found: {}", msg),
             ErrorTypes::DatabaseAlreadyExists(msg) => {
                 write!(f, "Database already exists: {}", msg)
             }

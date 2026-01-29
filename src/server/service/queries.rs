@@ -32,8 +32,6 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
             ))
         })?;
 
-    //TODO: Check fot valid embeddings first
-
     info!("Generating embedding for query: '{}'", query);
 
     // Generate embedding for query
@@ -63,7 +61,11 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                         "Failed to read embeddings metadata for cache validation: {}",
                         e
                     );
-                    return Err(anyhow::anyhow!("Failed to read embeddings metadata: {}", e));
+                    return Err(ErrorTypes::IndexNotFound(format!(
+                        "Failed to validate cache, index not found, Error: {}",
+                        e
+                    ))
+                    .into());
                 }
             };
 
@@ -87,15 +89,27 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 let metadata = match read_embeddings_metadata(&db_path).await {
                     Ok(meta) => Arc::new(meta),
                     Err(e) => {
-                        error!("Failed to read embeddings metadata: {}", e);
-                        return Err(anyhow::anyhow!("Failed to read embeddings metadata: {}", e));
+                        error!(
+                            "Failed to read embeddings metadata for cache validation: {}",
+                            e
+                        );
+                        return Err(ErrorTypes::IndexNotFound(format!(
+                            "Failed to validate cache, index not found, Error: {}",
+                            e
+                        ))
+                        .into());
                     }
                 };
 
-                // Try to get the store or return error
+                // Try to get the store or return No Index error
                 let store = match store {
                     Some(s) => Arc::new(s),
-                    None => return Err(anyhow::anyhow!("No index found")),
+                    None => {
+                        return Err(ErrorTypes::IndexNotFound(
+                            "No index found in database".to_string(),
+                        )
+                        .into());
+                    }
                 };
 
                 // Update cache
@@ -117,14 +131,23 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 Ok(meta) => Arc::new(meta),
                 Err(e) => {
                     error!("Failed to read embeddings metadata: {}", e);
-                    return Err(anyhow::anyhow!("Failed to read embeddings metadata: {}", e));
+                    return Err(ErrorTypes::IndexNotFound(format!(
+                        "Failed to read embeddings metadata: {}",
+                        e
+                    ))
+                    .into());
                 }
             };
 
             // Try to get the store or return error
             let store = match store {
                 Some(s) => Arc::new(s),
-                None => return Err(anyhow::anyhow!("No index found")),
+                None => {
+                    return Err(ErrorTypes::IndexNotFound(
+                        "No index found in database".to_string(),
+                    )
+                    .into());
+                }
             };
 
             // Add to cache
