@@ -32,6 +32,8 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
             ))
         })?;
 
+    //TODO: Check fot valid embeddings first
+
     info!("Generating embedding for query: '{}'", query);
 
     // Generate embedding for query

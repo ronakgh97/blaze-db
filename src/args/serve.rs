@@ -4,8 +4,9 @@ use crate::server::start_server;
 use crate::utils::Provider;
 use crate::{error, info, warn};
 use anyhow::Result;
+use dotenv::dotenv;
 
-pub async fn serve_run(port: Option<u16>, _source: Option<Vec<String>>) -> Result<Provider> {
+pub async fn serve_run(cli_port: Option<u16>, _source: Option<Vec<String>>) -> Result<Provider> {
     info!("Starting the Server...");
 
     let config =
@@ -16,26 +17,28 @@ pub async fn serve_run(port: Option<u16>, _source: Option<Vec<String>>) -> Resul
         vec!["default_src".to_string()]
     });
 
-    // Check env for port override
-    let env_port = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse::<u16>().ok());
-    let port = env_port.or(port);
+    dotenv().ok();
 
-    // Use 8080, if no one cares about port :)
-    let port = port.unwrap_or(8080);
+    let final_port = if let Some(p) = cli_port {
+        p
+    } else if let Ok(env_port) = std::env::var("PORT") {
+        env_port
+            .parse::<u16>()
+            .expect("PORT must be a valid number")
+    } else {
+        8080
+    };
 
     let url = std::env::var("EMBEDDING_API_URL")
-        .unwrap_or_else(|_| "http://localhost:1234/v1/embeddings".to_string());
-
-    let model = std::env::var("EMBEDDING_MODEL")
-        .unwrap_or_else(|_| "text-embedding-qwen3-embedding-0.6b".to_string());
-
-    let api_key = std::env::var("EMBEDDING_API_KEY").unwrap_or_else(|_| "local".to_string());
+        .expect("EMBEDDING_API_URL environment variable is required");
+    let model =
+        std::env::var("EMBEDDING_MODEL").expect("EMBEDDING_MODEL environment variable is required");
+    let api_key = std::env::var("EMBEDDING_API_KEY")
+        .expect("EMBEDDING_API_KEY environment variable is required");
 
     // Init provider at the start of the server
     let provider = Provider::init(url, model, api_key);
-    info!("Using Embedding Provider: \n{:?}", provider);
+    info!("{:?}", Provider::pretty_display(&provider));
 
     // // Get sources or use all sources from config
     // let source = if let Some(src) = source {
@@ -68,7 +71,7 @@ pub async fn serve_run(port: Option<u16>, _source: Option<Vec<String>>) -> Resul
         "Starting server with {} valid source(s)",
         valid_sources.len()
     );
-    start_server(port, valid_sources, &provider).await?;
+    start_server(final_port, valid_sources, &provider).await?;
 
     Ok(provider)
 }
