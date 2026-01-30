@@ -125,7 +125,7 @@ pub async fn insert_run(
     let node_count = hnsw.nodes.len();
     let mut embedding_store = EmbeddingStore::new(hnsw);
     embedding_store
-        .write_to_disk(&final_filename)
+        .write_to_disk(&final_filename, final_index_number)
         .await
         .with_context(|| "Failed to write final index")?;
 
@@ -247,7 +247,7 @@ pub async fn embed_run(
     let node_count = hnsw.nodes.len();
     let mut embedding_store = EmbeddingStore::new(hnsw);
     embedding_store
-        .write_to_disk(&final_filename)
+        .write_to_disk(&final_filename, final_index_number)
         .await
         .with_context(|| "Failed to write final index")?;
 

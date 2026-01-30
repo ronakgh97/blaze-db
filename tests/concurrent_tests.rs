@@ -35,7 +35,7 @@ async fn test_concurrent_writes_different_databases() {
             // Save to disk
             let index_path = db_path.join("HNSW_INDEX_1".to_string());
             let mut store = EmbeddingStore::new(hnsw.clone());
-            store.write_to_disk(&index_path).await.unwrap();
+            store.write_to_disk(&index_path, 1).await.unwrap();
 
             (db_idx, hnsw.nodes.len())
         });
@@ -125,7 +125,7 @@ async fn test_concurrent_writes_same_database() {
             // Save to disk
             let index_path = db_path.join("HNSW_INDEX_1");
             let mut store = EmbeddingStore::new(hnsw.clone());
-            store.write_to_disk(&index_path).await.unwrap();
+            store.write_to_disk(&index_path, 1).await.unwrap();
 
             let write_elapsed = write_start.elapsed();
 
@@ -190,7 +190,7 @@ async fn test_concurrent_reads_with_write() {
 
     let index_path = db_path.join("HNSW_INDEX_1");
     let mut store = EmbeddingStore::new(hnsw);
-    store.write_to_disk(&index_path).await.unwrap();
+    store.write_to_disk(&index_path, 1).await.unwrap();
 
     // Create RwLock for the database
     let db_lock = Arc::new(RwLock::new(()));
@@ -262,7 +262,7 @@ async fn test_concurrent_reads_with_write() {
 
         // Save
         let index_path = db_path_writer.join("HNSW_INDEX_2");
-        store.write_to_disk(&index_path).await.unwrap();
+        store.write_to_disk(&index_path, 1).await.unwrap();
 
         let write_elapsed = write_start.elapsed();
 
@@ -355,7 +355,7 @@ async fn test_cumulative_writes() {
         let new_index = max_index + 1;
         let index_path = db_path.join(format!("HNSW_INDEX_{}", new_index));
         let mut store = EmbeddingStore::new(hnsw.clone());
-        store.write_to_disk(&index_path).await.unwrap();
+        store.write_to_disk(&index_path, 1).await.unwrap();
 
         println!(
             "Batch {}: {}→{} nodes, saved to HNSW_INDEX_{}",

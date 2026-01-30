@@ -30,7 +30,7 @@ async fn test_write_read_binary() {
     let mut store = EmbeddingStore::new(hnsw);
 
     // Write binary
-    store.write_to_disk(&file_path).await.unwrap();
+    store.write_to_disk(&file_path, 0).await.unwrap();
 
     // Read binary back
     let binary_path = format!("{}.bin", file_path.to_str().unwrap());
@@ -65,7 +65,7 @@ async fn test_read_binary_multiple_files() {
 
         let mut store = EmbeddingStore::new(cumulative_hnsw.clone());
         let file_path = embeddings_dir.join(format!("batch_{}", i));
-        store.write_to_disk(&file_path).await.unwrap();
+        store.write_to_disk(&file_path, 0).await.unwrap();
     }
 
     // Read all files
@@ -234,7 +234,7 @@ async fn test_embedding_store_with_checksum() {
     let mut store = EmbeddingStore::new(hnsw);
 
     // Write to disk (should generate checksum)
-    store.write_to_disk(&file_path).await.unwrap();
+    store.write_to_disk(&file_path, 0).await.unwrap();
 
     // Load it back and verify
     let binary_path = format!("{}.bin", file_path.to_str().unwrap());
@@ -261,7 +261,7 @@ async fn test_concurrent_file_loading_thread_safety() {
     }
 
     let mut store = EmbeddingStore::new(hnsw);
-    store.write_to_disk(&file_path).await.unwrap();
+    store.write_to_disk(&file_path, 0).await.unwrap();
 
     let binary_path = std::path::PathBuf::from(format!("{}.bin", file_path.to_str().unwrap()));
 
@@ -310,7 +310,7 @@ async fn test_concurrent_different_files_loading() {
         }
 
         let mut store = EmbeddingStore::new(hnsw);
-        store.write_to_disk(&file_path).await.unwrap();
+        store.write_to_disk(&file_path, 0).await.unwrap();
 
         file_paths.push(std::path::PathBuf::from(format!(
             "{}.bin",

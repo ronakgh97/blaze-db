@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
 
     let mut index_store = EmbeddingStore::new(hnsw);
 
-    index_store.write_to_disk(&index_path).await?;
+    index_store.write_to_disk(&index_path, 0).await?;
 
     let duration = start_indexing.elapsed();
     progress_bar.finish_with_message("Index Completed");

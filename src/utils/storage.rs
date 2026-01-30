@@ -21,10 +21,12 @@ pub struct EmbeddingStore {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct EmbeddingMetadata {
+    pub index_version: usize,
     pub checksum: String,
     pub total_vectors: usize,
     pub dimensions: usize,
-    pub last_modified: u64,
+    pub last_modified: String,
+    pub file_size_mb: usize,
 }
 
 impl EmbeddingStore {
@@ -138,7 +140,7 @@ impl EmbeddingStore {
     }
 
     /// Write the EmbeddingStore to disk and store the hash checksum
-    pub async fn write_to_disk(&mut self, file_path: &PathBuf) -> Result<()> {
+    pub async fn write_to_disk(&mut self, file_path: &PathBuf, file_index: usize) -> Result<()> {
         // Add extension if not present
         let formatted_path = if file_path
             .extension()
@@ -165,10 +167,12 @@ impl EmbeddingStore {
                 .ok_or_else(|| anyhow!("File path has no parent directory"))?
                 .to_path_buf(), // TODO: Unwrap safe?
             &EmbeddingMetadata {
+                index_version: file_index,
                 checksum,
                 total_vectors: self.hnsw_store.nodes.len(),
                 dimensions: self.hnsw_store.nodes[0].vector.len(), //TODO: Very hacky but works for now (hopes does not panic 🛐)
-                last_modified: chrono::Utc::now().timestamp_millis() as u64,
+                last_modified: chrono::Utc::now().to_rfc3339(),
+                file_size_mb: initial_bytes.len() / (1024 * 1024),
             },
         )
         .await?;
@@ -182,7 +186,11 @@ impl EmbeddingStore {
     }
 
     #[allow(unused)]
-    pub async fn write_to_disk_json(&mut self, file_path: PathBuf) -> Result<()> {
+    pub async fn write_to_disk_json(
+        &mut self,
+        file_path: PathBuf,
+        file_index: usize,
+    ) -> Result<()> {
         // Add extension if not present
         let formatted_path = if file_path
             .extension()
@@ -208,10 +216,12 @@ impl EmbeddingStore {
                 .ok_or_else(|| anyhow!("File path has no parent directory"))?
                 .to_path_buf(), // TODO: Unwrap safe?
             &EmbeddingMetadata {
+                index_version: file_index,
                 checksum,
                 total_vectors: self.hnsw_store.nodes.len(),
                 dimensions: self.hnsw_store.nodes[0].vector.len(), //TODO: Very hacky but works for now (hopes does not panic 🛐)
-                last_modified: chrono::Utc::now().timestamp_millis() as u64,
+                last_modified: chrono::Utc::now().to_rfc3339(),
+                file_size_mb: initial_json.len() / (1024 * 1024),
             },
         )
         .await?;
@@ -260,30 +270,36 @@ impl EmbeddingStore {
 }
 
 /// Write or update the EmbeddingMetadata on disk, this is auto called when writing the EmbeddingStore
+/// Thread-safe with atomic writes using temp-file-rename pattern
 async fn write_or_update_metadata(dir_path: &PathBuf, metadata: &EmbeddingMetadata) -> Result<()> {
     let metadata_path = dir_path.join("metadata.json");
+    let metadata = metadata.clone();
 
-    let json_data = serde_json::to_string_pretty(metadata)
-        .with_context(|| "Failed to serialize metadata to JSON")?;
-
-    fs::write(&metadata_path, json_data)
-        .await
-        .with_context(|| format!("Failed to write metadata to {:?}", metadata_path))?;
+    // Use blocking task for synchronous file operations
+    tokio::task::spawn_blocking(move || {
+        let store: SingleValueStore<EmbeddingMetadata> = SingleValueStore::new(metadata_path)?;
+        store.set(metadata)?;
+        Ok::<(), anyhow::Error>(())
+    })
+    .await
+    .with_context(|| "Blocking task panicked while writing metadata")??;
 
     Ok(())
 }
 
 #[allow(unused)]
 /// Read the EmbeddingMetadata from disk, good for invalidate cache or integrity checks
+/// Thread-safe - uses RwLock internally
 pub async fn read_embeddings_metadata(path: &PathBuf) -> Result<EmbeddingMetadata> {
     let metadata_path = path.join("metadata.json");
 
-    let json_data = fs::read_to_string(&metadata_path)
-        .await
-        .with_context(|| format!("Failed to read metadata from {:?}", metadata_path))?;
-
-    let metadata: EmbeddingMetadata = serde_json::from_str(&json_data)
-        .with_context(|| "Failed to deserialize metadata from JSON")?;
+    // Use blocking task for synchronous file operations
+    let metadata = tokio::task::spawn_blocking(move || {
+        let store: SingleValueStore<EmbeddingMetadata> = SingleValueStore::new(metadata_path)?;
+        store.get()
+    })
+    .await
+    .with_context(|| "Blocking task panicked while reading metadata")??;
 
     Ok(metadata)
 }
@@ -295,6 +311,7 @@ pub async fn read_embeddings_metadata(path: &PathBuf) -> Result<EmbeddingMetadat
 /// Thread-safe DataStore with in-memory HashMap and persistent JSON storage
 /// Uses Arc<RwLock<T>> for concurrent access and memmap2 for fast reads
 #[derive(Clone)]
+#[allow(dead_code)] // Will be used for configs (server_file.toml, etc.)
 pub struct DataStore<K, V>
 where
     K: Eq + Hash + Clone + Serialize + for<'de> Deserialize<'de>,
@@ -306,6 +323,7 @@ where
     path: PathBuf,
 }
 
+#[allow(dead_code)] // Will be used for configs in the future
 impl<K, V> DataStore<K, V>
 where
     K: Eq + Hash + Clone + Serialize + for<'de> Deserialize<'de>,
@@ -476,7 +494,7 @@ where
         let file = File::open(&self.path).context("Failed to open file for reading")?;
 
         // Use memmap2 for fast memory-mapped file access
-        let mmap = unsafe { memmap2::Mmap::map(&file).context("Failed to create memory map")? };
+        let mmap = unsafe { Mmap::map(&file).context("Failed to create memory map")? };
 
         // Deserialize from the memory-mapped data
         let loaded_data: HashMap<K, V> =
@@ -522,6 +540,185 @@ where
             data.insert(key, value);
         }
 
+        drop(data);
+
+        self.save_to_disk()?;
+
+        Ok(())
+    }
+}
+
+/// Thread-safe SingleValueStore for storing a single value with persistent JSON storage
+/// Specialized version of DataStore for single values (like metadata, configs)
+/// Uses Arc<RwLock<T>> for concurrent access and atomic writes with temp-file-rename pattern
+#[derive(Clone)]
+pub struct SingleValueStore<V>
+where
+    V: Clone + Serialize + for<'de> Deserialize<'de>,
+{
+    /// In-memory storage with thread-safety
+    data: Arc<RwLock<Option<V>>>,
+    /// File path for persistence
+    path: PathBuf,
+}
+
+impl<V> SingleValueStore<V>
+where
+    V: Clone + Serialize + for<'de> Deserialize<'de>,
+{
+    /// Create a new SingleValueStore with the given file path
+    pub fn new(path: PathBuf) -> Result<Self> {
+        let data = Arc::new(RwLock::new(None));
+        let store = SingleValueStore { data, path };
+
+        // Load existing data if file exists
+        if store.path.exists() {
+            store.load_from_disk()?;
+        }
+
+        Ok(store)
+    }
+
+    /// Set the value (replaces existing value)
+    pub fn set(&self, value: V) -> Result<()> {
+        let mut data = self
+            .data
+            .write()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))?;
+
+        *data = Some(value);
+        drop(data); // Release lock before disk I/O
+
+        // Persist to disk with atomic write
+        self.save_to_disk()?;
+
+        Ok(())
+    }
+
+    /// Get the value (returns error if no value exists)
+    pub fn get(&self) -> Result<V> {
+        let data = self
+            .data
+            .read()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire read lock: {}", e))?;
+
+        data.clone()
+            .ok_or_else(|| anyhow::anyhow!("No value stored at {:?}", self.path))
+    }
+
+    /// Try to get the value (returns None if no value exists)
+    #[allow(dead_code)]
+    pub fn try_get(&self) -> Result<Option<V>> {
+        let data = self
+            .data
+            .read()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire read lock: {}", e))?;
+
+        Ok(data.clone())
+    }
+
+    /// Clear the value
+    #[allow(dead_code)]
+    pub fn clear(&self) -> Result<()> {
+        let mut data = self
+            .data
+            .write()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))?;
+
+        *data = None;
+        drop(data);
+
+        // Delete the file
+        if self.path.exists() {
+            std::fs::remove_file(&self.path)
+                .with_context(|| format!("Failed to remove file: {:?}", self.path))?;
+        }
+
+        Ok(())
+    }
+
+    /// Save data to disk using atomic write-then-rename pattern
+    /// This ensures that reads never see partial writes
+    pub fn save_to_disk(&self) -> Result<()> {
+        let data = self
+            .data
+            .read()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire read lock: {}", e))?;
+
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent).context("Failed to create parent directory")?;
+        }
+
+        // Write to temporary file first (atomic write pattern)
+        let temp_path = self.path.with_extension("tmp");
+
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&temp_path)
+            .with_context(|| format!("Failed to open temp file: {:?}", temp_path))?;
+
+        let mut writer = BufWriter::new(file);
+
+        serde_json::to_writer_pretty(&mut writer, &*data)
+            .context("Failed to serialize data to JSON")?;
+
+        writer.flush().context("Failed to flush writer")?;
+        drop(writer); // Ensure file is closed
+
+        // Atomic rename (on most systems, this is atomic even across processes)
+        std::fs::rename(&temp_path, &self.path)
+            .with_context(|| format!("Failed to rename {:?} to {:?}", temp_path, self.path))?;
+
+        Ok(())
+    }
+
+    /// Load data from disk using memmap2 for fast reading
+    pub fn load_from_disk(&self) -> Result<()> {
+        let file = File::open(&self.path).context("Failed to open file for reading")?;
+
+        // Use memmap2 for fast memory-mapped file access
+        let mmap = unsafe { Mmap::map(&file).context("Failed to create memory map")? };
+
+        // Deserialize from the memory-mapped data
+        let loaded_data: V =
+            serde_json::from_slice(&mmap).context("Failed to deserialize JSON data")?;
+
+        let mut data = self
+            .data
+            .write()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))?;
+
+        *data = Some(loaded_data);
+
+        Ok(())
+    }
+
+    /// Reload data from disk (useful for synchronization)
+    #[allow(dead_code)]
+    pub fn reload(&self) -> Result<()> {
+        if self.path.exists() {
+            self.load_from_disk()
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Update the value using a closure (atomic update)
+    #[allow(dead_code)]
+    pub fn update<F>(&self, updater: F) -> Result<()>
+    where
+        F: FnOnce(Option<V>) -> Option<V>,
+    {
+        let mut data = self
+            .data
+            .write()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))?;
+
+        let current = data.take();
+        *data = updater(current);
         drop(data);
 
         self.save_to_disk()?;

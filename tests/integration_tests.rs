@@ -32,7 +32,7 @@ async fn test_ingest_to_storage_pipeline() {
 
     // Test storage
     let output_path = dir.path().join("embeddings");
-    store.write_to_disk(&output_path).await.unwrap();
+    store.write_to_disk(&output_path, 0).await.unwrap();
 
     // Verify file was created
     let binary_path = format!("{}.bin", output_path.to_str().unwrap());
@@ -87,8 +87,8 @@ async fn test_multiple_batch_processing() {
     let batch1_path = dir.path().join("batch_0");
     let batch2_path = dir.path().join("batch_1");
 
-    store1.write_to_disk(&batch1_path).await.unwrap();
-    store2.write_to_disk(&batch2_path).await.unwrap();
+    store1.write_to_disk(&batch1_path, 0).await.unwrap();
+    store2.write_to_disk(&batch2_path, 1).await.unwrap();
 
     // Verify both files exist
     assert!(std::path::Path::new(&format!("{}.bin", batch1_path.to_str().unwrap())).exists());
@@ -136,7 +136,7 @@ async fn test_unicode_text_processing() {
 
     // Test storage and retrieval
     let output_path = dir.path().join("unicode_embeddings");
-    store.write_to_disk(&output_path).await.unwrap();
+    store.write_to_disk(&output_path, 0).await.unwrap();
 
     let binary_path = format!("{}.bin", output_path.to_str().unwrap());
     let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
@@ -173,7 +173,7 @@ async fn test_large_embedding_dimensions() {
     // Test storage and retrieval
     let output_path = dir.path().join("large_embeddings");
     let mut store = EmbeddingStore::new(hnsw);
-    store.write_to_disk(&output_path).await.unwrap();
+    store.write_to_disk(&output_path, 0).await.unwrap();
 
     let binary_path = format!("{}.bin", output_path.to_str().unwrap());
     let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
