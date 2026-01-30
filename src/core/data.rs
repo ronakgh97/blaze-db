@@ -26,6 +26,12 @@ impl Source {
                     source.push(new_source);
                 }
             }
+            // Some(source) => {
+            //     if source.contains(&new_source) {
+            //         anyhow::bail!("Source '{}' already exists", new_source);
+            //     }
+            //     source.push(new_source);
+            // }
             None => self.source_name = Some(vec![new_source]),
         }
         Ok(self)

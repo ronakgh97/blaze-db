@@ -335,6 +335,50 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
             (StatusCode::OK, Json(response))
         }
         Err(e) => {
+            if let Some(error_type) = e.downcast_ref::<ErrorTypes>() {
+                match error_type {
+                    ErrorTypes::DatabaseNotFound(msg) => {
+                        error!(
+                            "[POST /embed] Database not found error during embed: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NOT_FOUND,
+                            Json(EmbedResponse {
+                                database: "null".to_string(),
+                                source: "null".to_string(),
+                                total_entries: 0,
+                            }),
+                        );
+                    }
+
+                    ErrorTypes::SourceNotFound(msg) => {
+                        error!("[POST /embed] Source not found error during embed: {}", msg);
+                        return (
+                            StatusCode::NOT_FOUND,
+                            Json(EmbedResponse {
+                                database: "null".to_string(),
+                                source: "null".to_string(),
+                                total_entries: 0,
+                            }),
+                        );
+                    }
+
+                    ErrorTypes::InvalidField(msg) => {
+                        error!("[POST /embed] Invalid field error during embed: {}", msg);
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(EmbedResponse {
+                                database: "null".to_string(),
+                                source: "null".to_string(),
+                                total_entries: 0,
+                            }),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+
             error!(
                 "[POST /embed] Failed to embed data into database: {} - Error: {:?}",
                 payload.database.clone(),
