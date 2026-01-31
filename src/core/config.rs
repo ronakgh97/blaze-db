@@ -417,24 +417,6 @@ impl ServerFile {
     pub fn snapshot(&self) -> Result<HashMap<String, Source>> {
         self.store.snapshot()
     }
-
-    /// Get statistics about the server file
-    pub fn stats(&self) -> Result<ServerStats> {
-        let sources = self.get_all_sources()?;
-        let total_sources = sources.len();
-        let total_vector_bases: usize = sources.iter().map(|s| s.vector_bases.len()).sum();
-        let total_nodes: u32 = sources
-            .iter()
-            .flat_map(|s| &s.vector_bases)
-            .map(|vb| vb.node_count)
-            .sum();
-
-        Ok(ServerStats {
-            total_sources,
-            total_vector_bases,
-            total_nodes,
-        })
-    }
 }
 
 /// Report from syncing sources with filesystem
@@ -450,15 +432,6 @@ impl SyncReport {
     pub fn is_clean(&self) -> bool {
         self.orphaned_in_store.is_empty() && self.untracked_on_fs.is_empty()
     }
-}
-
-/// Statistics about the server file
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerStats {
-    // TODO: Too vague, improve later
-    pub total_sources: usize,
-    pub total_vector_bases: usize,
-    pub total_nodes: u32,
 }
 
 /// Get the base path where all sources are stored

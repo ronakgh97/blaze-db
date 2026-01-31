@@ -3,32 +3,50 @@ use colored::Colorize;
 
 pub async fn print_ascii() -> anyhow::Result<()> {
     let ascii_art = r#"
-    ▄▄    ▄▄                        ▄▄ ▄▄
-    ██    ██                        ██ ██
-    ████▄ ██  ▀▀█▄ ▀▀▀██ ▄█▀█▄   ▄████ ████▄
-    ██ ██ ██ ▄█▀██   ▄█▀ ██▄█▀   ██ ██ ██ ██
-    ████▀ ██ ▀█▄██ ▄██▄▄ ▀█▄▄▄   ▀████ ████▀
-    "#;
+$$\       $$\                                           $$\ $$\       
+$$ |      $$ |                                          $$ |$$ |      
+$$$$$$$\  $$ | $$$$$$\  $$$$$$$$\  $$$$$$\         $$$$$$$ |$$$$$$$\  
+$$  __$$\ $$ | \____$$\ \____$$  |$$  __$$\       $$  __$$ |$$  __$$\ 
+$$ |  $$ |$$ | $$$$$$$ |  $$$$ _/ $$$$$$$$ |      $$ /  $$ |$$ |  $$ |
+$$ |  $$ |$$ |$$  __$$ | $$  _/   $$   ____|      $$ |  $$ |$$ |  $$ |
+$$$$$$$  |$$ |\$$$$$$$ |$$$$$$$$\ \$$$$$$$\       \$$$$$$$ |$$$$$$$  |
+\_______/ \__| \_______|\________| \_______|       \_______|\_______/                                                                                                                                            
+ "#;
 
-    println!("{}\n\n", ascii_art.to_string().yellow());
+    println!("{}\n", ascii_art.to_string().red());
 
     // Display server configuration
     let server_file = SERVER_FILE.read().await;
-    match server_file.stats() {
-        Ok(stats) => {
-            println!(
-                "  Total sources: {}",
-                stats.total_sources.to_string().cyan()
-            );
+    match server_file.get_all_sources() {
+        Ok(sources) => {
+            let total_sources = sources.len();
+            let total_vector_bases: usize = sources.iter().map(|s| s.vector_bases.len()).sum();
+            let total_nodes: u32 = sources
+                .iter()
+                .flat_map(|s| s.vector_bases.iter())
+                .map(|vb| vb.node_count)
+                .sum();
+            println!(" Server Configuration:");
+            println!("  Total sources: {}", total_sources.to_string().cyan());
             println!(
                 "  Total vector bases: {}",
-                stats.total_vector_bases.to_string().cyan()
+                total_vector_bases.to_string().cyan()
             );
-            println!("  Total nodes: {}", stats.total_nodes.to_string().yellow());
+            println!("  Total nodes: {}", total_nodes.to_string().yellow());
 
             // List sources
-            if let Ok(sources) = server_file.list_sources() {
-                println!("\n Sources: {:?}", sources);
+            if let Ok(sources) = server_file.get_all_sources() {
+                for src in sources {
+                    println!("   • Source: {}", src.source_name.green());
+                    let vector_bases = &src.vector_bases;
+                    if !vector_bases.is_empty() {
+                        for vb in vector_bases {
+                            println!("      - Database: {}", vb.vb_name.cyan());
+                        }
+                    } else {
+                        println!("      - No databases found");
+                    }
+                }
             }
             println!();
         }
@@ -55,7 +73,7 @@ pub async fn print_ascii() -> anyhow::Result<()> {
 
     println!(
         "🔗  Github: {}",
-        "https://github.com/ronakgh97/blaze-db\n".cyan()
+        "https://github.com/ronakgh97/blaze-db\n".blue().bold()
     );
 
     Ok(())
