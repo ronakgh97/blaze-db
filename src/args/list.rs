@@ -1,5 +1,4 @@
 use crate::core::ClientConfig;
-use crate::prelude::parse_database_name;
 use crate::server::ListResponse;
 use anyhow::Result;
 use colored::Colorize;
@@ -21,12 +20,12 @@ pub async fn list_run() -> Result<()> {
             for source_data in list {
                 println!("  Sources ({})", source_data.from_sources.yellow());
                 for db in source_data.databases {
-                    // Parse db to get db name
-                    let Some((db_name, _, _, _)) = parse_database_name(&db) else {
-                        println!("    • {}", db.cyan());
-                        continue;
-                    };
-                    println!("    • {}", db_name.cyan());
+                    // // Parse db to get db name
+                    // let Some((db_name, _, _, _)) = parse_database_name(&db) else {
+                    //     println!("    • {}", db.cyan());
+                    //     continue;
+                    // };
+                    println!("    • {}", db.cyan());
                 }
             }
         }

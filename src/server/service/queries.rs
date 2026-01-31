@@ -4,7 +4,7 @@ use crate::core::{HNSW, Metrics, NodeId};
 use crate::prelude::{Provider, SearchQuery};
 use crate::server::controller::{ErrorTypes, INDEX_CACHE};
 use crate::server::dto::QueryResult;
-use crate::server::service::database::search_database;
+use crate::server::service::database::search_database_on_disk;
 use crate::server::service::load_embeddings_index_from_database;
 use crate::server::{QueryRequest, QueryResponse};
 use crate::utils::read_embeddings_metadata;
@@ -19,7 +19,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     let from_database = &request.database;
 
     // Get database directory path
-    let db_path = search_database(&from_database, &source)
+    let db_path = search_database_on_disk(&from_database, &source)
         .await
         .map_err(|e| {
             error!(
@@ -44,6 +44,14 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     // Check cache first, if fails load from disk and update cache using hash checks. Simple!! :)
     let cache_key = format!("{}_{}", &request.database, &request.source);
     #[allow(unused)]
+    // TODO: PERFORMANCE - INDEX_CACHE.write() lock held during disk I/O (40-60ms)
+    // This BLOCKS all other queries (even for different databases) during cache miss
+    // Impact: Thundering herd problem - multiple queries for uncached DB = serialized
+    // Optimization: Split into read phase (check cache) and write phase (update cache)
+    //   - Check cache with read lock (fast, concurrent)
+    //   - If miss, load from disk WITHOUT lock
+    //   - Update cache with brief write lock (<1ms instead of 50ms)
+    // Trade-off: Possible duplicate loads, but much better concurrent throughput
     let cache_index = {
         let mut cache = INDEX_CACHE.write().await;
 

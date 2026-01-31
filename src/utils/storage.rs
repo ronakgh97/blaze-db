@@ -161,7 +161,7 @@ impl EmbeddingStore {
         hasher.update(&initial_bytes);
         let checksum = format!("{:x}", hasher.finalize());
 
-        write_or_update_metadata(
+        write_metadata(
             &formatted_path
                 .parent()
                 .ok_or_else(|| anyhow!("File path has no parent directory"))?
@@ -210,7 +210,7 @@ impl EmbeddingStore {
         hasher.update(&initial_json);
         let checksum = format!("{:x}", hasher.finalize());
 
-        write_or_update_metadata(
+        write_metadata(
             &formatted_path
                 .parent()
                 .ok_or_else(|| anyhow!("File path has no parent directory"))?
@@ -271,7 +271,7 @@ impl EmbeddingStore {
 
 /// Write or update the EmbeddingMetadata on disk, this is auto called when writing the EmbeddingStore
 /// Thread-safe with atomic writes using temp-file-rename pattern
-async fn write_or_update_metadata(dir_path: &PathBuf, metadata: &EmbeddingMetadata) -> Result<()> {
+async fn write_metadata(dir_path: &PathBuf, metadata: &EmbeddingMetadata) -> Result<()> {
     let metadata_path = dir_path.join("metadata.json");
     let metadata = metadata.clone();
 
@@ -343,6 +343,10 @@ where
     }
 
     /// Insert or update a key-value pair
+    // TODO: PERFORMANCE - Every insert triggers full disk write (save_to_disk)
+    // This serializes the ENTIRE HashMap to JSON and writes to disk
+    // For high-frequency writes, this becomes a bottleneck
+    // Use (WAL) or batched commits
     pub fn insert(&self, key: K, value: V) -> Result<Option<V>> {
         let mut data = self
             .data
@@ -350,9 +354,12 @@ where
             .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))?;
 
         let old_value = data.insert(key, value);
-        drop(data); // Release lock before disk I/O
+        drop(data); // Release lock before disk I/O - IMPORTANT for concurrency
 
-        // Persist to disk
+        // TODO: CORRECTNESS vs PERFORMANCE - Disk write happens AFTER lock release
+        // This means: in-memory state is updated, but disk might fail
+        // Trade-off: Better concurrency (other readers can proceed) vs durability risk
+        // If disk write fails, in-memory and disk are out of sync
         self.save_to_disk()?;
 
         Ok(old_value)

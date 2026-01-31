@@ -8,4 +8,4 @@ pub use dto::{
     EmbedRequest, EmbedResponse, HealthCheckResponse, InsertRequest, InsertResponse, ListResponse,
     QueryRequest, QueryResponse, VectorDataDto,
 };
-pub use service::{list_databases, parse_database_name};
+pub use service::{list_databases_from_disk, parse_database_name};

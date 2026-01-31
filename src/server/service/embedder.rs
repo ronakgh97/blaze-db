@@ -1,10 +1,8 @@
-use crate::core::{HNSW, check_source_valid};
+use crate::core::{HNSW, SERVER_FILE, check_source_valid};
 use crate::server::controller::{DB_WRITE_LOCKS, ErrorTypes};
 use crate::server::dto::VectorDataDto;
-use crate::server::service::database::search_database;
-use crate::server::{
-    EmbedRequest, EmbedResponse, InsertRequest, InsertResponse, parse_database_name,
-};
+use crate::server::service::database::search_database_on_disk;
+use crate::server::{EmbedRequest, EmbedResponse, InsertRequest, InsertResponse};
 use crate::utils::{EmbeddingStore, Provider};
 use crate::{error, info, warn};
 use anyhow::{Context, Result};
@@ -37,18 +35,26 @@ pub async fn insert_run(
     }
 
     // Check all vector dimensions consistency with database init (dimensions)
-    let excepted_dimensions: usize = parse_database_name(&database_name)
-        .ok_or_else(|| {
-            ErrorTypes::InvalidField(format!(
-                "Failed to parse database name: '{}'",
-                database_name
-            ))
-        })?
-        .2 // 2nd index is dimensions (String)
-        .parse()?;
+    let excepted_dimensions: usize = {
+        let server_file = SERVER_FILE.read().await;
+        match server_file.get_vector_base(&source, &database_name)? {
+            Some(vb) => vb.dimension as usize,
+            None => {
+                error!(
+                    "Database '{}' not found in source '{}'",
+                    database_name, source
+                );
+                return Err(ErrorTypes::DatabaseNotFound(format!(
+                    "Database '{}' not found in source '{}'",
+                    database_name, source
+                ))
+                .into());
+            }
+        }
+    };
 
     // DO THIS LAST TO AVOID WASTING TIME
-    // VERY IMPORTANT, OR ELSE IT WILL CORRUPT THE INDEX WITH INCONSISTENT DIMENSIONS
+    // VERY IMPORTANT!!, OR ELSE IT WILL CORRUPT THE INDEX WITH INCONSISTENT DIMENSIONS
     // Fast check in parallel using rayon
     let inconsistent_vectors: Vec<&VectorDataDto> = vector_data
         .par_iter()
@@ -68,7 +74,7 @@ pub async fn insert_run(
     }
 
     // Locate the database directory
-    let database_path = search_database(&database_name, &source)
+    let database_path = search_database_on_disk(&database_name, &source)
         .await
         .map_err(|e| {
             error!(
@@ -100,6 +106,10 @@ pub async fn insert_run(
 
     // Acquire write lock - this ensures only one write operation per database at a time
     // Multiple databases can still be written to concurrently
+    // TODO: PERFORMANCE - Write lock held during HNSW insertions + disk I/O
+    // Lock duration: ~100-500ms depending on batch size and disk speed
+    // This is INTENTIONAL to prevent index corruption - DO NOT CHANGE
+    // Alternative optimization: Use copy-on-write or shadow index technique
     let _write_guard = lock.write().await;
     info!("Acquired write lock for database '{}'", database_name);
 
@@ -165,7 +175,7 @@ pub async fn embed_run(
     }
 
     // Locate the database directory
-    let database_path = search_database(&database_name, &source)
+    let database_path = search_database_on_disk(&database_name, &source)
         .await
         .map_err(|e| {
             error!(
@@ -207,6 +217,9 @@ pub async fn embed_run(
 
     // Acquire write lock - this ensures only one write operation per database at a time
     // Multiple databases can still be written to concurrently
+    // TODO: PERFORMANCE - Write lock held during embedding generation + HNSW insertions + disk I/O
+    // Lock duration: Can be VERY long (seconds) for large batches
+    // This prevents concurrent writes to same DB - necessary for index consistency
     let _write_guard = lock.write().await;
     info!("Acquired write lock for database '{}'", database_name);
 
@@ -276,7 +289,7 @@ pub async fn load_embeddings_index_from_database(
     source: String,
 ) -> (Option<EmbeddingStore>, usize) {
     info!("Reading embeddings from database '{}'", database);
-    let database_name = match search_database(&database, &source).await {
+    let database_name = match search_database_on_disk(&database, &source).await {
         Ok(path) => path,
         Err(e) => {
             error!("Database '{}' not found, e: {}", database, e.to_string());
@@ -323,6 +336,8 @@ pub async fn load_embeddings_index_from_database(
 
     (loaded_hnsw, max_index)
 }
+
+// TODO: Schedule this to run periodically in background task (use this)
 
 /// Cleanup old index files, keeping only the last N indexes
 /// This prevents disk space from filling up with old indexes

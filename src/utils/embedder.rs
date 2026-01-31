@@ -1,6 +1,5 @@
 use anyhow::Result;
 use bincode::{Decode, Encode};
-use colored::Colorize;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -124,9 +123,9 @@ impl Provider {
     pub fn pretty_display(&self) -> String {
         format!(
             "Provider(model: {}, url: {}, api_key: {}...)",
-            &self.model.green(),
-            &self.url.yellow(),
-            &self.api_key[..4.min(self.api_key.len())].dimmed()
+            &self.model,
+            &self.url,
+            &self.api_key[..4.min(self.api_key.len())]
         )
     }
 

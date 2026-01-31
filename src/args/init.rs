@@ -1,28 +1,36 @@
-use crate::core::{ClientConfig, ServerConfig, get_source_path, save_config};
+use crate::core::{ClientConfig, SERVER_FILE, get_source_path, save_config};
 use anyhow::Result;
 
+// TODO: FIX 'if' statements
 pub async fn init_run_server() -> Result<()> {
     println!("Initializing dotfiles/src...");
 
-    let mut config = ServerConfig::default();
+    // Check if default source already exists to avoid overwriting
+    let default_src_path = get_source_path()?.join("default_src");
 
-    let mut get_source = config.get_source().clone();
-
-    // Check if default source and default config already exists to avoid overwriting
-    if get_source_path()?.join("default_src").exists()
-        && ServerConfig::get_default_server_config_path()?.exists()
     {
-        println!("Defaults already initialized at {:?}", get_source_path()?);
-        return Ok(());
+        let server_file = SERVER_FILE.read().await;
+
+        if default_src_path.exists() && server_file.source_exists("default_src")? {
+            println!("Defaults already initialized");
+            return Ok(());
+        }
     }
 
-    get_source.add_source("default_src".to_string())?; // Add default source
-    get_source.create_source_dir().await?;
+    // Create default source if it doesn't exist
+    let mut server_file = SERVER_FILE.write().await;
 
-    // Update config with the modified source
-    config.update_source(get_source);
+    let src_id = uuid::Uuid::new_v4().to_string();
+    let timestamp = chrono::Utc::now().to_rfc3339();
 
-    save_config(ServerConfig::get_default_server_config_path()?, &config).await?;
+    if !server_file.source_exists("default_src")? {
+        server_file
+            .add_source(src_id, "default_src".to_string(), timestamp)
+            .await?;
+        println!(" Created default source");
+    }
+
+    println!(" Server defaults initialized");
 
     Ok(())
 }
@@ -36,6 +44,8 @@ pub async fn init_run_client(url: Option<String>) -> Result<()> {
     }
 
     save_config(ClientConfig::get_default_user_config_path()?, &config).await?;
+
+    println!(" Client initialized with URL: {}", config.url);
 
     Ok(())
 }

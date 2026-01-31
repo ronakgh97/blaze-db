@@ -1,20 +1,26 @@
-use crate::core::ServerConfig;
-use crate::prelude::save_config;
+use crate::core::SERVER_FILE;
 use anyhow::Result;
 
 pub async fn new_run(source_name: String) -> Result<()> {
     println!("Creating a new source...");
 
-    let mut config =
-        ServerConfig::load_config(&ServerConfig::get_default_server_config_path()?).await?;
+    let mut server_file = SERVER_FILE.write().await;
 
-    config.data_source.add_source(source_name.clone())?;
+    // Check if source already exists
+    if server_file.source_exists(&source_name)? {
+        println!(" Source '{}' already exists!", source_name);
+        return Ok(());
+    }
 
-    config.data_source.create_source_dir().await?;
+    let src_id = uuid::Uuid::new_v4().to_string();
+    let timestamp = chrono::Utc::now().to_rfc3339();
 
-    save_config(ServerConfig::get_default_server_config_path()?, &config).await?;
+    // Add new source (automatically creates directory)
+    server_file
+        .add_source(src_id.clone(), source_name.clone(), timestamp.clone())
+        .await?;
 
-    println!("Source: [`{}`] created successfully!", source_name);
+    println!(" Source '{}' created successfully!", source_name);
 
     Ok(())
 }

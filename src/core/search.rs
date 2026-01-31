@@ -1,4 +1,3 @@
-#[deprecated(since = "0.1.0", note = "Use `HNSW::new` instead")]
 use crate::utils::VectorData;
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 use rayon::prelude::IntoParallelRefIterator;
@@ -8,6 +7,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use wide::f32x8;
 
+#[deprecated(since = "2026-01-08", note = "Use `HNSW::new` instead")]
 #[derive(Serialize, Deserialize)]
 pub struct SearchQuery {
     pub top_k: usize,
@@ -15,6 +15,7 @@ pub struct SearchQuery {
     pub metric: Metrics,
 }
 
+#[deprecated(since = "2026-01-08", note = "Use `HNSW::new` instead")]
 #[derive(Serialize, Deserialize)]
 pub struct SearchResult {
     pub chunk: String,
@@ -73,12 +74,20 @@ impl Metrics {
             Metrics::DotProduct => dot_product(a, b),
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Metrics::Cosine => "DOT_PRODUCT".to_string(),
+            Metrics::Euclidean => "EUCLIDEAN".to_string(),
+            Metrics::DotProduct => "CROSS_PRODUCT".to_string(),
+        }
+    }
 }
 
 /// SIMD-optimized cosine similarity using 8-wide f32 vectors
 /// Returns value in [-1, 1]
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len(), "Vector dimensions must match");
+    assert_eq!(a.len(), b.len(), "Vector dimensions must match");
 
     let chunks = a.len() / 8;
     let mut dot = f32x8::ZERO;
@@ -123,7 +132,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 /// SIMD-optimized Euclidean similarity
 /// Returns value in (0, 1]
 pub fn euclidean_similarity(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len(), "Vector dimensions must match");
+    assert_eq!(a.len(), b.len(), "Vector dimensions must match");
 
     let chunks = a.len() / 8;
     let mut sum_sq = f32x8::ZERO;
@@ -151,7 +160,7 @@ pub fn euclidean_similarity(a: &[f32], b: &[f32]) -> f32 {
 
 /// SIMD-optimized dot product
 pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len(), "Vector dimensions must match");
+    assert_eq!(a.len(), b.len(), "Vector dimensions must match");
 
     let chunks = a.len() / 8;
     let mut sum = f32x8::ZERO;

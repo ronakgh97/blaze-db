@@ -1,5 +1,4 @@
-use crate::core::check_source_valid;
-use crate::prelude::ServerConfig;
+use crate::core::{check_source_valid, list_sources};
 use crate::server::start_server;
 use crate::utils::Provider;
 use crate::{error, info, warn};
@@ -9,13 +8,18 @@ use dotenv::dotenv;
 pub async fn serve_run(cli_port: Option<u16>, _source: Option<Vec<String>>) -> Result<Provider> {
     info!("Starting the Server...");
 
-    let config =
-        ServerConfig::load_config(&ServerConfig::get_default_server_config_path()?).await?;
+    // Get all sources from ServerFile
+    let all_sources = list_sources().await?;
 
-    let source = config.data_source.source_name.unwrap_or_else(|| {
-        warn!("No source provided in config, using default source: default_src");
+    if all_sources.is_empty() {
+        warn!("No sources found in server data, using default source: default_src");
+    }
+
+    let sources_to_check = if all_sources.is_empty() {
         vec!["default_src".to_string()]
-    });
+    } else {
+        all_sources
+    };
 
     dotenv().ok();
 
@@ -40,21 +44,10 @@ pub async fn serve_run(cli_port: Option<u16>, _source: Option<Vec<String>>) -> R
     let provider = Provider::init(url, model, api_key);
     info!("{:?}", Provider::pretty_display(&provider));
 
-    // // Get sources or use all sources from config
-    // let source = if let Some(src) = source {
-    //     src
-    // } else {
-    //     warn!("No source provided, using default source: default_src");
-    //     config
-    //         .data_source
-    //         .source_name
-    //         .unwrap_or_else(|| vec!["default_src".to_string()])
-    // };
-
     // Validate all sources before starting server
     let mut valid_sources = Vec::new();
-    for src in &source {
-        if check_source_valid(&src).await? {
+    for src in &sources_to_check {
+        if check_source_valid(src).await? {
             info!("Source: {} is valid", src);
             valid_sources.push(src.clone());
         } else {
@@ -63,7 +56,7 @@ pub async fn serve_run(cli_port: Option<u16>, _source: Option<Vec<String>>) -> R
     }
 
     if valid_sources.is_empty() {
-        error!("No valid sources found in {:?}", source);
+        error!("No valid sources found in {:?}", sources_to_check);
         return Err(anyhow::anyhow!("No valid sources found"));
     }
 

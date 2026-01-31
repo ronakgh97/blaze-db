@@ -236,6 +236,71 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 ## TODO:
 
+### Thread Safety & Performance
+
+The current implementation is **fully thread-safe with no deadlocks**, but suffers from lock contention and I/O
+bottlenecks:
+
+#### Lock Contention Issues:
+
+- **Double-layered locking**: `Arc<RwLock<ServerFile>>` → `DataStore` → `Arc<RwLock<HashMap>>`
+- Write locks held during async filesystem operations (source validation, directory creation)
+- Single write lock blocks ALL database/source operations (create, update, delete)
+- Lock hold duration includes: validation → duplicate check → metadata update → disk I/O → directory creation
+
+#### Disk I/O Bottlenecks:
+
+- Every `insert()`/`update()` writes **entire** `SERVER_DATA.json` to disk (full HashMap serialization)
+- No batching: 100 database creates = 100 full file rewrites
+- Disk writes happen after lock release → potential inconsistency if write fails
+- `list_source()` scans filesystem while holding read lock → blocks all write operations
+
+#### Why Database Creation Feels Slow:
+
+```
+create_new_database():
+  1. Acquire write lock          ← Blocks everything
+  2. Validate source (disk I/O)   ← Filesystem check
+  3. Check duplicates             
+  4. Add to ServerFile           
+     └─> DataStore.insert()       ← Serializes entire HashMap to JSON
+         └─> save_to_disk()       ← Writes full file to disk
+  5. Create directory (async I/O) ← More filesystem work
+  6. Release lock
+```
+
+Total lock hold time: ~50-200ms depending on disk speed (this is why it feels slow!)
+
+#### Future Optimization Strategies (DO NOT IMPLEMENT YET):
+
+1. **Lock Scope Reduction**:
+    - Use read lock for validation, upgrade to write lock only for actual mutation
+    - Cache source validity to avoid I/O under lock
+    - Separate validation locks from mutation locks
+
+2. **Write Batching**:
+    - Implement Write-Ahead Log (WAL) instead of immediate disk writes
+    - Batch multiple operations, flush periodically (e.g., every 100ms or 10 operations)
+    - Use append-only log for durability, periodic compaction for cleanup
+
+3. **Optimistic Locking**:
+    - Validate without lock → mutate with lock → retry on conflict
+    - Reduces lock hold time from 50ms to <1ms
+
+4. **Better Storage Engine**:
+    - Replace JSON serialization with binary format (bincode/postcard)
+    - Use LSM-tree or B-tree for incremental updates
+    - Memory-mapped files for zero-copy reads
+
+5. **Source Validity Caching**:
+    - Cache filesystem existence checks with TTL
+    - Invalidate on source operations
+
+**Bottom Line**: Current approach prioritizes **correctness** and **simplicity** over performance. It works, it's safe,
+but it's not fast. Future optimizations will need careful design to maintain thread safety while improving throughput.
+
+### Feature TODO:
+
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance. `DONE (basic implementation)`
 - Fix Chunking for better meaningful text segments. `DONE, but kinda broken for now.`
 - Write/insert functionality for adding new vectors to the database.
@@ -277,3 +342,14 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues or submit pull requests. 🤧🏳️
+
+My Code, My Rules 😼
+
+- **DO NOT USE AI**, I can smell the SLOP from miles away. 🚫🤖 (Except boring testing code)
+- **DO NOT UNCOMMENT THE COMMENTED OUT CODES**, Those are ritual sacrifices to the coding gods 🛐, it ward off evil bugs.
+  🪦👹
+- **DO NOT REFACTOR SERVER AND CORE MODULES**, Unless there is a major I/O improvement, those codes are sacred. 🙏📜
+- **DO NOT BRING YOUR 'BEST PRACTICES' BS HERE**, Im very opinionated about coding styles and still learning, so don't
+  waste your time. 🛑🧠
+- **DO NOT UNDER ANY CIRCUMSTANCES, ADD ANOTHER LOCKS/THREAD SPAWNS/ASYNC AWAIT UNLESS ABSOLUTELY NECESSARY**,
+  Those are the reasons why this code is thread-safe AND why code is slow. 🛑🔒

@@ -7,7 +7,7 @@ use crate::server::{
     HealthCheckResponse, InsertRequest, InsertResponse, QueryRequest, QueryResponse,
 };
 use crate::utils::{EmbeddingMetadata, EmbeddingStore, Provider};
-use crate::{error, info};
+use crate::{error, info, warn};
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -241,7 +241,7 @@ pub async fn create_src(Json(payload): Json<CreateSourceRequest>) -> impl IntoRe
             if let Some(error_type) = e.downcast_ref::<ErrorTypes>() {
                 match error_type {
                     ErrorTypes::SourceAlreadyExists(msg) => {
-                        error!(
+                        warn!(
                             "[POST /sources/create] Source already exists error during source creation: {}",
                             msg
                         );

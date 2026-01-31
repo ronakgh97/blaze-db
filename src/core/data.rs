@@ -1,73 +1,142 @@
-use crate::core::config::ServerConfig;
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use tokio::fs;
 
+/// Represents a data source containing multiple vector databases
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Source {
-    pub source_name: Option<Vec<String>>,
+    pub src_id: String,
+    pub source_name: String,
+    pub vector_bases: Vec<VectorBase>,
+    pub created_at: String,
+}
+
+/// Represents a vector database within a source
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct VectorBase {
+    pub vb_id: String,
+    pub vb_name: String,
+    pub dimension: u32,
+    pub node_count: u32,
+    pub created_at: String,
+    pub last_accessed_at: String,
+    pub metric_type: String,
 }
 
 impl Default for Source {
     fn default() -> Self {
+        let uuid = uuid::Uuid::new_v4().to_string();
+        let timestamp = chrono::Utc::now().to_rfc3339();
         Self {
-            source_name: Some(vec![String::from("default_src")]),
+            src_id: uuid,
+            source_name: "default_src".to_string(),
+            vector_bases: vec![],
+            created_at: timestamp,
         }
     }
 }
 
 impl Source {
-    pub fn add_source(&mut self, new_source: String) -> Result<&mut Self> {
-        match &mut self.source_name {
-            Some(source) => {
-                // Check for duplicates - if exists, just return success
-                if !source.contains(&new_source) {
-                    source.push(new_source);
-                }
-            }
-            // Some(source) => {
-            //     if source.contains(&new_source) {
-            //         anyhow::bail!("Source '{}' already exists", new_source);
-            //     }
-            //     source.push(new_source);
-            // }
-            None => self.source_name = Some(vec![new_source]),
+    /// Create a new source with ID and timestamp
+    pub fn new(src_id: String, source_name: String, created_at: String) -> Self {
+        Self {
+            src_id,
+            source_name,
+            vector_bases: vec![],
+            created_at,
         }
-        Ok(self)
     }
 
-    pub async fn create_source_dir(&self) -> Result<()> {
-        if let Some(sources) = &self.source_name {
-            for source in sources {
-                let path_buf = get_source_path()?.join(source);
-                fs::create_dir_all(&path_buf).await?;
-            }
+    /// Create a new source with generated ID and current timestamp
+    pub fn new_with_generated(source_name: String) -> Self {
+        let uuid = uuid::Uuid::new_v4().to_string();
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        Self {
+            src_id: uuid,
+            source_name,
+            vector_bases: vec![],
+            created_at: timestamp,
         }
-        Ok(())
+    }
+
+    /// Add a vector base to this source
+    pub fn add_vector_base(&mut self, vb: VectorBase) {
+        self.vector_bases.push(vb);
+    }
+
+    /// Remove a vector base by ID
+    pub fn remove_vector_base(&mut self, vb_id: &str) -> Option<VectorBase> {
+        if let Some(index) = self.vector_bases.iter().position(|vb| vb.vb_id == vb_id) {
+            Some(self.vector_bases.remove(index))
+        } else {
+            None
+        }
+    }
+
+    /// Find a vector base by name
+    pub fn find_vector_base(&self, vb_name: &str) -> Option<&VectorBase> {
+        self.vector_bases.iter().find(|vb| vb.vb_name == vb_name)
+    }
+
+    /// Find a vector base by name (mutable)
+    pub fn find_vector_base_mut(&mut self, vb_name: &str) -> Option<&mut VectorBase> {
+        self.vector_bases
+            .iter_mut()
+            .find(|vb| vb.vb_name == vb_name)
+    }
+
+    /// Update a vector base
+    pub fn update_vector_base(&mut self, updated_vb: VectorBase) -> bool {
+        if let Some(vb) = self
+            .vector_bases
+            .iter_mut()
+            .find(|vb| vb.vb_id == updated_vb.vb_id)
+        {
+            *vb = updated_vb;
+            true
+        } else {
+            false
+        }
     }
 }
 
-pub fn get_source_path() -> Result<PathBuf> {
-    // TODO: Use configurable source path?
-    let home_dir =
-        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
-    let source_path = home_dir.join("blaze").join("sources");
-    Ok(source_path)
+impl Default for VectorBase {
+    fn default() -> Self {
+        let uuid = uuid::Uuid::new_v4().to_string();
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        Self {
+            vb_id: uuid,
+            vb_name: "default_vb".to_string(),
+            dimension: 1024,
+            node_count: 0,
+            created_at: timestamp.clone(),
+            last_accessed_at: timestamp,
+            metric_type: "COSINE".to_string(),
+        }
+    }
 }
 
-pub async fn check_source_valid(source_name: &String) -> Result<bool> {
-    let source_path = get_source_path()?.join(source_name);
-    let source_list = ServerConfig::load_config(&ServerConfig::get_default_server_config_path()?)
-        .await?
-        .data_source
-        .source_name;
-
-    if let Some(sources) = source_list
-        && sources.contains(source_name)
-        && source_path.exists()
-    {
-        return Ok(true);
+impl VectorBase {
+    /// Create a new vector base with generated ID and timestamp
+    pub fn new(vb_name: String, dimension: u32, metric_type: String) -> Self {
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        Self {
+            vb_id: uuid::Uuid::new_v4().to_string(),
+            vb_name,
+            dimension,
+            node_count: 0,
+            created_at: timestamp.clone(),
+            last_accessed_at: timestamp,
+            metric_type,
+        }
     }
-    Ok(false)
+
+    /// Update the last accessed timestamp
+    pub fn touch(&mut self) {
+        self.last_accessed_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Update the node count
+    pub fn set_node_count(&mut self, count: u32) {
+        self.node_count = count;
+        self.touch();
+    }
 }
