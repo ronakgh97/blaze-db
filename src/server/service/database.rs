@@ -55,7 +55,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
         dimension: 0,
         node_count: 0,
         created_at: timestamp.clone(),
-        last_accessed_at: timestamp.clone(),
+        last_queried_at: timestamp.clone(),
         metric_type: "cosine".to_string(),
     };
 
@@ -232,6 +232,7 @@ pub async fn get_databases_path_from_source(src_name: String) -> Result<Vec<Path
     Ok(databases)
 }
 
+#[allow(unused)]
 #[deprecated(since = "2026-01-30", note = "No longer needed")]
 /// Parse the database name from the given filename.
 /// The return format is: (name,id,dimensions,timestamp)

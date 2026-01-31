@@ -17,7 +17,7 @@ pub struct VectorBase {
     pub dimension: u32,
     pub node_count: u32,
     pub created_at: String,
-    pub last_accessed_at: String,
+    pub last_queried_at: String,
     pub metric_type: String,
 }
 
@@ -108,7 +108,7 @@ impl Default for VectorBase {
             dimension: 1024,
             node_count: 0,
             created_at: timestamp.clone(),
-            last_accessed_at: timestamp,
+            last_queried_at: timestamp,
             metric_type: "COSINE".to_string(),
         }
     }
@@ -124,14 +124,14 @@ impl VectorBase {
             dimension,
             node_count: 0,
             created_at: timestamp.clone(),
-            last_accessed_at: timestamp,
+            last_queried_at: timestamp,
             metric_type,
         }
     }
 
     /// Update the last accessed timestamp
     pub fn touch(&mut self) {
-        self.last_accessed_at = chrono::Utc::now().to_rfc3339();
+        self.last_queried_at = chrono::Utc::now().to_rfc3339();
     }
 
     /// Update the node count

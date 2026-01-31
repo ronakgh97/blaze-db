@@ -46,7 +46,7 @@ async fn test_metadata_updates() -> Result<()> {
     let initial_timestamp = {
         let server_file = SERVER_FILE.read().await;
         let vb = server_file.get_vector_base(test_source, test_db)?;
-        vb.unwrap().last_accessed_at.clone()
+        vb.unwrap().last_queried_at.clone()
     };
 
     // Wait a bit to ensure timestamp difference
@@ -64,10 +64,10 @@ async fn test_metadata_updates() -> Result<()> {
         let vb = server_file.get_vector_base(test_source, test_db)?;
         assert!(vb.is_some());
         let vb = vb.unwrap();
-        assert_ne!(vb.last_accessed_at, initial_timestamp);
+        assert_ne!(vb.last_queried_at, initial_timestamp);
         println!(
             "✓ Verified last_accessed_at updated from {} to {}",
-            initial_timestamp, vb.last_accessed_at
+            initial_timestamp, vb.last_queried_at
         );
     }
 

@@ -16,9 +16,15 @@ pub async fn print_ascii() -> anyhow::Result<()> {
     let server_file = SERVER_FILE.read().await;
     match server_file.stats() {
         Ok(stats) => {
-            println!("  Total sources: {}", stats.total_sources);
-            println!("  Total vector bases: {}", stats.total_vector_bases);
-            println!("  Total nodes: {}", stats.total_nodes);
+            println!(
+                "  Total sources: {}",
+                stats.total_sources.to_string().cyan()
+            );
+            println!(
+                "  Total vector bases: {}",
+                stats.total_vector_bases.to_string().cyan()
+            );
+            println!("  Total nodes: {}", stats.total_nodes.to_string().yellow());
 
             // List sources
             if let Ok(sources) = server_file.list_sources() {
@@ -47,7 +53,10 @@ pub async fn print_ascii() -> anyhow::Result<()> {
         }
     }
 
-    println!("🔗 Github: https://github.com/ronakgh97/blaze-db\n");
+    println!(
+        "🔗  Github: {}",
+        "https://github.com/ronakgh97/blaze-db\n".cyan()
+    );
 
     Ok(())
 }

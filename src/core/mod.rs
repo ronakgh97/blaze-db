@@ -10,6 +10,4 @@ pub use config::{
 pub use data::{Source, VectorBase};
 #[allow(unused)]
 pub use hnsw::{HNSW, Node, NodeId};
-pub use search::{
-    Metrics, cosine_similarity, dot_product, euclidean_similarity,
-};
+pub use search::{Metrics, cosine_similarity, dot_product, euclidean_similarity};

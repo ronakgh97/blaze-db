@@ -420,7 +420,7 @@ async fn test_touch_vector_base() -> Result<()> {
         let vb = server_file
             .get_vector_base("touch_test", "embeddings")?
             .unwrap();
-        vb.last_accessed_at.clone()
+        vb.last_queried_at.clone()
     };
 
     // Wait a bit
@@ -434,7 +434,7 @@ async fn test_touch_vector_base() -> Result<()> {
         let vb = server_file
             .get_vector_base("touch_test", "embeddings")?
             .unwrap();
-        vb.last_accessed_at
+        vb.last_queried_at
     };
 
     assert_ne!(initial_time, new_time);
@@ -597,17 +597,17 @@ async fn test_vectorbase_data_model() {
     assert_eq!(vb.node_count, 0);
 
     // Test set_node_count
-    let initial_time = vb.last_accessed_at.clone();
+    let initial_time = vb.last_queried_at.clone();
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     vb.set_node_count(100);
     assert_eq!(vb.node_count, 100);
-    assert_ne!(vb.last_accessed_at, initial_time);
+    assert_ne!(vb.last_queried_at, initial_time);
 
     // Test touch
-    let time_before_touch = vb.last_accessed_at.clone();
+    let time_before_touch = vb.last_queried_at.clone();
     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     vb.touch();
-    assert_ne!(vb.last_accessed_at, time_before_touch);
+    assert_ne!(vb.last_queried_at, time_before_touch);
 }
 
 #[tokio::test]

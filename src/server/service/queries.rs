@@ -1,14 +1,14 @@
 #[allow(unused)]
-use crate::core::{HNSW, Metrics, NodeId};
+use crate::core::{HNSW, Metrics, NodeId, SERVER_FILE};
 #[allow(unused)]
-use crate::prelude::{Provider, SearchQuery};
+use crate::prelude::Provider;
 use crate::server::controller::{ErrorTypes, INDEX_CACHE};
 use crate::server::dto::QueryResult;
 use crate::server::service::database::search_database_on_disk;
 use crate::server::service::load_embeddings_index_from_database;
 use crate::server::{QueryRequest, QueryResponse};
 use crate::utils::read_embeddings_metadata;
-use crate::{error, info};
+use crate::{error, info, warn};
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -219,6 +219,21 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
         search_time_sec: duration_sec,
         io_time_sec: io_duration_sec,
     };
+
+    // Update last_accessed_at in SERVER_FILE
+    // This is done after the query to track when the database was last used
+    // TODO: Consider batching these updates or making them async/background task
+    // Current approach: Simple and immediate, but adds ~5-10ms to query latency
+    {
+        let mut server_file = SERVER_FILE.write().await;
+        if let Err(e) = server_file.touch_vector_base(&request.source, &request.database) {
+            warn!(
+                "Failed to update last_accessed_at for database '{}': {}",
+                request.database, e
+            );
+            // Don't fail the query - metadata update is not critical
+        }
+    }
 
     Ok(response)
 }

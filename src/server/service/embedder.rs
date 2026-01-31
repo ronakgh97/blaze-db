@@ -149,6 +149,25 @@ pub async fn insert_run(
     drop(_write_guard);
     info!("Released write lock for database '{}'", database_name);
 
+    // Update node_count in SERVER_FILE
+    // TODO: This acquires SERVER_FILE write lock after releasing per-db lock
+    // Could be optimized, but keeping it simple for now
+    {
+        let mut server_file = SERVER_FILE.write().await;
+        if let Err(e) = server_file.update_node_count(&source, &database_name, node_count as u32) {
+            warn!(
+                "Failed to update node_count for database '{}': {}",
+                database_name, e
+            );
+            // Don't fail the operation - metadata update is not critical
+        } else {
+            info!(
+                "Updated metadata: node_count={} for database '{}'",
+                node_count, database_name
+            );
+        }
+    }
+
     Ok(InsertResponse {
         database: database_name.clone(),
         source: source.clone(),
@@ -273,6 +292,23 @@ pub async fn embed_run(
     // Write lock will be automatically released here when _write_guard goes out of scope
     drop(_write_guard);
     info!("Released write lock for database '{}'", database_name);
+
+    // Update node_count in SERVER_FILE
+    {
+        let mut server_file = SERVER_FILE.write().await;
+        if let Err(e) = server_file.update_node_count(&source, &database_name, node_count as u32) {
+            warn!(
+                "Failed to update node_count for database '{}': {}",
+                database_name, e
+            );
+            // Don't fail the operation - metadata update is not critical
+        } else {
+            info!(
+                "Updated metadata: node_count={} for database '{}'",
+                node_count, database_name
+            );
+        }
+    }
 
     Ok(EmbedResponse {
         database: database_name.clone(),

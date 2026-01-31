@@ -454,7 +454,8 @@ impl SyncReport {
 
 /// Statistics about the server file
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerStats { // TODO: Too vague, improve later
+pub struct ServerStats {
+    // TODO: Too vague, improve later
     pub total_sources: usize,
     pub total_vector_bases: usize,
     pub total_nodes: u32,
