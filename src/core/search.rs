@@ -1,12 +1,9 @@
-use crate::utils::VectorData;
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
-use rayon::prelude::IntoParallelRefIterator;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
 #[allow(unused_imports)]
 use std::collections::BinaryHeap;
 use wide::f32x8;
 
+#[allow(unused)]
 #[deprecated(since = "2026-01-08", note = "Use `HNSW::new` instead")]
 #[derive(Serialize, Deserialize)]
 pub struct SearchQuery {
@@ -15,6 +12,7 @@ pub struct SearchQuery {
     pub metric: Metrics,
 }
 
+#[allow(unused)]
 #[deprecated(since = "2026-01-08", note = "Use `HNSW::new` instead")]
 #[derive(Serialize, Deserialize)]
 pub struct SearchResult {
@@ -22,42 +20,42 @@ pub struct SearchResult {
     pub score: f32,
 }
 
-impl SearchQuery {
-    pub fn new(top_k: usize, query_vector: Vec<f32>, metric: Metrics) -> Self {
-        Self {
-            top_k,
-            query_vector,
-            metric,
-        }
-    }
-
-    pub fn search_vector(&self, data: &VectorData) -> Vec<SearchResult> {
-        let mut results: Vec<SearchResult> = data
-            .embedding
-            .par_iter()
-            .enumerate()
-            .map(|(idx, vector)| {
-                let score = self.metric.calculate(&self.query_vector, vector);
-                SearchResult {
-                    chunk: data.chunk[idx].to_string(),
-                    score,
-                }
-            })
-            .collect();
-
-        // Sort results by score in descending order
-        results.sort_by(|a, b| {
-            // Compare scores, treating NaN as less than any number
-            match a.score.is_nan().cmp(&b.score.is_nan()) {
-                Ordering::Equal => b.score.partial_cmp(&a.score).unwrap(),
-                other => other,
-            }
-        });
-
-        // Return top_k results
-        results.into_iter().take(self.top_k).collect()
-    }
-}
+// impl SearchQuery {
+//     pub fn new(top_k: usize, query_vector: Vec<f32>, metric: Metrics) -> Self {
+//         Self {
+//             top_k,
+//             query_vector,
+//             metric,
+//         }
+//     }
+//
+//     pub fn search_vector(&self, data: &VectorData) -> Vec<SearchResult> {
+//         let mut results: Vec<SearchResult> = data
+//             .embedding
+//             .par_iter()
+//             .enumerate()
+//             .map(|(idx, vector)| {
+//                 let score = self.metric.calculate(&self.query_vector, vector);
+//                 SearchResult {
+//                     chunk: data.chunk[idx].to_string(),
+//                     score,
+//                 }
+//             })
+//             .collect();
+//
+//         // Sort results by score in descending order
+//         results.sort_by(|a, b| {
+//             // Compare scores, treating NaN as less than any number
+//             match a.score.is_nan().cmp(&b.score.is_nan()) {
+//                 Ordering::Equal => b.score.partial_cmp(&a.score).unwrap(),
+//                 other => other,
+//             }
+//         });
+//
+//         // Return top_k results
+//         results.into_iter().take(self.top_k).collect()
+//     }
+// }
 
 #[derive(Serialize, Deserialize)]
 pub enum Metrics {

@@ -11,5 +11,5 @@ pub use data::{Source, VectorBase};
 #[allow(unused)]
 pub use hnsw::{HNSW, Node, NodeId};
 pub use search::{
-    Metrics, SearchQuery, SearchResult, cosine_similarity, dot_product, euclidean_similarity,
+    Metrics, cosine_similarity, dot_product, euclidean_similarity,
 };
