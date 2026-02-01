@@ -16,9 +16,6 @@ async fn main() -> Result<()> {
         None => {
             let _ = print_ascii().await;
         }
-        Some(ServerCommands::New { name }) => {
-            new_run(name).await?;
-        }
     }
 
     Ok(())

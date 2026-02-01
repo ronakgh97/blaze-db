@@ -1,6 +1,7 @@
 use crate::core::SERVER_FILE;
 use anyhow::Result;
 
+#[allow(unused)]
 pub async fn new_run(source_name: String) -> Result<()> {
     println!("Creating a new source...");
 
@@ -15,7 +16,7 @@ pub async fn new_run(source_name: String) -> Result<()> {
     let src_id = uuid::Uuid::new_v4().to_string();
     let timestamp = chrono::Utc::now().to_rfc3339();
 
-    // Add new source (automatically creates directory)
+    // Add new source
     server_file
         .add_source(src_id.clone(), source_name.clone(), timestamp.clone())
         .await?;

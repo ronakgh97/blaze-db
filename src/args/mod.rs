@@ -5,6 +5,7 @@ mod init;
 mod list;
 mod new;
 mod query;
+mod register;
 mod serve;
 
 pub use ascii::print_ascii;
@@ -13,6 +14,6 @@ pub use embed::embed_run;
 pub use init::init_run_client;
 pub use init::init_run_server;
 pub use list::list_run;
-pub use new::new_run;
 pub use query::query_run;
+pub use register::register_run;
 pub use serve::serve_run;

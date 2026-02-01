@@ -1,6 +1,6 @@
 mod config;
 mod data;
-mod hnsw;
+pub mod hnsw;
 mod search;
 
 pub use config::{

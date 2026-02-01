@@ -20,13 +20,6 @@ pub enum ServerCommands {
         fix: bool,
     },
 
-    /// Initialize a new Data source
-    New {
-        /// Name of the new source
-        #[arg(short, long)]
-        name: String,
-    },
-
     /// Start the server
     Serve {
         /// Optional port to run the server on
