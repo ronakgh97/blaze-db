@@ -265,11 +265,9 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - Incremental updates without full reindex. (HNSW) `DONE (Need better indexing matters)`
 - Distributed storage and sharding support.
 - Move hardcoded Values to separate config files. `API PROVIDER CONFIG LEFT`
-- HNSW DEMO and benchmarking. `Need to read Criterion docs`
 - So many Locks and IO everywhere, need a serious fix, no jokes. `Someone help me pls. 😭`
 - Server logs are mess, current using my custom macros, need proper monitoring solution. `HELP`
 - Cloud deployment options. `What is cloud thingy?`
-- Better Testing and Benchmarking suite. `IN PROGRESS`
 
 ## References
 
