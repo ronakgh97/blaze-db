@@ -6,7 +6,7 @@ use std::path::PathBuf;
     name = "blaze_db",
     version = "1.0.0-beta",
     about = "Blaze-DB: A high-performance vector database",
-    long_about = "A CLI client wrapper for querying Blaze-DB vector database servers"
+    long_about = "A CLI client wrapper for querying Blaze-DB servers"
 )]
 pub struct ClientArgs {
     #[command(subcommand)]
@@ -15,12 +15,11 @@ pub struct ClientArgs {
 
 #[derive(Subcommand)]
 pub enum ClientCommands {
+    /// Register to BlazeDB user service
+    Register {},
+
     /// Initialize the Blaze-DB client configuration
-    Config {
-        /// Server URL
-        #[arg(short, long)]
-        url: Option<String>,
-    },
+    Init {},
 
     /// Create a new database or a new source in Blaze-DB
     Create {
@@ -71,7 +70,7 @@ pub enum ClientCommands {
         search: String,
 
         /// Number of top similar results to return
-        #[arg(short, long, default_value_t = 5)]
+        #[arg(short, long, default_value_t = 10)]
         top_k: usize,
     },
 

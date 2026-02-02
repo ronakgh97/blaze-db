@@ -6,8 +6,11 @@ use clap::Parser;
 async fn main() -> Result<()> {
     let args = ClientArgs::parse();
     match args.command {
-        Some(ClientCommands::Config { url }) => {
-            init_run_client(url).await?;
+        Some(ClientCommands::Register {}) => {
+            register_run().await?;
+        }
+        Some(ClientCommands::Init {}) => {
+            init_run_client().await?;
         }
         Some(ClientCommands::Create {
             source,
