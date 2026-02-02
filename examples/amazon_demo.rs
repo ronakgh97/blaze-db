@@ -7,36 +7,45 @@ use std::path::PathBuf;
 #[allow(unused)]
 const BATCH_SIZE: usize = 4096;
 
+#[allow(unused)]
+const NODES_TO_INDEX: usize = 50_000;
+
 // TODO: Implement Resume logic and batch-wise indexing
 #[tokio::main]
 async fn main() -> Result<()> {
     let vector_data =
         VectorData::read_from_disk(&PathBuf::from("embeddings/EMBEDDINGS.json")).await?;
 
-    // Post-load sanity check
     assert_eq!(
         vector_data.embedding.len(),
         vector_data.chunk.len(),
         "Embeddings and Chunks length mismatch!"
     );
 
-    println!("Total embeddings: {}", vector_data.embedding.len());
+    let nodes_to_index = vector_data.embedding.len().min(NODES_TO_INDEX) as u64;
 
+    println!("Total embeddings: {}", vector_data.embedding.len());
+    println!("Building HNSW index with {} nodes...", nodes_to_index);
     // Progress bar setup
-    let progress_bar = ProgressBar::new(vector_data.chunk.len() as u64);
+    let progress_bar = ProgressBar::new(nodes_to_index);
     progress_bar.set_style(
         ProgressStyle::default_bar()
-            .template("Batch: [{bar:60.cyan/blue}] {pos}/{len} ({percent}%)")?
+            .template("Nodes: [{bar:60.cyan/blue}] {pos}/{len} ({percent}%)")?
             .progress_chars("●●-"),
     );
 
-    let mut hnsw = HNSW::new(128, 200, 16, 0.8);
+    let mut hnsw = HNSW::default();
 
-    let index_path = PathBuf::from("examples/amazon_index/amazon_index_0");
+    let index_path = PathBuf::from("examples/amazon_index/amazon_index");
 
     let start_indexing = std::time::Instant::now();
     // Just DUMP embeddings into HNSW index 😒
-    for (embedding, metadata) in vector_data.embedding.iter().zip(vector_data.chunk.iter()) {
+    for (embedding, metadata) in vector_data
+        .embedding
+        .iter()
+        .take(nodes_to_index as usize)
+        .zip(vector_data.chunk.iter())
+    {
         let random_level = hnsw.get_random_level();
         hnsw.insert(embedding, metadata.to_string(), random_level);
         progress_bar.inc(1);
@@ -73,28 +82,19 @@ async fn load_amazon_reviews_csv(file_path: &str) -> Result<Vec<CsvDataPoint>> {
 
 #[tokio::test]
 async fn index_health_check() -> Result<()> {
-    let (lastest_index, _max_index) =
-        EmbeddingStore::load_lastest_index("amazon_index", "examples/amazon_index").await?;
-
-    let hnsw_index = match lastest_index {
-        Some(index) => index,
-        None => {
-            println!("No index found");
-            return Ok(());
-        }
-    };
+    let hnsw_index =
+        EmbeddingStore::load_binary_file(&PathBuf::from("examples/amazon_index/amazon_index.bin"))
+            .await?;
 
     println!(
         "Total nodes: {} in HNSW index",
         hnsw_index.hnsw_store.nodes.len(),
     );
 
-    let batch_num = hnsw_index.hnsw_store.nodes.len() / BATCH_SIZE;
-
     let csv_points = load_amazon_reviews_csv("datasets/amazon_products.csv").await?;
 
     // Take first N * BATCH_SIZE rows from csv
-    let check_points = csv_points[..batch_num * BATCH_SIZE].to_vec();
+    let check_points = csv_points[..NODES_TO_INDEX].to_vec();
 
     // Get all metadata from index
     let metadata_vec: Vec<String> = hnsw_index
@@ -149,13 +149,14 @@ async fn check_csv() -> Result<()> {
 #[tokio::test]
 async fn bench_search() -> Result<()> {
     use colored::Colorize;
-    let (lastest_index, _max_index) =
-        EmbeddingStore::load_lastest_index("amazon_index", "examples/amazon_index").await?;
+    let index =
+        EmbeddingStore::load_binary_file(&PathBuf::from("examples/amazon_index/amazon_index.bin"))
+            .await;
 
-    let embedding_store = match lastest_index {
-        Some(index) => index,
-        None => {
-            println!("No index found");
+    let embedding_store = match index {
+        Ok(index) => index,
+        Err(e) => {
+            println!("No index found - Error loading index: {}", e);
             return Ok(());
         }
     };
@@ -166,7 +167,7 @@ async fn bench_search() -> Result<()> {
         "local",
     );
 
-    let query = "Gaming RTX 4060 Laptop with 165Hz Display";
+    let query = "Valentine gift for girlfriend"; // My lonely ahh ass
     let query_embedding = provider.fetch_embedding(query).await?;
 
     let top_k = 100;
