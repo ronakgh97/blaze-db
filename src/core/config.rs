@@ -20,37 +20,57 @@ lazy_static! {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ClientConfig {
-    pub url: String,
-    pub timeout: u64,
+pub struct UserConfig {
+    pub user: User,
+    pub server: Server,
 }
 
-impl Default for ClientConfig {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct User {
+    pub username: String,
+    pub email: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Server {
+    pub server_url: String,
+    pub instance_url: String,
+}
+
+impl Default for UserConfig {
     fn default() -> Self {
         Self {
-            url: "http://localhost:8080".to_string(),
-            timeout: 30,
+            user: User {
+                username: "local".to_string(),
+                email: "local@example.com".to_string(),
+            },
+            server: Server {
+                server_url: "https://api.blaze.sh".to_string(), // Haven't bought this yet 😅, I swear there was a domain (blaze.tech) less than 2 dollar and now its gone 💀
+                instance_url: "http://127.0.0.1:8080".to_string(),
+            },
         }
     }
 }
 
-impl ClientConfig {
-    pub fn new(url: String, timeout: u64) -> Self {
-        Self { url, timeout }
+impl UserConfig {
+    /// Create new client config
+    pub fn new(user: User, server: Server) -> Self {
+        Self { user, server }
     }
 
-    pub fn update(&mut self, url: String, timeout: u64) {
-        self.url = url;
-        self.timeout = timeout;
+    /// Update client config
+    pub fn update(&mut self, user: User, server: Server) {
+        self.user = user;
+        self.server = server;
     }
 
     /// Load client config from given location
-    pub async fn load_config(config_path: &PathBuf) -> Result<ClientConfig> {
+    pub async fn load_config(config_path: &PathBuf) -> Result<UserConfig> {
         let config_content = fs::read_to_string(&config_path)
             .await
             .with_context(|| format!("Failed to read config file {}", config_path.display()))?;
 
-        let config: ClientConfig = toml::from_str(&config_content)
+        let config: UserConfig = toml::from_str(&config_content)
             .with_context(|| "Failed to parse config".to_string())?;
 
         Ok(config)
@@ -59,8 +79,30 @@ impl ClientConfig {
     /// Get default config path
     pub fn get_default_user_config_path() -> Result<PathBuf> {
         let home = dirs::home_dir().with_context(|| "No home directory?")?;
-        Ok(home.join(".config").join("blaze").join("user_config.toml"))
+        Ok(home.join(".config").join("blaze").join("whoami.toml"))
     }
+}
+
+/// Save TOML configs
+pub async fn save_config<T>(config_path: PathBuf, config: &T) -> Result<()>
+where
+    T: Serialize,
+{
+    // Create parent directory
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("Failed to create config directory {}", parent.display()))?;
+    }
+
+    let toml_string = toml::to_string_pretty(&config)
+        .with_context(|| format!("Failed to serialize config to {}", config_path.display()))?;
+
+    fs::write(&config_path, toml_string)
+        .await
+        .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
+
+    Ok(())
 }
 
 /// SERVER FILE MANAGER (Owns DataStore, provides business logic)
@@ -439,28 +481,6 @@ pub fn get_source_path() -> Result<PathBuf> {
     let home_dir =
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
     Ok(home_dir.join("blaze").join("sources"))
-}
-
-/// Save TOML configs (kept for backward compatibility with user_config.toml)
-pub async fn save_config<T>(config_path: PathBuf, config: &T) -> Result<()>
-where
-    T: Serialize,
-{
-    // Create parent directory
-    if let Some(parent) = config_path.parent() {
-        fs::create_dir_all(parent)
-            .await
-            .with_context(|| format!("Failed to create config directory {}", parent.display()))?;
-    }
-
-    let toml_string = toml::to_string_pretty(&config)
-        .with_context(|| format!("Failed to serialize config to {}", config_path.display()))?;
-
-    fs::write(&config_path, toml_string)
-        .await
-        .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
-
-    Ok(())
 }
 
 /// Check if a source is valid (exists in store AND on disk)

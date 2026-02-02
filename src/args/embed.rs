@@ -1,4 +1,4 @@
-use crate::core::ClientConfig;
+use crate::core::UserConfig;
 use crate::prelude::Ingestor;
 use crate::server::{EmbedRequest, EmbedResponse};
 use anyhow::Result;
@@ -12,7 +12,7 @@ pub async fn embed_run(
 ) -> Result<()> {
     println!("Embedding data into database...: {}", &database);
 
-    let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
+    let config = UserConfig::load_config(&UserConfig::get_default_user_config_path()?).await?;
 
     let batch = batch.unwrap_or(1024);
 
@@ -35,8 +35,12 @@ pub async fn embed_run(
         batch,
     };
 
+    dotenv::dotenv().ok();
+    let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
+
     let response = reqwest::Client::new()
-        .post(config.url + "/v1/blaze/embed")
+        .post(config.server.instance_url + "/v1/blaze/embed")
+        .header("Authorization", format!("Bearer {}", api_key))
         .json(&request_body)
         .send()
         .await?;

@@ -1,13 +1,17 @@
-use crate::core::ClientConfig;
+use crate::core::UserConfig;
 use crate::server::ListResponse;
 use anyhow::Result;
 use colored::Colorize;
 
 pub async fn list_run() -> Result<()> {
-    let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
+    let config = UserConfig::load_config(&UserConfig::get_default_user_config_path()?).await?;
+
+    dotenv::dotenv().ok();
+    let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
 
     let response = reqwest::Client::new()
-        .get(config.url + "/v1/blaze/list")
+        .get(config.server.instance_url + "/v1/blaze/list")
+        .header("Authorization", format!("Bearer {}", api_key))
         .send()
         .await?;
 

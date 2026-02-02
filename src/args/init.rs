@@ -1,4 +1,4 @@
-use crate::core::{ClientConfig, SERVER_FILE, get_source_path, save_config};
+use crate::core::{SERVER_FILE, UserConfig, get_source_path, save_config};
 use anyhow::Result;
 
 // TODO: FIX 'if' statements
@@ -35,17 +35,13 @@ pub async fn init_run_server() -> Result<()> {
     Ok(())
 }
 
-pub async fn init_run_client(url: Option<String>) -> Result<()> {
+pub async fn init_run_client() -> Result<()> {
     println!("Initializing dotfiles...");
 
-    let mut config = ClientConfig::default();
-    if let Some(url) = url {
-        config.update(url, config.timeout);
-    }
+    let config = UserConfig::default();
 
-    save_config(ClientConfig::get_default_user_config_path()?, &config).await?;
+    save_config(UserConfig::get_default_user_config_path()?, &config).await?;
 
-    println!(" Client initialized with URL: {}", config.url);
-
+    println!(" Client defaults initialized");
     Ok(())
 }

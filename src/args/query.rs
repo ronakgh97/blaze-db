@@ -1,4 +1,4 @@
-use crate::core::ClientConfig;
+use crate::core::UserConfig;
 use crate::server::{QueryRequest, QueryResponse};
 use anyhow::Result;
 use colored::Colorize;
@@ -6,7 +6,7 @@ use colored::Colorize;
 pub async fn query_run(database: String, src: String, query: String, top_k: usize) -> Result<()> {
     println!("\nSearch querying the database: {}\n", database.yellow());
 
-    let config = ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await?;
+    let config = UserConfig::load_config(&UserConfig::get_default_user_config_path()?).await?;
 
     let request_body = QueryRequest {
         database,
@@ -15,8 +15,12 @@ pub async fn query_run(database: String, src: String, query: String, top_k: usiz
         source: src,
     };
 
+    dotenv::dotenv().ok();
+    let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
+
     let response = reqwest::Client::new()
-        .post(config.url + "/v1/blaze/query")
+        .post(config.server.instance_url + "/v1/blaze/query")
+        .header("Authorization", format!("Bearer {}", api_key))
         .json(&request_body)
         .send()
         .await?;

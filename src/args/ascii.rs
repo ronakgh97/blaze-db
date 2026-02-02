@@ -1,4 +1,4 @@
-use crate::core::{ClientConfig, SERVER_FILE};
+use crate::core::{SERVER_FILE, UserConfig};
 use colored::Colorize;
 
 pub async fn print_ascii() -> anyhow::Result<()> {
@@ -13,7 +13,7 @@ $$$$$$$  |$$ |\$$$$$$$ |$$$$$$$$\ \$$$$$$$\       \$$$$$$$ |$$$$$$$  |
 \_______/ \__| \_______|\________| \_______|       \_______|\_______/                                                                                                                                            
  "#;
 
-    println!("{}\n", ascii_art.to_string().red());
+    println!("{}\n", ascii_art.to_string().yellow());
 
     // Display server configuration
     let server_file = SERVER_FILE.read().await;
@@ -56,14 +56,22 @@ $$$$$$$  |$$ |\$$$$$$$ |$$$$$$$$\ \$$$$$$$\       \$$$$$$$ |$$$$$$$  |
     }
 
     // Display client configuration
-    let client_config =
-        ClientConfig::load_config(&ClientConfig::get_default_user_config_path()?).await;
+    let client_config = UserConfig::load_config(&UserConfig::get_default_user_config_path()?).await;
 
     match client_config {
         Ok(client_config) => {
-            println!(" Client Configuration:");
-            println!("  URL: {}", client_config.url);
-            println!("  Timeout: {}s", client_config.timeout);
+            println!(" Client Configuration\n");
+            println!(" User: {}", client_config.user.username);
+            dotenv::dotenv().ok();
+            if let Ok(api_key) = std::env::var("BLAZE_API_KEY") {
+                println!(" API Key: {}****", api_key[0..6].to_string().dimmed());
+            }
+
+            println!(" Service URL: {}", client_config.server.server_url);
+            println!(
+                "  Instance Server URL: {}",
+                client_config.server.instance_url
+            );
             println!();
         }
         Err(_) => {
