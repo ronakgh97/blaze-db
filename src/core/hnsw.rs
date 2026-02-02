@@ -42,6 +42,17 @@ pub struct HNSW {
     pub distribution_bias: f32,
 }
 
+impl Default for HNSW {
+    /// Default HNSW parameters:
+    /// - max_neighbors: 16
+    /// - ef_construction: 200
+    /// - max_layers: 12
+    /// - distribution_bias: 1.0 (Unused btw)
+    fn default() -> Self {
+        HNSW::new(16, 200, 16, 1.0)
+    }
+}
+
 impl HNSW {
     /// Creates a new HNSW instance with specified parameters.
     pub fn new(
