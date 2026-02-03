@@ -6,7 +6,7 @@ use colored::Colorize;
 pub async fn query_run(database: String, src: String, query: String, top_k: usize) -> Result<()> {
     println!("\nSearch querying the database: {}\n", database.yellow());
 
-    let config = UserConfig::load_config(&UserConfig::get_default_user_config_path()?).await?;
+    let config = UserConfig::load_config(&UserConfig::get_default_path()?).await?;
 
     let request_body = QueryRequest {
         database,

@@ -12,7 +12,7 @@ pub async fn embed_run(
 ) -> Result<()> {
     println!("Embedding data into database...: {}", &database);
 
-    let config = UserConfig::load_config(&UserConfig::get_default_user_config_path()?).await?;
+    let config = UserConfig::load_config(&UserConfig::get_default_path()?).await?;
 
     let batch = batch.unwrap_or(1024);
 

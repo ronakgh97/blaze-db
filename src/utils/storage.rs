@@ -49,12 +49,6 @@ impl EmbeddingStore {
     /// - No references to the mmap escape the blocking task
     /// - Multiple concurrent calls are safe as each has its own mmap instance
     ///
-    /// ### Performance
-    /// Uses `memmap2` for efficient file loading:
-    /// - Faster than reading entire file into memory
-    /// - Lower memory overhead for large files
-    /// - OS-level page cache optimization
-    ///
     /// ### Safety
     /// The unsafe `Mmap::map()` call is safe because:
     /// - We only read from the mmap (no writes)

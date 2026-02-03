@@ -45,7 +45,7 @@ impl Default for UserConfig {
                 email: "local@example.com".to_string(),
             },
             server: Server {
-                server_url: "https://api.blaze.sh".to_string(), // Haven't bought this yet 😅, I swear there was a domain (blaze.tech) less than 2 dollar and now its gone 💀
+                server_url: "https://api.blazedb.online".to_string(), // Bought this for only $1.08 for 1 year :)
                 instance_url: "http://127.0.0.1:8080".to_string(),
             },
         }
@@ -77,7 +77,7 @@ impl UserConfig {
     }
 
     /// Get default config path
-    pub fn get_default_user_config_path() -> Result<PathBuf> {
+    pub fn get_default_path() -> Result<PathBuf> {
         let home = dirs::home_dir().with_context(|| "No home directory?")?;
         Ok(home.join(".config").join("blaze").join("whoami.toml"))
     }

@@ -4,8 +4,8 @@ pub mod hnsw;
 mod search;
 
 pub use config::{
-    SERVER_FILE, ServerFile, SyncReport, UserConfig, check_source_valid, get_source_path,
-    list_sources, save_config,
+    SERVER_FILE, Server, ServerFile, SyncReport, User, UserConfig, check_source_valid,
+    get_source_path, list_sources, save_config,
 };
 pub use data::{Source, VectorBase};
 #[allow(unused)]

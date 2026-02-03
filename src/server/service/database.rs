@@ -11,7 +11,6 @@ use uuid::Uuid;
 // TODO: LOCK CONTENTION - This function holds SERVER_FILE write lock for entire operation
 // The lock covers: validation (with I/O), duplicate check, metadata update (disk write), directory creation
 // Blocks ALL other database/source operations during this time
-// Current approach: Simple, correct, thread-safe - just slower than optimal
 pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<CreateDatabaseResponse> {
     let database_id = Uuid::new_v4().to_string();
     let timestamp = Utc::now().to_rfc3339();

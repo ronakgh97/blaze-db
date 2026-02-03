@@ -40,7 +40,7 @@ pub async fn init_run_client() -> Result<()> {
 
     let config = UserConfig::default();
 
-    save_config(UserConfig::get_default_user_config_path()?, &config).await?;
+    save_config(UserConfig::get_default_path()?, &config).await?;
 
     println!(" Client defaults initialized");
     Ok(())

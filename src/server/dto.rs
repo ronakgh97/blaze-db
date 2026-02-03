@@ -23,6 +23,7 @@ pub struct CreateDatabaseResponse {
     pub name: String,
     pub dimensions: usize,
     pub source: String,
+    // pub metric: Option<String>,
     pub created_at: String,
 }
 

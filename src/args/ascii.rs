@@ -56,7 +56,7 @@ $$$$$$$  |$$ |\$$$$$$$ |$$$$$$$$\ \$$$$$$$\       \$$$$$$$ |$$$$$$$  |
     }
 
     // Display client configuration
-    let client_config = UserConfig::load_config(&UserConfig::get_default_user_config_path()?).await;
+    let client_config = UserConfig::load_config(&UserConfig::get_default_path()?).await;
 
     match client_config {
         Ok(client_config) => {

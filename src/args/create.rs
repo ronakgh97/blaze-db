@@ -29,7 +29,7 @@ pub async fn create_run(
 async fn create_database(name: String, src: &String, dimensions: usize) -> Result<()> {
     println!("Creating a new database: {}", name.yellow());
 
-    let config = UserConfig::load_config(&UserConfig::get_default_user_config_path()?).await?;
+    let config = UserConfig::load_config(&UserConfig::get_default_path()?).await?;
 
     let request_body = CreateDatabaseRequest {
         name,
@@ -64,7 +64,7 @@ async fn create_database(name: String, src: &String, dimensions: usize) -> Resul
 async fn create_source(name: &String) -> Result<()> {
     println!("Creating a new source: {}", name.yellow());
 
-    let config = UserConfig::load_config(&UserConfig::get_default_user_config_path()?).await?;
+    let config = UserConfig::load_config(&UserConfig::get_default_path()?).await?;
 
     let request_body = CreateSourceRequest {
         source_name: name.to_string(),
