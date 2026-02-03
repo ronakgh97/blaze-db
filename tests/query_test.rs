@@ -1,5 +1,6 @@
 use blaze_db::prelude::{QueryRequest, QueryResponse};
 
+// TODO: Something wrong here with the index 👺, for now, fuck it, just ignore
 // This test requires for server to be running, and amazon product index created.
 #[ignore]
 #[tokio::test]
@@ -7,17 +8,24 @@ async fn test_cache_and_bench() -> anyhow::Result<()> {
     // Send a query request to the server
     let client = reqwest::Client::new();
 
-    let query_request = QueryRequest {
-        query: "Gaming RTX 4060 Laptop with 165Hz Display ".to_string(),
+    let query_request_1 = QueryRequest {
+        query: "Valentine gift for girlfriend".to_string(), // My lonely ahh ass
         database: "test_db".to_string(),
         source: "default_src".to_string(),
-        top_k: 5,
+        top_k: 10,
+    };
+
+    let query_request_2 = QueryRequest {
+        query: "Wedding present ideas for couple".to_string(), // I'm too distracted
+        database: "test_db".to_string(),
+        source: "default_src".to_string(),
+        top_k: 10,
     };
 
     let time_taken_no_cache = std::time::Instant::now();
     let resp = client
         .post("http://localhost:8080/v1/blaze/query")
-        .json(&query_request)
+        .json(&query_request_1)
         .send()
         .await?;
     let client_elapsed_no_cache = time_taken_no_cache.elapsed().as_secs_f64();
@@ -46,6 +54,8 @@ async fn test_cache_and_bench() -> anyhow::Result<()> {
         all_total_client_server_no_cache, client_elapsed_no_cache, total_time_no_cache_server
     );
 
+    // println!("Results: {:?}", query_response.results);
+
     // Maybe wait a bit to ensure cache is ready
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
@@ -53,7 +63,7 @@ async fn test_cache_and_bench() -> anyhow::Result<()> {
     let time_taken_with_cache = std::time::Instant::now();
     let resp_cached = client
         .post("http://localhost:8080/v1/blaze/query")
-        .json(&query_request)
+        .json(&query_request_2)
         .send()
         .await?;
     let client_elapsed_with_cache = time_taken_with_cache.elapsed().as_secs_f64();
@@ -82,6 +92,8 @@ async fn test_cache_and_bench() -> anyhow::Result<()> {
         "Total time with cache: {}s (Client: {}s, Server: {}s)",
         all_total_client_server_with_cache, client_elapsed_with_cache, total_time_with_cache_server
     );
+
+    // println!("Results: {:?}", query_response.results);
 
     // Ensure that the cached query is faster than the non-cached one
     assert!(
