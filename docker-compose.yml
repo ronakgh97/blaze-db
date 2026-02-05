@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     image: blazedb:latest
     container_name: blazedb-server
+    #expose:
+    #  - 8080
     ports:
       - "${PORT}:${PORT}"
     env_file:
@@ -19,7 +21,7 @@ services:
       #- EMBEDDING_MODEL=text-embedding-qwen3-embedding-0.6b
       #- EMBEDDING_API_URL=http://host.docker.internal:1234/v1/embeddings
       #- EMBEDDING_API_KEY=local
-    command: ["serve"]
+    command: [ "serve" ]
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -27,11 +29,13 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "test", "-f", "/app/blzsrv"]
+      test: [ "CMD", "test", "-f", "/app/blzsrv" ]
       interval: 30s
       timeout: 3s
       start_period: 10s
       retries: 3
+    networks:
+      - blazedb-network
     # deploy:
     #   resources:
     #     limits:
@@ -47,6 +51,6 @@ volumes:
   blazedb-sources:
     driver: local
 
-# networks:
-#   blazedb-network:
-#     driver: bridge
+networks:
+  blazedb-network:
+    driver: bridge

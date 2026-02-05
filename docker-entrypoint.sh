@@ -7,7 +7,7 @@ chmod -R 755 /home/blazedb/blaze/sources
 chmod -R 755 /home/blazedb/.config/blaze
 
 # Initialize config if it doesn't exist
-if [ ! -f "/home/blazedb/.config/blaze/server_file.toml" ]; then
+if [ ! -f "/home/blazedb/.config/blaze/SERVER_DATA.json" ]; then
     echo "Server file not found. Running initialization..."
     /app/blzsrv init
     echo "Initialization complete."
