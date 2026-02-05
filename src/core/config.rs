@@ -12,8 +12,8 @@ use tokio::sync::RwLock;
 lazy_static! {
     /// Global thread-safe ServerFile instance
     /// All operations MUST go through this singleton to ensure thread safety
-    pub static ref SERVER_FILE: Arc<RwLock<ServerFile>> = {
-        let server_file = ServerFile::load_or_new()
+    pub static ref SERVER_FILE: Arc<RwLock<Catalog>> = {
+        let server_file = Catalog::load_or_new()
             .expect("Failed to initialize ServerFile");
         Arc::new(RwLock::new(server_file))
     };
@@ -114,11 +114,11 @@ where
 /// - Uses DataStore which has internal RwLock for thread-safe operations
 /// - Global singleton wrapped in Arc<RwLock<>> for additional safety
 /// - All disk I/O is synchronized through DataStore
-pub struct ServerFile {
+pub struct Catalog {
     store: DataStore<String, Source>,
 }
 
-impl ServerFile {
+impl Catalog {
     /// Initialize ServerFile by loading from disk or creating new
     /// This is called once during lazy_static initialization
     /// THIS DOES NOT CREATE DEFAULT SOURCES AUTOMATICALLY

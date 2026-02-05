@@ -12,7 +12,7 @@ pub mod prelude {
     };
     pub use crate::client_args::{ClientArgs, ClientCommands};
     pub use crate::core::{
-        HNSW, Metrics, Node, NodeId, SERVER_FILE, ServerFile, Source, SyncReport, UserConfig,
+        Catalog, HNSW, Metrics, Node, NodeId, SERVER_FILE, Source, SyncReport, UserConfig,
         VectorBase, check_source_valid, cosine_similarity, dot_product, euclidean_similarity,
         get_source_path, list_sources, save_config,
     };

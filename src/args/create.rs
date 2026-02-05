@@ -41,7 +41,7 @@ async fn create_database(name: String, src: &String, dimensions: usize) -> Resul
     let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
 
     let response = reqwest::Client::new()
-        .post(config.server.instance_url + "/v1/blaze/databases/create")
+        .post(config.server.instance_url + "/v1/blazedb/databases/create")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&request_body)
         .send()
@@ -74,7 +74,7 @@ async fn create_source(name: &String) -> Result<()> {
     let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
 
     let response = reqwest::Client::new()
-        .post(config.server.instance_url + "/v1/blaze/sources/create")
+        .post(config.server.instance_url + "/v1/blazedb/sources/create")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&request_body)
         .send()

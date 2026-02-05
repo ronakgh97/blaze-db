@@ -45,13 +45,13 @@ lazy_static! {
 
 async fn create_router() -> Router {
     Router::new()
-        .route("/v1/blaze/health", get(health_check))
-        .route("/v1/blaze/databases/create", post(create_database))
-        .route("/v1/blaze/sources/create", post(create_src))
-        .route("/v1/blaze/list", get(list_sources))
-        .route("/v1/blaze/insert", post(new_insert))
-        .route("/v1/blaze/embed", post(new_embeddings))
-        .route("/v1/blaze/query", post(search_query))
+        .route("/v1/blazedb/health", get(health_check))
+        .route("/v1/blazedb/databases/create", post(create_database))
+        .route("/v1/blazedb/sources/create", post(create_src))
+        .route("/v1/blazedb/list", get(list_sources))
+        .route("/v1/blazedb/insert", post(new_insert))
+        .route("/v1/blazedb/embed", post(new_embeddings))
+        .route("/v1/blazedb/query", post(search_query))
         //.route("/v1/blaze/query/vector", post(search_vector)) TODO: Endpoint for direct vector queries
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
 }

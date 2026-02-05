@@ -10,7 +10,7 @@ pub async fn list_run() -> Result<()> {
     let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
 
     let response = reqwest::Client::new()
-        .get(config.server.instance_url + "/v1/blaze/list")
+        .get(config.server.instance_url + "/v1/blazedb/list")
         .header("Authorization", format!("Bearer {}", api_key))
         .send()
         .await?;

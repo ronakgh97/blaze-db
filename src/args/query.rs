@@ -19,7 +19,7 @@ pub async fn query_run(database: String, src: String, query: String, top_k: usiz
     let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
 
     let response = reqwest::Client::new()
-        .post(config.server.instance_url + "/v1/blaze/query")
+        .post(config.server.instance_url + "/v1/blazedb/query")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&request_body)
         .send()

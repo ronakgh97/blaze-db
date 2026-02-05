@@ -39,7 +39,7 @@ pub async fn embed_run(
     let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
 
     let response = reqwest::Client::new()
-        .post(config.server.instance_url + "/v1/blaze/embed")
+        .post(config.server.instance_url + "/v1/blazedb/embed")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&request_body)
         .send()

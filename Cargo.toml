@@ -45,6 +45,16 @@ strip = true
 incremental = false
 debug = false
 
+[profile.dev]
+opt-level = 1
+debug = true
+incremental = true
+
+[profile.dev.package."*"]
+opt-level = 1
+debug = true
+incremental = true
+
 [dependencies]
 tokio = { version = "1.49.0", features = ["full"] }
 memmap2 = "0.9.9"
