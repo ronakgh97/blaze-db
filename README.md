@@ -10,18 +10,29 @@ embeddings using HNSW Indexing.
 - Batch/Chunks processing for embedding generation (Only used in CLI Wrapper).
 - Stores/Index embeddings on disk in binary/JSON format.
 - Use memory-mapped files for fast loading and concurrent reads, rayon for parallel processing (where possible).
-- Index caching (LRU), which gives 46x faster I/O with reads and writes lockings (thread-safe).
+- Index caching (LRU), which gives about 86x faster I/O with reads and writes lockings (thread-safe).
 - Implements HNSW (Hierarchical Navigable Small World) graph for approximate nearest neighbor search.
 - Basic HTTP API server for remote database access.
 - CLI client for local/remote database querying.
 - Uses semantic similarity search with multiple distance metrics (Cosine, Euclidean, Dot Product).
-- Performance benchmarking suite (<1ms per search on War and Peace dataset, <1ms per search on Amazon Product Dataset).
+- Performance benchmarking suite (<1ms per search on War and Peace dataset, <5ms per search on Amazon Product Dataset).
+
+## Quick Links
+
+- [Docker Hub Image](https://hub.docker.com/r/ronakgh97/blazedb) - `docker pull ronakgh97/blazedb:latest`
+- [Pre-indexed Dataset (Google Drive)](https://drive.google.com/file/d/1rnnpMNYzbwkOr9dIetZW83JeF5WCV5cL/view?usp=sharing) -
+  278K vectors, ready to use
+- [Amazon Products Source Dataset](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products) -
+  About 1.4M 2023 products, for indexing and testing
 
 ## Usage
 
-### Start the Server bin
+### Build from Source (Cargo needed)
 
 ```shell
+# Initialize dotfiles
+blzsrv init
+
 blzsrv serve
 
 [14:15:46][INFO] Starting the Server...
@@ -36,6 +47,32 @@ blzsrv serve
   here: [Google Drive Link](https://drive.google.com/file/d/1rnnpMNYzbwkOr9dIetZW83JeF5WCV5cL/view?usp=sharing)
 - Checksum (Sha256): **20e7ec6fb00fc7d6988daa0a67349a76898a44dfd46c899cc841f937f0d429b8**
 - Extract to `~/.blaze/sources/default_src/amazon_products_2023/`
+
+### Docker
+
+```shell
+# Pull the image from Docker Hub
+docker pull ronakgh97/blazedb:latest
+
+# Run the container
+docker run -d \
+  --name blazedb \
+  -p 8080:8080 \
+  -env-file .env \
+  -v blazedb-config:/home/blazedb/.config/blaze \
+  -v blazedb-sources:/home/blazedb/blaze \
+  ronakgh97/blazedb:latest
+```
+
+- Download Pre-Indexed
+  from: [Google Drive Link](https://drive.google.com/file/d/1rnnpMNYzbwkOr9dIetZW83JeF5WCV5cL/view?usp=sharing)
+- Checksum (SHA256): **20e7ec6fb00fc7d6988daa0a67349a76898a44dfd46c899cc841f937f0d429b8**
+- Extract and copy to Docker volume
+- Before copying, create a database `amazon_products_2023` using CLI or API, so that the server recognizes it.
+
+```shell
+docker cp amazon_products_2023 blazedb-server:/home/blazedb/blaze/sources/default_src/amazon_products_2023
+```
 
 ### Query using CLI Client
 
@@ -74,7 +111,7 @@ Title: ASUS ROG Swift 27” 1440P Gaming Monitor (PG279QM) - WQHD, Fast IPS, 240
 ```
 
 - Had a classic moment here, was getting 28ms, until I realized that I was running in debug mode. 😶
-- Anyways, 4.5ms is pretty good for 278528 vectors! 👨‍🍳🔥
+- Anyway, 4.5ms is pretty good for 278528 vectors! 👨‍🍳🔥
 - Amazon product 2023
   dataset: [Source Link](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products?select=amazon_products.csv)
 
@@ -268,6 +305,8 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - So many Locks and IO everywhere, need a serious fix, no jokes. `Someone help me pls. 😭`
 - Server logs are mess, current using my custom macros, need proper monitoring solution. `HELP`
 - Cloud deployment options. `What is cloud thingy?`
+- Missing Database ops endpoints are missing!!!
+- Tombstone deletion and Background reindexing for better performance. `IN PROGRESS`
 
 ## References
 
@@ -278,6 +317,10 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues or submit pull requests. 🤧🏳️
+
+> 📚 **For Contributors:** See [CONTRIBUTOR_GUIDE.md](docs/CONTRIBUTOR_GUIDE.md) for Docker development workflow and
+> testing
+> checklist.
 
 My Code, My Rules 😼
 
