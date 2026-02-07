@@ -32,12 +32,12 @@ fn generate_query_vector(dimensions: usize) -> Vec<f32> {
     (0..dimensions).map(|i| (i as f32 * 0.002).cos()).collect()
 }
 
-/// Benchmark HNSW construction with varying number of vectors (100, 500, 1K, 5K) 384-dim
+/// Benchmark HNSW construction with varying number of vectors (100, 500, 1K, 5K) 1024-dim
 fn bench_hnsw_construction_varying_vectors(c: &mut Criterion) {
     let vector_counts = [1_000, 5_000, 10_000, 50_000];
-    let dimensions = 384;
+    let dimensions = 1024;
 
-    let mut group = c.benchmark_group("hnsw_construction_by_vector_count");
+    let mut group = c.benchmark_group("construction_benches");
     group.sample_size(10); // Reduce sample size for slower operations
 
     for count in vector_counts {
@@ -59,12 +59,12 @@ fn bench_hnsw_construction_varying_vectors(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark HNSW construction with varying dimensions (384, 768, 1024, 1536) with 1000 vectors
+/// Benchmark HNSW construction with varying dimensions (1024, 768, 1024, 1536) with 1000 vectors
 fn bench_hnsw_construction_varying_dimensions(c: &mut Criterion) {
-    let dimensions = [384, 768, 1024, 1536];
+    let dimensions = [1024, 768, 1024, 1536];
     let vector_count = 1_000;
 
-    let mut group = c.benchmark_group("hnsw_construction_by_dimensions");
+    let mut group = c.benchmark_group("construction_benches");
     group.sample_size(10);
 
     for dim in dimensions {
@@ -86,15 +86,15 @@ fn bench_hnsw_construction_varying_dimensions(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark HNSW construction with different max_neighbors (M) values (8, 16, 32, 48) with 1000 vectors, 384-dim
+/// Benchmark HNSW construction with different max_neighbors (M) values (8, 16, 32, 48) with 1000 vectors, 1024-dim
 fn bench_hnsw_construction_varying_m(c: &mut Criterion) {
     let m_values = [8, 16, 32, 48];
     let vector_count = 1_000;
-    let dimensions = 384;
+    let dimensions = 1024;
 
     let vectors = generate_deterministic_vectors(vector_count, dimensions);
 
-    let mut group = c.benchmark_group("hnsw_construction_by_max_neighbors");
+    let mut group = c.benchmark_group("construction_benches");
     group.sample_size(10);
 
     for m in m_values {
@@ -113,15 +113,15 @@ fn bench_hnsw_construction_varying_m(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark HNSW construction with different ef_construction values (50, 100, 200, 400) with 1000 vectors, 384-dim
+/// Benchmark HNSW construction with different ef_construction values (50, 100, 200, 400) with 1000 vectors, 1024-dim
 fn bench_hnsw_construction_varying_ef(c: &mut Criterion) {
     let ef_values = [50, 100, 200, 400];
     let vector_count = 1_000;
-    let dimensions = 384;
+    let dimensions = 1024;
 
     let vectors = generate_deterministic_vectors(vector_count, dimensions);
 
-    let mut group = c.benchmark_group("hnsw_construction_by_ef_construction");
+    let mut group = c.benchmark_group("construction_benches");
     group.sample_size(10);
 
     for ef in ef_values {
@@ -154,13 +154,13 @@ fn build_hnsw_index(num_vectors: usize, dimensions: usize) -> HNSW {
     hnsw
 }
 
-/// Benchmark search with varying index sizes
+/// Benchmark search with varying index sizes (1K, 5K, 10K, 50K) with 1024-dim and k=10
 fn bench_hnsw_search_varying_index_size(c: &mut Criterion) {
     let index_sizes = [1_000, 5_000, 10_000, 50_000];
-    let dimensions = 384;
+    let dimensions = 1024;
     let k = 10;
 
-    let mut group = c.benchmark_group("hnsw_search_by_index_size");
+    let mut group = c.benchmark_group("search_benches");
     group.sample_size(30);
 
     for size in index_sizes {
@@ -176,16 +176,16 @@ fn bench_hnsw_search_varying_index_size(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark search with varying k (top-k values) 1,5,10,20,50,100 on 10K index, 384-dim
+/// Benchmark search with varying k (top-k values) 1,5,10,20,50,100 on 10K index, 1024-dim
 fn bench_hnsw_search_varying_k(c: &mut Criterion) {
     let k_values = [1, 5, 10, 20, 50, 100];
     let index_size = 10_000;
-    let dimensions = 384;
+    let dimensions = 1024;
 
     let hnsw = build_hnsw_index(index_size, dimensions);
     let query = generate_query_vector(dimensions);
 
-    let mut group = c.benchmark_group("hnsw_search_by_top_k");
+    let mut group = c.benchmark_group("search_benches");
     group.sample_size(50);
 
     for k in k_values {
@@ -197,13 +197,13 @@ fn bench_hnsw_search_varying_k(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark search with varying dimensions (64, 128, 256, 384, 512) on 10K index
+/// Benchmark search with varying dimensions (1024, 512, 768, 1024, 1536) on 10K index with k=10
 fn bench_hnsw_search_varying_dimensions(c: &mut Criterion) {
-    let dimensions = [64, 128, 256, 384, 512];
+    let dimensions = [1024, 512, 768, 1024, 1536];
     let index_size = 10_000;
     let k = 10;
 
-    let mut group = c.benchmark_group("hnsw_search_by_dimensions");
+    let mut group = c.benchmark_group("search_benches");
     group.sample_size(30);
 
     for dim in dimensions {
@@ -222,13 +222,13 @@ fn bench_hnsw_search_varying_dimensions(c: &mut Criterion) {
 /// Benchmark search with metadata retrieval
 fn bench_hnsw_search_with_metadata(c: &mut Criterion) {
     let index_size = 10_000;
-    let dimensions = 384;
+    let dimensions = 1024;
     let k = 10;
 
     let hnsw = build_hnsw_index(index_size, dimensions);
     let query = generate_query_vector(dimensions);
 
-    let mut group = c.benchmark_group("hnsw_search_metadata");
+    let mut group = c.benchmark_group("search_benches");
     group.sample_size(50);
 
     group.bench_function("search_plain", |bench| {
@@ -245,15 +245,15 @@ fn bench_hnsw_search_with_metadata(c: &mut Criterion) {
 /// Benchmark typical embedding dimensions (OpenAI, sentence-transformers, etc.)
 fn bench_hnsw_common_embedding_dimensions(c: &mut Criterion) {
     let configs = [
-        ("openai_ada_002", 1536),     // OpenAI text-embedding-ada-002
-        ("sentence_bert_base", 768),  // BERT-base sentence embeddings
-        ("sentence_bert_small", 384), // MiniLM sentence embeddings
-        ("cohere_embed", 1024),       // Cohere embeddings
+        ("openai_ada_002", 1536),      // OpenAI text-embedding-ada-002
+        ("sentence_bert_base", 768),   // BERT-base sentence embeddings
+        ("sentence_bert_small", 1024), // MiniLM sentence embeddings
+        ("cohere_embed", 1024),        // Cohere embeddings
     ];
     let index_size = 10_000;
     let k = 10;
 
-    let mut group = c.benchmark_group("hnsw_common_embeddings");
+    let mut group = c.benchmark_group("realworld_benches");
     group.sample_size(20);
 
     for (name, dim) in configs {
@@ -268,16 +268,16 @@ fn bench_hnsw_common_embedding_dimensions(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark batch query scenario (10, 50, 100, 500 queries) on 10K index, 384-dim
+/// Benchmark batch query scenario (10, 50, 100, 500 queries) on 10K index, 1024-dim
 fn bench_hnsw_batch_queries(c: &mut Criterion) {
     let batch_sizes = [10, 50, 100, 500];
     let index_size = 10_000;
-    let dimensions = 384;
+    let dimensions = 1024;
     let k = 10;
 
     let hnsw = build_hnsw_index(index_size, dimensions);
 
-    let mut group = c.benchmark_group("hnsw_batch_queries");
+    let mut group = c.benchmark_group("realworld_benches");
     group.sample_size(20);
 
     for batch_size in batch_sizes {
@@ -306,13 +306,13 @@ fn bench_hnsw_batch_queries(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark incremental inserts into existing index (500, 1K, 5K) adding 100 vectors each time, 384-dim
+/// Benchmark incremental inserts into existing index (500, 1K, 5K) adding 100 vectors each time, 1024-dim
 fn bench_hnsw_incremental_insert(c: &mut Criterion) {
     let initial_sizes = [500, 1_000, 5_000];
-    let dimensions = 384;
+    let dimensions = 1024;
     let inserts_per_bench = 100;
 
-    let mut group = c.benchmark_group("hnsw_incremental_insert");
+    let mut group = c.benchmark_group("incremental_benches");
     group.sample_size(20);
 
     for initial_size in initial_sizes {
@@ -338,12 +338,12 @@ fn bench_hnsw_incremental_insert(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark single insert operation at different index sizes (100, 500, 1K, 5K) 384-dim
+/// Benchmark single insert operation at different index sizes (100, 500, 1K, 5K) 1024-dim
 fn bench_hnsw_single_insert_at_scale(c: &mut Criterion) {
     let index_sizes = [100, 500, 1_000, 5_000];
-    let dimensions = 384;
+    let dimensions = 1024;
 
-    let mut group = c.benchmark_group("hnsw_single_insert_scalability");
+    let mut group = c.benchmark_group("incremental_benches");
     group.sample_size(30);
 
     for size in index_sizes {

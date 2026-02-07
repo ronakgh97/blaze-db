@@ -45,6 +45,14 @@ strip = true
 incremental = false
 debug = false
 
+[profile.bench]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+incremental = false
+debug = false
+
 [profile.dev]
 opt-level = 1
 debug = true
@@ -85,6 +93,6 @@ regex = "1.12.2"
 # thiserror = "2.0.18"
 
 [dev-dependencies]
-criterion = "0.8.1"
+criterion = "0.8.2"
 tempfile = "3.8"
 futures = "0.3"
