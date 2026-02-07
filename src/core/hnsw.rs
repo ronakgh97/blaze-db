@@ -620,9 +620,17 @@ impl HNSW {
     }
 
     /// Get metadata for a specific node
-    pub fn get_metadata(&self, node_id: NodeId) -> Option<&String> {
+    pub fn get_metadata_by_id(&self, node_id: NodeId) -> Option<&String> {
         self.nodes.get(node_id).map(|node| &node.metadata)
     }
+
+    /// Get vector for a specific node
+    pub fn get_vector_by_id(&self, node_id: NodeId) -> Option<&Vec<f32>> {
+        self.nodes.get(node_id).map(|node| &node.vector)
+    }
+
+    //TODO: Deletion API - non-trivial in HNSW, requires careful handling of neighbors and layers
+    //TODO: Will use Tombstone markers for 'deleted nodes' and skip them during search, then periodically rebuild the graph to clean up 😌
 }
 
 /// Unique identifier for a node in the HNSW graph.

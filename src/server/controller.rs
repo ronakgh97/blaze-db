@@ -53,6 +53,9 @@ async fn create_router() -> Router {
         .route("/v1/blazedb/embed", post(new_embeddings))
         .route("/v1/blazedb/query", post(search_query))
         //.route("/v1/blaze/query/vector", post(search_vector)) TODO: Endpoint for direct vector queries
+        //.route("/v1/blaze/sources/del", get(delete_src)) TODO: Endpoint to delete source and all associated databases and indexes
+        //.route("/v1/blaze/databases/del", get(delete_db)) TODO: Endpoint to delete database and all associated indexes
+        //.route("/v1/blaze/vectors/del", get(delete_vectors)) TODO: Endpoint to delete specific vectors from a database
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
 }
 
