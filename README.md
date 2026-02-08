@@ -24,6 +24,7 @@ embeddings using HNSW Indexing.
   278K vectors, ready to use
 - [Amazon Products Source Dataset](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products) -
   About 1.4M 2023 products, for indexing and testing
+- [BlazeDB Service](https://github.com/ronakgh97/blazedb-service)
 
 ## Usage
 
@@ -314,6 +315,13 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - [Curse of Dimensionality](https://en.wikipedia.org/wiki/Curse_of_dimensionality)
 - [Little Intro](https://www.pinecone.io/learn/series/faiss/hnsw/)
 - [Arvix HNSW Paper](https://arxiv.org/abs/2512.06636)
+
+## Support the Project
+
+Development and Hosting on high-dimensional datasets require decent hardware.
+If you'd like to support the hosting costs (VPS/GPU instances for hosting), you can contribute here:
+
+- [Support VPS Costs](https://razorpay.me/@ronak8747)
 
 ## Contributing
 
