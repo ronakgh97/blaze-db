@@ -1,4 +1,4 @@
-use crate::core::cosine_similarity;
+use crate::core::{Metrics, cosine_similarity, dot_product, euclidean_similarity};
 use bincode::{Decode, Encode};
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -40,6 +40,9 @@ pub struct HNSW {
     pub ef_construction: usize,
     /// Controls the layer distribution of nodes (exponential distribution bias) CURRENTLY UNUSED
     pub distribution_bias: f32,
+    /// Similarity metric to use for distance calculations (default: Cosine)
+    // TODO: Take Option type here
+    pub metrics: Option<Metrics>,
 }
 
 impl Default for HNSW {
@@ -49,7 +52,7 @@ impl Default for HNSW {
     /// - max_layers: 12
     /// - distribution_bias: 1.0 (Unused btw)
     fn default() -> Self {
-        HNSW::new(16, 200, 16, 1.0)
+        HNSW::new(16, 200, 16, 1.0, &Some(Metrics::Cosine))
     }
 }
 
@@ -60,14 +63,16 @@ impl HNSW {
         ef_construction: usize,
         max_layers: usize,
         distribution_bias: f32,
+        metrics: &Option<Metrics>,
     ) -> Self {
         HNSW {
-            nodes: Vec::with_capacity(10000), // Preallocate for efficiency
+            nodes: Vec::with_capacity(10_000), // Preallocate for efficiency
             entry_point: None,
             max_layers,
             max_neighbors,
             ef_construction,
             distribution_bias, // Currently unused
+            metrics: metrics.clone(),
         }
     }
 
@@ -252,7 +257,8 @@ impl HNSW {
     /// Used for navigating upper layers quickly
     fn search_layer_greedy(&self, query: &[f32], entry: NodeId, layer: usize) -> NodeId {
         let mut current = entry;
-        let mut current_sim = self.similarity(query, &self.nodes[current].vector);
+        let mut current_sim =
+            self.similarity(query, &self.nodes[current].vector, self.metrics.as_ref());
         let mut improved = true;
 
         // println!(
@@ -285,7 +291,11 @@ impl HNSW {
                 // .ok();
 
                 for &neighbor_id in &self.nodes[current].neighbors[layer] {
-                    let neighbor_sim = self.similarity(query, &self.nodes[neighbor_id].vector);
+                    let neighbor_sim = self.similarity(
+                        query,
+                        &self.nodes[neighbor_id].vector,
+                        self.metrics.as_ref(),
+                    );
 
                     if neighbor_sim > current_sim {
                         current = neighbor_id;
@@ -342,7 +352,7 @@ impl HNSW {
         // Best found so far
         let mut results = Vec::with_capacity(candidates.capacity());
 
-        let entry_sim = self.similarity(query, &self.nodes[entry].vector);
+        let entry_sim = self.similarity(query, &self.nodes[entry].vector, self.metrics.as_ref());
         visited.insert(entry);
         candidates.push((entry, entry_sim));
         results.push((entry, entry_sim));
@@ -408,7 +418,11 @@ impl HNSW {
 
                 for &neighbor_id in &self.nodes[current_id].neighbors[layer] {
                     if visited.insert(neighbor_id) {
-                        let sim = self.similarity(query, &self.nodes[neighbor_id].vector);
+                        let sim = self.similarity(
+                            query,
+                            &self.nodes[neighbor_id].vector,
+                            self.metrics.as_ref(),
+                        );
 
                         // Only add if better than worst result or we haven't found ef results yet
                         if results.len() < ef || sim > results[ef - 1].1 {
@@ -479,7 +493,11 @@ impl HNSW {
         let mut neighbor_sims: Vec<(NodeId, f32)> = self.nodes[node_id].neighbors[layer]
             .par_iter()
             .map(|&n| {
-                let sim = self.similarity(&self.nodes[node_id].vector, &self.nodes[n].vector);
+                let sim = self.similarity(
+                    &self.nodes[node_id].vector,
+                    &self.nodes[n].vector,
+                    self.metrics.as_ref(),
+                );
                 (n, sim)
             })
             .collect();
@@ -525,8 +543,12 @@ impl HNSW {
     /// For random high-dimensional vectors, similarities are typically around 0.0
     /// because random vectors are nearly orthogonal in high dimensions.
     #[inline]
-    fn similarity(&self, a: &[f32], b: &[f32]) -> f32 {
-        cosine_similarity(a, b)
+    fn similarity(&self, a: &[f32], b: &[f32], metrics: Option<&Metrics>) -> f32 {
+        match metrics {
+            Some(Metrics::Cosine) | None => cosine_similarity(a, b),
+            Some(Metrics::Euclidean) => euclidean_similarity(a, b),
+            Some(Metrics::DotProduct) => dot_product(a, b),
+        }
     }
 
     /// Public search API: find K nearest neighbors to a query
@@ -597,7 +619,12 @@ impl HNSW {
         // Return with similarities
         let mut results: Vec<(NodeId, f32)> = candidates
             .into_par_iter()
-            .map(|id| (id, self.similarity(query, &self.nodes[id].vector)))
+            .map(|id| {
+                (
+                    id,
+                    self.similarity(query, &self.nodes[id].vector, self.metrics.as_ref()),
+                )
+            })
             .collect();
 
         results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap()); // Higher similarity first

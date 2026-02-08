@@ -228,7 +228,7 @@ async fn main() -> anyhow::Result<()> {
     let mut nsw = NSW::new(5555, 16);
 
     // Generate 20K random vectors
-    let num_vectors = 20_000;
+    let num_vectors = 10_000 * 2;
 
     for i in 0..num_vectors {
         let vector = generate_random_vector(1024);
@@ -305,11 +305,11 @@ async fn main() -> anyhow::Result<()> {
     let greedy_start_time = std::time::Instant::now();
     let start_points = 5;
     let parallel_results = NSW::parallel_greedy_search(&query_vector, top_k, start_points, &graph);
-    let duration = greedy_start_time.elapsed().as_secs_f64();
+    let greedy_duration = greedy_start_time.elapsed().as_secs_f64();
     println!(
         "\nParallel Greedy search with {} start points, completed in {}s",
         start_points.to_string().yellow(),
-        duration.to_string().yellow()
+        greedy_duration.to_string().yellow()
     );
     println!("\nTop {} Parallel Greedy Search Results:", top_k);
     for (i, result) in parallel_results.iter().enumerate() {
@@ -326,10 +326,10 @@ async fn main() -> anyhow::Result<()> {
     // Brute-force Search
     let bruteforce_start_time = std::time::Instant::now();
     let brute_results = NSW::brute_search(&query_vector, top_k, &graph);
-    let duration = bruteforce_start_time.elapsed().as_secs_f64();
+    let bruteforce_duration = bruteforce_start_time.elapsed().as_secs_f64();
     println!(
         "\nBrute Force search completed in {}s",
-        duration.to_string().yellow()
+        bruteforce_duration.to_string().yellow()
     );
     println!("\nTop {} Brute-force Results:", top_k);
     for (i, result) in brute_results.iter().enumerate() {
@@ -342,6 +342,12 @@ async fn main() -> anyhow::Result<()> {
             result.metadata.to_string().dimmed().green()
         );
     }
+
+    let speedup = bruteforce_duration / greedy_duration;
+    println!(
+        "\nSpeedup of Parallel Greedy Search over Brute-force: {:.2}x",
+        speedup
+    );
 
     Ok(())
 }

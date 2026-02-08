@@ -3,6 +3,7 @@ mod utils;
 #[allow(unused)]
 use crate::utils::{cosine_similarity, generate_random_vector, load_sample_hnsw_index};
 use anyhow::Result;
+use blaze_db::core::{Metrics, dot_product, euclidean_similarity};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng;
@@ -48,6 +49,8 @@ struct HNSW {
     pub ef_construction: usize,
     /// Controls the layer distribution of nodes (exponential distribution bias) CURRENTLY UNUSED
     pub distribution_bias: f32,
+    /// Metrics type: COSINE, EUCLIDEAN, RAW_DOT_PRODUCT
+    pub metrics_type: Option<Metrics>,
 }
 
 impl HNSW {
@@ -57,14 +60,16 @@ impl HNSW {
         ef_construction: usize,
         max_layers: usize,
         distribution_bias: f32,
+        metrics_type: Option<Metrics>,
     ) -> Self {
         HNSW {
-            nodes: Vec::with_capacity(10000), // Preallocate for efficiency
+            nodes: Vec::with_capacity(10_000), // Preallocate for efficiency
             entry_point: None,
             max_layers,
             max_neighbors,
             ef_construction,
             distribution_bias, // Currently unused
+            metrics_type,      // Currently unused, default to cosine
         }
     }
 
@@ -249,7 +254,11 @@ impl HNSW {
     /// Used for navigating upper layers quickly
     fn search_layer_greedy(&self, query: &[f32], entry: NodeId, layer: usize) -> NodeId {
         let mut current = entry;
-        let mut current_sim = self.similarity(query, &self.nodes[current].vector);
+        let mut current_sim = self.similarity(
+            query,
+            &self.nodes[current].vector,
+            self.metrics_type.as_ref(),
+        );
         let mut improved = true;
 
         // println!(
@@ -282,7 +291,11 @@ impl HNSW {
                 // .ok();
 
                 for &neighbor_id in &self.nodes[current].neighbors[layer] {
-                    let neighbor_sim = self.similarity(query, &self.nodes[neighbor_id].vector);
+                    let neighbor_sim = self.similarity(
+                        query,
+                        &self.nodes[neighbor_id].vector,
+                        self.metrics_type.as_ref(),
+                    );
 
                     if neighbor_sim > current_sim {
                         current = neighbor_id;
@@ -339,7 +352,8 @@ impl HNSW {
         // Best found so far
         let mut results = Vec::with_capacity(candidates.capacity());
 
-        let entry_sim = self.similarity(query, &self.nodes[entry].vector);
+        let entry_sim =
+            self.similarity(query, &self.nodes[entry].vector, self.metrics_type.as_ref());
         visited.insert(entry);
         candidates.push((entry, entry_sim));
         results.push((entry, entry_sim));
@@ -405,7 +419,11 @@ impl HNSW {
 
                 for &neighbor_id in &self.nodes[current_id].neighbors[layer] {
                     if visited.insert(neighbor_id) {
-                        let sim = self.similarity(query, &self.nodes[neighbor_id].vector);
+                        let sim = self.similarity(
+                            query,
+                            &self.nodes[neighbor_id].vector,
+                            self.metrics_type.as_ref(),
+                        );
 
                         // Only add if better than worst result or we haven't found ef results yet
                         if results.len() < ef || sim > results[ef - 1].1 {
@@ -477,7 +495,11 @@ impl HNSW {
             .neighbors[layer]
             .par_iter()
             .map(|&n| {
-                let sim = self.similarity(&self.nodes[node_id].vector, &self.nodes[n].vector);
+                let sim = self.similarity(
+                    &self.nodes[node_id].vector,
+                    &self.nodes[n].vector,
+                    self.metrics_type.as_ref(),
+                );
                 (n, sim)
             })
             .collect();
@@ -523,8 +545,12 @@ impl HNSW {
     /// For random high-dimensional vectors, similarities are typically around 0.0
     /// because random vectors are nearly orthogonal in high dimensions.
     #[inline]
-    fn similarity(&self, a: &[f32], b: &[f32]) -> f32 {
-        cosine_similarity(a, b)
+    fn similarity(&self, a: &[f32], b: &[f32], metrics: Option<&Metrics>) -> f32 {
+        match metrics {
+            Some(Metrics::Cosine) | None => cosine_similarity(a, b),
+            Some(Metrics::Euclidean) => euclidean_similarity(a, b),
+            Some(Metrics::DotProduct) => dot_product(a, b),
+        }
     }
 
     /// Public search API: find K nearest neighbors to a query
@@ -595,7 +621,12 @@ impl HNSW {
         // Return with similarities
         let mut results: Vec<(blaze_db::prelude::NodeId, f32)> = candidates
             .into_par_iter()
-            .map(|id| (id, self.similarity(query, &self.nodes[id].vector)))
+            .map(|id| {
+                (
+                    id,
+                    self.similarity(query, &self.nodes[id].vector, self.metrics_type.as_ref()),
+                )
+            })
             .collect();
 
         results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap()); // Higher similarity first
@@ -627,7 +658,12 @@ impl HNSW {
             .nodes
             .par_iter()
             .enumerate()
-            .map(|(id, node)| (id, self.similarity(query, &node.vector)))
+            .map(|(id, node)| {
+                (
+                    id,
+                    self.similarity(query, &node.vector, self.metrics_type.as_ref()),
+                )
+            })
             .collect();
 
         results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap()); // Higher similarity first
@@ -684,7 +720,7 @@ impl Node {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut hnsw = HNSW::new(16, 200, 6, 0.8);
+    let mut hnsw = HNSW::new(16, 200, 12, 0.8, Some(Metrics::Cosine));
 
     // create_debug_log_file().await?;
 
@@ -692,7 +728,7 @@ async fn main() -> Result<()> {
 
     // let loaded_vector_data = load_sample_hnsw_index().await;
 
-    let node_count = 50_000;
+    let node_count = 10_000 * 5;
     // let node_count = loaded_vector_data.hnsw_store.nodes.len();
     let dimension = 1024;
 
@@ -783,6 +819,9 @@ async fn main() -> Result<()> {
                 .green()
         );
     }
+
+    let speedup = brute_time / search_time;
+    println!("\nSpeedup over brute-force: {:.2}x", speedup);
 
     Ok(())
 }

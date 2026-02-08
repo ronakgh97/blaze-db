@@ -1,3 +1,4 @@
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use std::collections::BinaryHeap;
@@ -57,7 +58,7 @@ pub struct SearchResult {
 //     }
 // }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
 pub enum Metrics {
     Cosine,
     Euclidean,
@@ -75,13 +76,14 @@ impl Metrics {
 
     pub fn to_string(&self) -> String {
         match self {
-            Metrics::Cosine => "DOT_PRODUCT".to_string(),
+            Metrics::Cosine => "COSINE".to_string(),
             Metrics::Euclidean => "EUCLIDEAN".to_string(),
-            Metrics::DotProduct => "CROSS_PRODUCT".to_string(),
+            Metrics::DotProduct => "DOT_PRODUCT".to_string(),
         }
     }
 }
 
+#[inline]
 /// SIMD-optimized cosine similarity using 8-wide f32 vectors
 /// Returns value in [-1, 1]
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -127,6 +129,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
+#[inline]
 /// SIMD-optimized Euclidean similarity
 /// Returns value in (0, 1]
 pub fn euclidean_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -156,7 +159,8 @@ pub fn euclidean_similarity(a: &[f32], b: &[f32]) -> f32 {
     1.0 / (1.0 + distance_sq.sqrt())
 }
 
-/// SIMD-optimized dot product
+#[inline]
+/// SIMD-optimized raw dot product
 pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "Vector dimensions must match");
 
