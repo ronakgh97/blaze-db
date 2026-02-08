@@ -1,3 +1,4 @@
+use crate::core::Metrics;
 use serde::{Deserialize, Serialize};
 
 /// Represents a data source containing multiple vector databases
@@ -18,7 +19,7 @@ pub struct VectorBase {
     pub node_count: u32,
     pub created_at: String,
     pub last_queried_at: String,
-    pub metric_type: String,
+    pub metric_type: Metrics,
 }
 
 impl Default for Source {
@@ -109,14 +110,14 @@ impl Default for VectorBase {
             node_count: 0,
             created_at: timestamp.clone(),
             last_queried_at: timestamp,
-            metric_type: "COSINE".to_string(),
+            metric_type: Metrics::Cosine,
         }
     }
 }
 
 impl VectorBase {
     /// Create a new vector base with generated ID and timestamp
-    pub fn new(vb_name: String, dimension: u32, metric_type: String) -> Self {
+    pub fn new(vb_name: String, dimension: u32, metric_type: Metrics) -> Self {
         let timestamp = chrono::Utc::now().to_rfc3339();
         Self {
             vb_id: uuid::Uuid::new_v4().to_string(),

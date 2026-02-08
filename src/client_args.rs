@@ -1,3 +1,4 @@
+use crate::prelude::Metrics;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -34,6 +35,10 @@ pub enum ClientCommands {
         /// Number of dimensions for the database embeddings
         #[arg(short, long)]
         dimensions: Option<usize>,
+
+        /// Similarity metric to use for the database (e.g., COSINE, EUCLIDEAN, DOT_PRODUCT)
+        #[arg(short, long)]
+        metrics: Option<Metrics>,
     },
 
     /// Embed data into an existing Blaze-DB database

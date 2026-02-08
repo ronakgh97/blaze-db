@@ -14,7 +14,7 @@ pub struct HealthCheckResponse {
 pub struct CreateDatabaseRequest {
     pub name: String,
     pub source: String,
-    // pub metrics: Option<Metrics>,
+    pub metrics: Option<Metrics>, // COSINE, EUCLIDEAN, DOT_PRODUCT, etc. Default to COSINE if not provided
     pub dimensions: usize,
 }
 

@@ -19,6 +19,8 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     let source = &request.source;
     let source_path = get_source_path()?;
 
+    let metrics = request.metrics.unwrap_or(Metrics::Cosine);
+
     if name.contains('/') || name.contains('\\') || name.contains('.') {
         return Err(ErrorTypes::InvalidField(format!(
             "Database name '{}' contains invalid characters",
@@ -55,7 +57,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
         node_count: 0,
         created_at: timestamp.clone(),
         last_queried_at: timestamp.clone(),
-        metric_type: Metrics::to_string(&Metrics::Cosine),
+        metric_type: metrics.clone(),
     };
 
     // TODO: PERFORMANCE - This triggers immediate disk write (save_to_disk in DataStore)
@@ -120,7 +122,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     Ok(CreateDatabaseResponse {
         id: database_id,
         name: name.to_string(),
-        metrics: Metrics::Cosine,
+        metrics: metrics.clone(),
         dimensions: *dimensions,
         source: source.to_string(),
         created_at: timestamp,

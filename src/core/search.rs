@@ -2,6 +2,7 @@ use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use std::collections::BinaryHeap;
+use clap::ValueEnum;
 use wide::f32x8;
 
 #[allow(unused)]
@@ -58,7 +59,7 @@ pub struct SearchResult {
 //     }
 // }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
+#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode, PartialEq, ValueEnum)]
 pub enum Metrics {
     Cosine,
     Euclidean,

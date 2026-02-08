@@ -1,4 +1,4 @@
-use crate::core::{HNSW, Metrics, SERVER_FILE, check_source_valid};
+use crate::core::{HNSW, SERVER_FILE, check_source_valid};
 use crate::server::controller::{DB_WRITE_LOCKS, ErrorTypes};
 use crate::server::dto::VectorDataDto;
 use crate::server::service::database::search_database_on_disk;
@@ -35,10 +35,10 @@ pub async fn insert_run(
     }
 
     // Check all vector dimensions consistency with database init (dimensions)
-    let excepted_dimensions: usize = {
+    let (expected_dimensions, metrics) = {
         let server_file = SERVER_FILE.read().await;
         match server_file.get_vector_base(&source, &database_name)? {
-            Some(vb) => vb.dimension as usize,
+            Some(vb) => (vb.dimension as usize, vb.metric_type),
             None => {
                 error!(
                     "Database '{}' not found in source '{}'",
@@ -58,7 +58,7 @@ pub async fn insert_run(
     // Fast check in parallel using rayon
     let inconsistent_vectors: Vec<&VectorDataDto> = vector_data
         .par_iter()
-        .filter(|vec_data| vec_data.embedding.len() != excepted_dimensions)
+        .filter(|vec_data| vec_data.embedding.len() != expected_dimensions)
         .collect();
 
     if !inconsistent_vectors.is_empty() {
@@ -68,7 +68,7 @@ pub async fn insert_run(
         );
         return Err(ErrorTypes::InvalidField(format!(
             "Inconsistent vector dimensions found. Expected: {}, but some vectors have different dimensions.",
-            excepted_dimensions
+            expected_dimensions
         ))
         .into());
     }
@@ -92,7 +92,7 @@ pub async fn insert_run(
         load_embeddings_index_from_database(database_name.clone(), source.clone()).await;
     let mut hnsw = match loaded_hnsw {
         Some(store) => store.hnsw_store,
-        None => HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine)),
+        None => HNSW::new(18, 200, 12, 0.8, &Some(metrics)),
     };
 
     // Get or create lock for this database
@@ -193,6 +193,24 @@ pub async fn embed_run(
         return Err(ErrorTypes::SourceNotFound(format!("Source '{}' not found", source)).into());
     }
 
+    let metrics = {
+        let server_file = SERVER_FILE.read().await;
+        match server_file.get_vector_base(&source, &database_name)? {
+            Some(vb) => vb.metric_type,
+            None => {
+                error!(
+                    "Database '{}' not found in source '{}'",
+                    database_name, source
+                );
+                return Err(ErrorTypes::DatabaseNotFound(format!(
+                    "Database '{}' not found in source '{}'",
+                    database_name, source
+                ))
+                .into());
+            }
+        }
+    };
+
     // Locate the database directory
     let database_path = search_database_on_disk(&database_name, &source)
         .await
@@ -212,7 +230,7 @@ pub async fn embed_run(
         load_embeddings_index_from_database(database_name.clone(), source.clone()).await;
     let mut hnsw = match loaded_hnsw {
         Some(store) => store.hnsw_store,
-        None => HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine)),
+        None => HNSW::new(18, 200, 12, 0.8, &Some(metrics)),
     };
 
     // Load existing HNSW index if provided

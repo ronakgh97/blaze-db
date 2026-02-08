@@ -1,4 +1,5 @@
 use crate::core::UserConfig;
+use crate::prelude::Metrics;
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse,
 };
@@ -9,6 +10,7 @@ use colored::Colorize;
 pub async fn create_run(
     name: Option<String>,
     src: String,
+    metrics: Option<Metrics>,
     dimensions: Option<usize>,
 ) -> Result<()> {
     let dim = dimensions.unwrap_or(1024);
@@ -21,12 +23,17 @@ pub async fn create_run(
         Ok(())
     } else {
         let _ = create_source(&src).await;
-        create_database(name.unwrap(), &src, dim).await?;
+        create_database(name.unwrap(), metrics, &src, dim).await?;
         Ok(())
     }
 }
 
-async fn create_database(name: String, src: &String, dimensions: usize) -> Result<()> {
+async fn create_database(
+    name: String,
+    metrics: Option<Metrics>,
+    src: &String,
+    dimensions: usize,
+) -> Result<()> {
     println!("Creating a new database: {}", name.yellow());
 
     let config = UserConfig::load_config(&UserConfig::get_default_path()?).await?;
@@ -34,6 +41,7 @@ async fn create_database(name: String, src: &String, dimensions: usize) -> Resul
     let request_body = CreateDatabaseRequest {
         name,
         source: src.clone(),
+        metrics,
         dimensions,
     };
 

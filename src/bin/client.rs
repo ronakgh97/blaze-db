@@ -16,8 +16,9 @@ async fn main() -> Result<()> {
             source,
             name,
             dimensions,
+            metrics
         }) => {
-            create_run(name, source, dimensions).await?; // TODO: source is unused (will be used in server uses multiple sources)
+            create_run(name, source, metrics, dimensions).await?; // TODO: source is unused (will be used in server uses multiple sources)
         }
         Some(ClientCommands::Embed {
             file,
