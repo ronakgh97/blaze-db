@@ -306,6 +306,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - Server logs are mess, current using my custom macros, need proper monitoring solution. `HELP`
 - Cloud deployment options. `What is cloud thingy?`
 - Missing Database ops endpoints are missing!!!
+- Configurable distance metrics and search parameters. `PARTIALLY DONE`
 - Tombstone deletion and Background reindexing for better performance. `IN PROGRESS`
 
 ## References
@@ -318,15 +319,11 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 Contributions are welcome! Please feel free to open issues or submit pull requests. 🤧🏳️
 
-> 📚 **For Contributors:** See [CONTRIBUTOR_GUIDE.md](docs/CONTRIBUTOR_GUIDE.md) for Docker development workflow and
-> testing
-> checklist.
-
 My Code, My Rules 😼
 
 - **DO NOT USE UNREVIEWED AI CODE**, I can smell the SLOP from miles away, so get away from my trash. 🚫🤖 (Except boring
   testing code, I do use AI for that. 🤧)
-- **DO NOT UNCOMMENT THE COMMENTED OUT CODES**, Those are ritual sacrifices to the coding gods 🛐, it ward off evil bugs.
+- **DO NOT REMOVE THE COMMENTED OUT CODES**, Those are ritual sacrifices to the coding gods 🛐, it ward off evil bugs.
   🪦👹
 - **DO NOT REFACTOR SERVER AND CORE MODULES**, Unless there is a major I/O improvement, those codes are sacred. 🙏📜
 - **DO NOT BRING YOUR 'BEST PRACTICES' BS HERE**, Im very opinionated about coding styles and still learning, so don't
