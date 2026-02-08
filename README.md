@@ -24,7 +24,8 @@ embeddings using HNSW Indexing.
   278K vectors, ready to use
 - [Amazon Products Source Dataset](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products) -
   About 1.4M 2023 products, for indexing and testing
-- [BlazeDB Service](https://github.com/ronakgh97/blazedb-service)
+- [BlazeDB Service](https://github.com/ronakgh97/blazedb-service) - A Saas layer on top of Blaze-DB for easy hosting and
+  management (In development) 🫡
 
 ## Usage
 
@@ -316,18 +317,11 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - [Little Intro](https://www.pinecone.io/learn/series/faiss/hnsw/)
 - [Arvix HNSW Paper](https://arxiv.org/abs/2512.06636)
 
-## Support the Project
-
-Development and Hosting on high-dimensional datasets require decent hardware.
-If you'd like to support the hosting costs (VPS/GPU instances for hosting), you can contribute here:
-
-- [Support VPS Costs](https://razorpay.me/@ronak8747)
-
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues or submit pull requests. 🤧🏳️
 
-My Code, My Rules 😼
+### My Code, My Rules 😼
 
 - **DO NOT USE UNREVIEWED AI CODE**, I can smell the SLOP from miles away, so get away from my trash. 🚫🤖 (Except boring
   testing code, I do use AI for that. 🤧)
@@ -337,4 +331,10 @@ My Code, My Rules 😼
 - **DO NOT BRING YOUR 'BEST PRACTICES' BS HERE**, Im very opinionated about coding styles and still learning, so don't
   waste your time. 🛑🧠
 - **DO NOT UNDER ANY CIRCUMSTANCES, ADD ANOTHER LOCKS/THREAD SPAWNS/ASYNC AWAIT UNLESS ABSOLUTELY NECESSARY**,
-  Those are the reasons why this code is thread-safe AND why the code is slow. 🛑🔒
+  Those are the reasons why this code is thread-safe AND why the code is slow, and I dont know HOW!!!!. 🛑🔒
+
+### Support the Project 😌
+
+Indexing high-dimensional datasets and Hosting require decent hardware.
+If you'd like to support the hosting costs (VPS/GPU instances for hosting), you can contribute
+here : [Support VPS Costs](https://razorpay.me/@ronak8747)
