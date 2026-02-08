@@ -1,3 +1,4 @@
+use crate::core::Metrics;
 use crate::server::dto::{CreateSourceRequest, CreateSourceResponse, ListResponse};
 use crate::server::service::{
     create_new_database, create_new_source, embed_run, insert_run, list_source, query_search,
@@ -50,12 +51,12 @@ async fn create_router() -> Router {
         .route("/v1/blazedb/sources/create", post(create_src))
         .route("/v1/blazedb/list", get(list_sources))
         .route("/v1/blazedb/insert", post(new_insert))
+        //.route("/v1/blaze/sources/del", del(delete_src)) TODO: Endpoint to delete source and all associated databases and indexes
+        //.route("/v1/blaze/databases/del", det(delete_db)) TODO: Endpoint to delete database and all associated indexes
+        //.route("/v1/blaze/vectors/del", det(delete_vectors)) TODO: Endpoint to delete specific vectors from a database
+        //.route("/v1/blaze/query/vector", post(search_vector)) TODO: Endpoint for direct vector queries
         .route("/v1/blazedb/embed", post(new_embeddings))
         .route("/v1/blazedb/query", post(search_query))
-        //.route("/v1/blaze/query/vector", post(search_vector)) TODO: Endpoint for direct vector queries
-        //.route("/v1/blaze/sources/del", get(delete_src)) TODO: Endpoint to delete source and all associated databases and indexes
-        //.route("/v1/blaze/databases/del", get(delete_db)) TODO: Endpoint to delete database and all associated indexes
-        //.route("/v1/blaze/vectors/del", get(delete_vectors)) TODO: Endpoint to delete specific vectors from a database
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
 }
 
@@ -123,6 +124,7 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
             Json(CreateDatabaseResponse {
                 id: "null".to_string(),
                 name: "null".to_string(),
+                metrics: Metrics::Cosine,
                 dimensions: 0,
                 source: "null".to_string(),
                 created_at: "null".to_string(),
@@ -147,10 +149,11 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
                             msg
                         );
                         return (
-                            StatusCode::NOT_FOUND,
+                            StatusCode::NO_CONTENT,
                             Json(CreateDatabaseResponse {
                                 id: "null".to_string(),
                                 name: "null".to_string(),
+                                metrics: Metrics::Cosine,
                                 dimensions: 0,
                                 source: "null".to_string(),
                                 created_at: "null".to_string(),
@@ -167,6 +170,7 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
                             Json(CreateDatabaseResponse {
                                 id: "null".to_string(),
                                 name: "null".to_string(),
+                                metrics: Metrics::Cosine,
                                 dimensions: 0,
                                 source: "null".to_string(),
                                 created_at: "null".to_string(),
@@ -183,6 +187,7 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
                             Json(CreateDatabaseResponse {
                                 id: "null".to_string(),
                                 name: "null".to_string(),
+                                metrics: Metrics::Cosine,
                                 dimensions: 0,
                                 source: "null".to_string(),
                                 created_at: "null".to_string(),
@@ -204,6 +209,7 @@ pub async fn create_database(Json(payload): Json<CreateDatabaseRequest>) -> impl
                 Json(CreateDatabaseResponse {
                     id: "null".to_string(),
                     name: "null".to_string(),
+                    metrics: Metrics::Cosine,
                     dimensions: 0,
                     source: "null".to_string(),
                     created_at: "null".to_string(),
@@ -584,7 +590,7 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
                             msg
                         );
                         return (
-                            StatusCode::NOT_FOUND,
+                            StatusCode::NO_CONTENT,
                             Json(QueryResponse {
                                 results: vec![],
                                 search_time_sec: 0.0,
@@ -596,7 +602,7 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
                     ErrorTypes::SourceNotFound(msg) => {
                         error!("[POST /query] Source not found error during query: {}", msg);
                         return (
-                            StatusCode::NOT_FOUND,
+                            StatusCode::NO_CONTENT,
                             Json(QueryResponse {
                                 results: vec![],
                                 search_time_sec: 0.0,
@@ -608,7 +614,7 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
                     ErrorTypes::IndexNotFound(msg) => {
                         error!("[POST /query] Index not found error during query: {}", msg);
                         return (
-                            StatusCode::NOT_FOUND,
+                            StatusCode::NO_CONTENT,
                             Json(QueryResponse {
                                 results: vec![],
                                 search_time_sec: 0.0,

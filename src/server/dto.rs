@@ -1,3 +1,4 @@
+use crate::core::Metrics;
 use serde::{Deserialize, Serialize};
 
 /// Response DTO for health check
@@ -13,6 +14,7 @@ pub struct HealthCheckResponse {
 pub struct CreateDatabaseRequest {
     pub name: String,
     pub source: String,
+    // pub metrics: Option<Metrics>,
     pub dimensions: usize,
 }
 
@@ -21,9 +23,9 @@ pub struct CreateDatabaseRequest {
 pub struct CreateDatabaseResponse {
     pub id: String,
     pub name: String,
+    pub metrics: Metrics,
     pub dimensions: usize,
     pub source: String,
-    // pub metric: Option<String>,
     pub created_at: String,
 }
 

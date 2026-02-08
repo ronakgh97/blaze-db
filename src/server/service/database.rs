@@ -1,4 +1,4 @@
-use crate::core::{SERVER_FILE, VectorBase, get_source_path};
+use crate::core::{Metrics, SERVER_FILE, VectorBase, get_source_path};
 use crate::server::controller::ErrorTypes;
 use crate::server::{CreateDatabaseRequest, CreateDatabaseResponse};
 use crate::{info, warn};
@@ -51,11 +51,11 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     let vb = VectorBase {
         vb_id: database_id.clone(),
         vb_name: name.to_string(),
-        dimension: 0,
+        dimension: *dimensions as u32,
         node_count: 0,
         created_at: timestamp.clone(),
         last_queried_at: timestamp.clone(),
-        metric_type: "cosine".to_string(),
+        metric_type: Metrics::to_string(&Metrics::Cosine),
     };
 
     // TODO: PERFORMANCE - This triggers immediate disk write (save_to_disk in DataStore)
@@ -120,6 +120,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     Ok(CreateDatabaseResponse {
         id: database_id,
         name: name.to_string(),
+        metrics: Metrics::Cosine,
         dimensions: *dimensions,
         source: source.to_string(),
         created_at: timestamp,

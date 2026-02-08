@@ -1,4 +1,4 @@
-use crate::core::{HNSW, SERVER_FILE, check_source_valid};
+use crate::core::{HNSW, Metrics, SERVER_FILE, check_source_valid};
 use crate::server::controller::{DB_WRITE_LOCKS, ErrorTypes};
 use crate::server::dto::VectorDataDto;
 use crate::server::service::database::search_database_on_disk;
@@ -92,7 +92,7 @@ pub async fn insert_run(
         load_embeddings_index_from_database(database_name.clone(), source.clone()).await;
     let mut hnsw = match loaded_hnsw {
         Some(store) => store.hnsw_store,
-        None => HNSW::new(18, 200, 12, 0.8),
+        None => HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine)),
     };
 
     // Get or create lock for this database
@@ -212,7 +212,7 @@ pub async fn embed_run(
         load_embeddings_index_from_database(database_name.clone(), source.clone()).await;
     let mut hnsw = match loaded_hnsw {
         Some(store) => store.hnsw_store,
-        None => HNSW::new(18, 200, 12, 0.8),
+        None => HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine)),
     };
 
     // Load existing HNSW index if provided
