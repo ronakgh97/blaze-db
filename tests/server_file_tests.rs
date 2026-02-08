@@ -1,5 +1,5 @@
 use anyhow::Result;
-use blaze_db::core::{Source, VectorBase};
+use blaze_db::core::{Metrics, Source, VectorBase};
 use blaze_db::utils::DataStore;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -340,7 +340,7 @@ async fn test_add_vector_base() -> Result<()> {
         .add_source(src_id, "vb_test".to_string(), timestamp)
         .await?;
 
-    let vb = VectorBase::new("embeddings".to_string(), 384, "cosine".to_string());
+    let vb = VectorBase::new("embeddings".to_string(), 384, Metrics::Cosine);
     server_file.add_vector_base("vb_test", vb)?;
 
     // Verify it was added
@@ -350,7 +350,7 @@ async fn test_add_vector_base() -> Result<()> {
     let vb = vb.unwrap();
     assert_eq!(vb.vb_name, "embeddings");
     assert_eq!(vb.dimension, 384);
-    assert_eq!(vb.metric_type, "cosine");
+    assert_eq!(vb.metric_type, Metrics::Cosine);
     assert_eq!(vb.node_count, 0);
 
     Ok(())
@@ -367,8 +367,8 @@ async fn test_list_vector_bases() -> Result<()> {
         .add_source(src_id, "multi_vb".to_string(), timestamp)
         .await?;
 
-    let vb1 = VectorBase::new("vb1".to_string(), 384, "cosine".to_string());
-    let vb2 = VectorBase::new("vb2".to_string(), 768, "euclidean".to_string());
+    let vb1 = VectorBase::new("vb1".to_string(), 384, Metrics::Cosine);
+    let vb2 = VectorBase::new("vb2".to_string(), 768, Metrics::Euclidean);
 
     server_file.add_vector_base("multi_vb", vb1)?;
     server_file.add_vector_base("multi_vb", vb2)?;
@@ -391,7 +391,7 @@ async fn test_update_node_count() -> Result<()> {
         .add_source(src_id, "node_count_test".to_string(), timestamp)
         .await?;
 
-    let vb = VectorBase::new("embeddings".to_string(), 384, "cosine".to_string());
+    let vb = VectorBase::new("embeddings".to_string(), 384, Metrics::Cosine);
     server_file.add_vector_base("node_count_test", vb)?;
 
     server_file.update_node_count("node_count_test", "embeddings", 1000)?;
@@ -412,7 +412,7 @@ async fn test_touch_vector_base() -> Result<()> {
     server_file
         .add_source(src_id, "touch_test".to_string(), timestamp)
         .await?;
-    let vb = VectorBase::new("embeddings".to_string(), 384, "cosine".to_string());
+    let vb = VectorBase::new("embeddings".to_string(), 384, Metrics::Cosine);
     server_file.add_vector_base("touch_test", vb)?;
 
     // Get initial timestamp
@@ -453,7 +453,7 @@ async fn test_remove_vector_base() -> Result<()> {
         .add_source(src_id, "remove_vb_test".to_string(), timestamp)
         .await?;
 
-    let vb = VectorBase::new("to_remove".to_string(), 384, "cosine".to_string());
+    let vb = VectorBase::new("to_remove".to_string(), 384, Metrics::Cosine);
     let vb_id = vb.vb_id.clone();
     server_file.add_vector_base("remove_vb_test", vb)?;
 
@@ -481,11 +481,11 @@ async fn test_stats() -> Result<()> {
         .await?;
 
     // Add VectorBases with nodes
-    let vb1 = VectorBase::new("vb1".to_string(), 384, "cosine".to_string());
+    let vb1 = VectorBase::new("vb1".to_string(), 384, Metrics::Cosine);
     server_file.add_vector_base("stats_source1", vb1)?;
     server_file.update_node_count("stats_source1", "vb1", 100)?;
 
-    let vb2 = VectorBase::new("vb2".to_string(), 768, "euclidean".to_string());
+    let vb2 = VectorBase::new("vb2".to_string(), 768, Metrics::Euclidean);
     server_file.add_vector_base("stats_source2", vb2)?;
     server_file.update_node_count("stats_source2", "vb2", 200)?;
 
@@ -523,7 +523,7 @@ async fn test_update_source() -> Result<()> {
     // Get source, modify it, update it
     let mut source = server_file.get_source("update_test")?.unwrap();
 
-    let vb = VectorBase::new("new_vb".to_string(), 512, "dot_product".to_string());
+    let vb = VectorBase::new("new_vb".to_string(), 512, Metrics::DotProduct);
     source.add_vector_base(vb);
 
     server_file.update_source(source)?;
@@ -571,7 +571,7 @@ async fn test_source_data_model() {
 
     // Test adding VectorBase
     let mut source = Source::new(src_id, "test".to_string(), timestamp);
-    let vb = VectorBase::new("vb1".to_string(), 384, "cosine".to_string());
+    let vb = VectorBase::new("vb1".to_string(), 384, Metrics::Cosine);
     source.add_vector_base(vb);
     assert_eq!(source.vector_bases.len(), 1);
 
@@ -589,11 +589,11 @@ async fn test_source_data_model() {
 
 #[tokio::test]
 async fn test_vectorbase_data_model() {
-    let mut vb = VectorBase::new("test".to_string(), 384, "cosine".to_string());
+    let mut vb = VectorBase::new("test".to_string(), 384, Metrics::Cosine);
 
     assert_eq!(vb.vb_name, "test");
     assert_eq!(vb.dimension, 384);
-    assert_eq!(vb.metric_type, "cosine");
+    assert_eq!(vb.metric_type, Metrics::Cosine);
     assert_eq!(vb.node_count, 0);
 
     // Test set_node_count
@@ -631,7 +631,7 @@ async fn test_error_cases() -> Result<()> {
     assert!(result.is_err());
 
     // Test adding VectorBase to non-existent source
-    let vb = VectorBase::new("test".to_string(), 384, "cosine".to_string());
+    let vb = VectorBase::new("test".to_string(), 384, Metrics::Cosine);
     let result = server_file.add_vector_base("does_not_exist", vb);
     assert!(result.is_err());
 

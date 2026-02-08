@@ -167,6 +167,7 @@ async fn test_create_database_success() {
     let db_request = CreateDatabaseRequest {
         name: format!("test_db_{}", chrono::Utc::now().timestamp()),
         source: source_name,
+        metrics: None,
         dimensions: 1024,
     };
 
@@ -196,6 +197,7 @@ async fn test_create_database_empty_name() {
     let request = CreateDatabaseRequest {
         name: "".to_string(), // Invalid: empty
         source: "test_src".to_string(),
+        metrics: None,
         dimensions: 1024,
     };
 
@@ -222,6 +224,7 @@ async fn test_create_database_empty_source() {
     let request = CreateDatabaseRequest {
         name: "test_db".to_string(),
         source: "".to_string(), // Invalid: empty
+        metrics: None,
         dimensions: 1024,
     };
 
@@ -245,6 +248,7 @@ async fn test_create_database_low_dimensions() {
     let request = CreateDatabaseRequest {
         name: "test_db".to_string(),
         source: "test_src".to_string(),
+        metrics: None,
         dimensions: 767, // Less than 768 - INVALID
     };
 
@@ -268,6 +272,7 @@ async fn test_create_database_invalid_source() {
     let request = CreateDatabaseRequest {
         name: "test_db".to_string(),
         source: "nonexistent_source_12345".to_string(), // Invalid: doesn't exist
+        metrics: None,
         dimensions: 1024,
     };
 
@@ -309,6 +314,7 @@ async fn test_create_database_duplicate_name_same_source() {
     let db_request1 = CreateDatabaseRequest {
         name: db_name.to_string(),
         source: source_name.clone(),
+        metrics: None,
         dimensions: 1024,
     };
 
@@ -326,7 +332,8 @@ async fn test_create_database_duplicate_name_same_source() {
     let db_request2 = CreateDatabaseRequest {
         name: db_name.to_string(),   // Same name!
         source: source_name.clone(), // Same source!
-        dimensions: 1536,            // Different dimensions - doesn't matter
+        metrics: None,
+        dimensions: 1536, // Different dimensions - doesn't matter
     };
 
     let response2 = client
@@ -381,6 +388,7 @@ async fn test_create_database_same_name_different_sources() {
     let db_request1 = CreateDatabaseRequest {
         name: db_name.to_string(),
         source: source_name1.clone(),
+        metrics: None,
         dimensions: 1024,
     };
 
@@ -398,6 +406,7 @@ async fn test_create_database_same_name_different_sources() {
     let db_request2 = CreateDatabaseRequest {
         name: db_name.to_string(),    // Same name!
         source: source_name2.clone(), // Different source!
+        metrics: None,
         dimensions: 1024,
     };
 

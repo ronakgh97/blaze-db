@@ -1,5 +1,5 @@
 use anyhow::Result;
-use blaze_db::core::{SERVER_FILE, VectorBase};
+use blaze_db::core::{Metrics, SERVER_FILE, VectorBase};
 
 #[tokio::test]
 async fn test_metadata_updates() -> Result<()> {
@@ -21,7 +21,7 @@ async fn test_metadata_updates() -> Result<()> {
             .await?;
 
         // Add vector base
-        let vb = VectorBase::new(test_db.to_string(), 1024, "COSINE".to_string());
+        let vb = VectorBase::new(test_db.to_string(), 1024, Metrics::Cosine);
         server_file.add_vector_base(test_source, vb)?;
 
         println!("✓ Created test source and database");
