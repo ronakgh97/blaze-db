@@ -1,10 +1,11 @@
+use blaze_db::core::Metrics;
 use blaze_db::prelude::{EmbeddingStore, HNSW, VectorData};
 use tempfile::tempdir;
 
 #[tokio::test]
 async fn test_embedding_store_creation() {
     // Create a new HNSW index
-    let hnsw = HNSW::new(16, 100, 5, 0.7);
+    let hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
 
     let store = EmbeddingStore::new(hnsw.clone());
 
@@ -20,7 +21,7 @@ async fn test_write_read_binary() {
     let file_path = dir.path().join("test_embeddings");
 
     // Create HNSW index with some test vectors
-    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     let vector1 = vec![1.0, 2.0, 3.0];
     let vector2 = vec![4.0, 5.0, 6.0];
 
@@ -57,7 +58,7 @@ async fn test_read_binary_multiple_files() {
     std::fs::create_dir_all(&embeddings_dir).unwrap();
 
     // Create multiple embedding stores with cumulative HNSW indices
-    let mut cumulative_hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut cumulative_hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
 
     for i in 0..3 {
         let vector = vec![i as f32, (i + 1) as f32];
@@ -166,7 +167,7 @@ fn test_vector_data_empty() {
 #[test]
 fn test_hnsw_search_basic() {
     // Test basic HNSW search functionality
-    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
 
     let vector1 = vec![1.0, 0.0, 0.0];
     let vector2 = vec![0.0, 1.0, 0.0];
@@ -187,7 +188,7 @@ fn test_hnsw_search_basic() {
 
 #[test]
 fn test_hnsw_node_insertion() {
-    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
 
     assert_eq!(hnsw.nodes.len(), 0);
     assert!(hnsw.entry_point.is_none());
@@ -204,7 +205,7 @@ fn test_hnsw_node_insertion() {
 
 #[test]
 fn test_hnsw_multiple_insertions() {
-    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
 
     for i in 0..10 {
         let vector = vec![i as f32, (i + 1) as f32, (i + 2) as f32];
@@ -216,7 +217,7 @@ fn test_hnsw_multiple_insertions() {
 
 #[test]
 fn test_hnsw_empty_search() {
-    let hnsw = HNSW::new(16, 100, 5, 0.7);
+    let hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     let query = vec![1.0, 2.0, 3.0];
     let results = hnsw.search(&query, 5);
 
@@ -228,7 +229,7 @@ async fn test_embedding_store_with_checksum() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("test_checksum");
 
-    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     hnsw.insert(&*vec![1.0, 2.0, 3.0, 4.0, 5.0], "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
@@ -254,7 +255,7 @@ async fn test_concurrent_file_loading_thread_safety() {
     let file_path = dir.path().join("test_concurrent");
 
     // Create a test file with some data
-    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     for i in 0..100 {
         let vector = vec![i as f32, (i + 1) as f32, (i + 2) as f32];
         hnsw.insert(&*vector, format!("chunk_{}", i), 0);
@@ -301,7 +302,7 @@ async fn test_concurrent_different_files_loading() {
     let mut file_paths = Vec::new();
     for i in 0..5 {
         let file_path = dir.path().join(format!("test_file_{}", i));
-        let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+        let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
 
         // Each file has a different number of vectors
         for j in 0..((i + 1) * 10) {

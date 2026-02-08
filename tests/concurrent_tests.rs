@@ -1,4 +1,4 @@
-use blaze_db::prelude::{EmbeddingStore, HNSW};
+use blaze_db::prelude::{EmbeddingStore, HNSW, Metrics};
 use std::sync::Arc;
 use std::time::Duration;
 use tempfile::tempdir;
@@ -22,7 +22,7 @@ async fn test_concurrent_writes_different_databases() {
         std::fs::create_dir_all(&db_path).unwrap();
 
         let handle = tokio::spawn(async move {
-            let mut hnsw = HNSW::new(18, 200, 12, 0.8);
+            let mut hnsw = HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine));
 
             // Insert vectors
             for i in 0..vectors_per_db {
@@ -104,10 +104,10 @@ async fn test_concurrent_writes_same_database() {
             let mut hnsw = if index_file.exists() {
                 match EmbeddingStore::load_binary_file(&index_file).await {
                     Ok(store) => store.hnsw_store,
-                    Err(_) => HNSW::new(18, 200, 12, 0.8),
+                    Err(_) => HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine)),
                 }
             } else {
-                HNSW::new(18, 200, 12, 0.8)
+                HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine))
             };
 
             let initial_count = hnsw.nodes.len();
@@ -180,7 +180,7 @@ async fn test_concurrent_reads_with_write() {
     std::fs::create_dir_all(&db_path).unwrap();
 
     // Create initial index
-    let mut hnsw = HNSW::new(18, 200, 12, 0.8);
+    let mut hnsw = HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine));
     for i in 0..100 {
         let vector: Vec<f32> = (0..1024).map(|x| (x + i) as f32 / 1000.0).collect();
         let metadata = format!("initial_vector_{}", i);
@@ -333,10 +333,10 @@ async fn test_cumulative_writes() {
             let index_file = db_path.join(format!("HNSW_INDEX_{}.bin", max_index));
             match EmbeddingStore::load_binary_file(&index_file).await {
                 Ok(store) => store.hnsw_store,
-                Err(_) => HNSW::new(18, 200, 12, 0.8),
+                Err(_) => HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine)),
             }
         } else {
-            HNSW::new(18, 200, 12, 0.8)
+            HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine))
         };
 
         let initial_count = hnsw.nodes.len();

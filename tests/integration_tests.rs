@@ -1,3 +1,4 @@
+use blaze_db::core::Metrics;
 use blaze_db::prelude::{EmbeddingStore, HNSW, Ingestor};
 use std::fs::File;
 use std::io::Write;
@@ -19,7 +20,7 @@ async fn test_ingest_to_storage_pipeline() {
     assert_eq!(batches[0].len(), 2);
 
     // Create HNSW index with mock embeddings
-    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
 
     // Simulate embedding vectors
     let vector1 = vec![1.0, 2.0, 3.0];
@@ -67,7 +68,7 @@ async fn test_multiple_batch_processing() {
     assert_eq!(batches[1].len(), 2);
 
     // Create cumulative HNSW index for first batch (8 vectors)
-    let mut hnsw1 = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw1 = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     for i in 0..8 {
         hnsw1.insert(&*vec![i as f32, (i + 1) as f32], "null".to_string(), 0);
     }
@@ -127,7 +128,7 @@ async fn test_unicode_text_processing() {
     assert_eq!(batches[0][2], "😭 Emoji support test 🤧");
 
     // Create HNSW index with test vectors
-    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     hnsw.insert(&*vec![1.0, 2.0], "null".to_string(), 0);
     hnsw.insert(&*vec![3.0, 4.0], "null".to_string(), 0);
     hnsw.insert(&*vec![5.0, 6.0], "null".to_string(), 0);
@@ -164,7 +165,7 @@ async fn test_large_embedding_dimensions() {
     // Create realistic high-dimensional embeddings (like GPT embeddings)
     let embedding_vector = (0..1536).map(|i| i as f32 * 0.01).collect::<Vec<f32>>();
 
-    let mut hnsw = HNSW::new(16, 100, 5, 0.7);
+    let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     hnsw.insert(&*embedding_vector, "null".to_string(), 0);
 
     assert_eq!(hnsw.nodes.len(), 1);

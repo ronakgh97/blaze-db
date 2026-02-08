@@ -1,3 +1,4 @@
+use blaze_db::core::Metrics;
 use blaze_db::core::hnsw::HNSW;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rand::Rng;
@@ -44,9 +45,9 @@ fn bench_hnsw_construction_varying_vectors(c: &mut Criterion) {
         let vectors = generate_deterministic_vectors(count, dimensions);
 
         group.throughput(Throughput::Elements(count as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |bench, _| {
+        group.bench_with_input(BenchmarkId::new("vectors", count), &count, |bench, _| {
             bench.iter(|| {
-                let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln());
+                let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
                 for (i, vec) in vectors.iter().enumerate() {
                     let level = hnsw.get_random_level();
                     hnsw.insert(black_box(vec), format!("chunk_{}", i), level);
@@ -61,7 +62,7 @@ fn bench_hnsw_construction_varying_vectors(c: &mut Criterion) {
 
 /// Benchmark HNSW construction with varying dimensions (1024, 768, 1024, 1536) with 1000 vectors
 fn bench_hnsw_construction_varying_dimensions(c: &mut Criterion) {
-    let dimensions = [1024, 768, 1024, 1536];
+    let dimensions = [512, 768, 1024, 1536];
     let vector_count = 1_000;
 
     let mut group = c.benchmark_group("construction_benches");
@@ -71,9 +72,9 @@ fn bench_hnsw_construction_varying_dimensions(c: &mut Criterion) {
         let vectors = generate_deterministic_vectors(vector_count, dim);
 
         group.throughput(Throughput::Elements((vector_count * dim) as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(dim), &dim, |bench, _| {
+        group.bench_with_input(BenchmarkId::new("dims", dim), &dim, |bench, _| {
             bench.iter(|| {
-                let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln());
+                let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
                 for (i, vec) in vectors.iter().enumerate() {
                     let level = hnsw.get_random_level();
                     hnsw.insert(black_box(vec), format!("chunk_{}", i), level);
@@ -98,9 +99,9 @@ fn bench_hnsw_construction_varying_m(c: &mut Criterion) {
     group.sample_size(10);
 
     for m in m_values {
-        group.bench_with_input(BenchmarkId::from_parameter(m), &m, |bench, &m| {
+        group.bench_with_input(BenchmarkId::new("m", m), &m, |bench, &m| {
             bench.iter(|| {
-                let mut hnsw = HNSW::new(m, 200, 5, 1.0 / (m as f32).ln());
+                let mut hnsw = HNSW::new(m, 200, 5, 1.0 / (m as f32).ln(), &Some(Metrics::Cosine));
                 for (i, vec) in vectors.iter().enumerate() {
                     let level = hnsw.get_random_level();
                     hnsw.insert(black_box(vec), format!("chunk_{}", i), level);
@@ -125,9 +126,9 @@ fn bench_hnsw_construction_varying_ef(c: &mut Criterion) {
     group.sample_size(10);
 
     for ef in ef_values {
-        group.bench_with_input(BenchmarkId::from_parameter(ef), &ef, |bench, &ef| {
+        group.bench_with_input(BenchmarkId::new("ef", ef), &ef, |bench, &ef| {
             bench.iter(|| {
-                let mut hnsw = HNSW::new(16, ef, 5, 1.0 / 16.0_f32.ln());
+                let mut hnsw = HNSW::new(16, ef, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
                 for (i, vec) in vectors.iter().enumerate() {
                     let level = hnsw.get_random_level();
                     hnsw.insert(black_box(vec), format!("chunk_{}", i), level);
@@ -143,7 +144,7 @@ fn bench_hnsw_construction_varying_ef(c: &mut Criterion) {
 #[inline]
 /// Helper to build a pre-populated HNSW index with params: mx_n: 16, ef_c: 200, mx_l 5, e: ln(1/16)
 fn build_hnsw_index(num_vectors: usize, dimensions: usize) -> HNSW {
-    let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln());
+    let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
     let vectors = generate_deterministic_vectors(num_vectors, dimensions);
 
     for (i, vec) in vectors.iter().enumerate() {
@@ -168,7 +169,7 @@ fn bench_hnsw_search_varying_index_size(c: &mut Criterion) {
         let query = generate_query_vector(dimensions);
 
         group.throughput(Throughput::Elements(size as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |bench, _| {
+        group.bench_with_input(BenchmarkId::new("index_size", size), &size, |bench, _| {
             bench.iter(|| hnsw.search(black_box(&query), black_box(k)))
         });
     }
@@ -189,7 +190,7 @@ fn bench_hnsw_search_varying_k(c: &mut Criterion) {
     group.sample_size(50);
 
     for k in k_values {
-        group.bench_with_input(BenchmarkId::from_parameter(k), &k, |bench, &k| {
+        group.bench_with_input(BenchmarkId::new("k", k), &k, |bench, &k| {
             bench.iter(|| hnsw.search(black_box(&query), black_box(k)))
         });
     }
@@ -199,7 +200,7 @@ fn bench_hnsw_search_varying_k(c: &mut Criterion) {
 
 /// Benchmark search with varying dimensions (1024, 512, 768, 1024, 1536) on 10K index with k=10
 fn bench_hnsw_search_varying_dimensions(c: &mut Criterion) {
-    let dimensions = [1024, 512, 768, 1024, 1536];
+    let dimensions = [512, 768, 1024, 1536];
     let index_size = 10_000;
     let k = 10;
 
@@ -211,7 +212,7 @@ fn bench_hnsw_search_varying_dimensions(c: &mut Criterion) {
         let query = generate_query_vector(dim);
 
         group.throughput(Throughput::Elements((index_size * dim) as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(dim), &dim, |bench, _| {
+        group.bench_with_input(BenchmarkId::new("dims", dim), &dim, |bench, _| {
             bench.iter(|| hnsw.search(black_box(&query), black_box(k)))
         });
     }
@@ -291,7 +292,7 @@ fn bench_hnsw_batch_queries(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(batch_size as u64));
         group.bench_with_input(
-            BenchmarkId::from_parameter(batch_size),
+            BenchmarkId::new("batch_size", batch_size),
             &batch_size,
             |bench, _| {
                 bench.iter(|| {
@@ -320,7 +321,7 @@ fn bench_hnsw_incremental_insert(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(inserts_per_bench as u64));
         group.bench_with_input(
-            BenchmarkId::from_parameter(initial_size),
+            BenchmarkId::new("batch_insert", initial_size),
             &initial_size,
             |bench, &size| {
                 bench.iter(|| {
@@ -349,17 +350,21 @@ fn bench_hnsw_single_insert_at_scale(c: &mut Criterion) {
     for size in index_sizes {
         let new_vector = generate_query_vector(dimensions);
 
-        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |bench, &size| {
-            bench.iter_batched(
-                || build_hnsw_index(size, dimensions),
-                |mut hnsw| {
-                    let level = hnsw.get_random_level();
-                    hnsw.insert(black_box(&new_vector), "new_chunk".to_string(), level);
-                    hnsw
-                },
-                criterion::BatchSize::LargeInput,
-            )
-        });
+        group.bench_with_input(
+            BenchmarkId::new("single_insert", size),
+            &size,
+            |bench, &size| {
+                bench.iter_batched(
+                    || build_hnsw_index(size, dimensions),
+                    |mut hnsw| {
+                        let level = hnsw.get_random_level();
+                        hnsw.insert(black_box(&new_vector), "new_chunk".to_string(), level);
+                        hnsw
+                    },
+                    criterion::BatchSize::LargeInput,
+                )
+            },
+        );
     }
 
     group.finish();
