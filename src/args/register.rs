@@ -14,18 +14,28 @@ pub async fn register_run() -> Result<()> {
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     // Check server availability
-    let server_resp = client
-        .get("https://api.blaze.sh/v1/blz/health")
+    let server_resp = match client
+        .get("https://api.blazedb.online/v1/blz/health")
         .send()
-        .await?;
-    if !server_resp.status().is_success() {
-        spinner.error("Server is currently unreachable. Please try again later.");
+        .await
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            spinner.error("Could not connect to the server. Please check your internet connection or the server URL.");
+            outro(format!("Error: {}", e))?;
+            return Ok(());
+        }
+    };
+
+    if !server_resp.status().is_success() || server_resp.status().is_server_error() {
+        spinner.error("Server is currently unreachable (non-200 code).");
         return Ok(());
     }
     spinner.stop("Server is reachable.\n");
 
-    // TODO: Add checks for existing user registration
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
+    // TODO: Add checks for existing user registration
     intro("Register yourself 😌")?;
 
     let user_name: String = input("Enter your user name")
