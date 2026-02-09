@@ -1,10 +1,12 @@
 use crate::core::UserConfig;
-use crate::prelude::Metrics;
+use crate::prelude::{ListResponse, Metrics};
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse,
 };
 use anyhow::Result;
 use colored::Colorize;
+use reqwest::Client;
+use std::ops::Add;
 
 // Create either a new source and database, or just a new database within an existing source, based on option args
 pub async fn create_run(
@@ -13,19 +15,44 @@ pub async fn create_run(
     metrics: Option<Metrics>,
     dimensions: Option<usize>,
 ) -> Result<()> {
+    let client = Client::new();
     let dim = dimensions.unwrap_or(1024);
+    let config = UserConfig::load_config(&UserConfig::get_default_path()?).await?;
 
-    // I don't care, lets server handle whatever it can.
+    dotenv::dotenv().ok();
+    let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
 
-    if name.is_none() {
-        // Create source only
-        let _ = create_source(&src).await;
-        Ok(())
-    } else {
-        let _ = create_source(&src).await;
-        create_database(name.unwrap(), metrics, &src, dim).await?;
-        Ok(())
+    let list_request = Client::new()
+        .get(config.server.instance_url.to_string() + "/v1/blazedb/list")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .send()
+        .await?;
+
+    let list_response: Vec<ListResponse> = list_request.json().await?;
+
+    // Check if source already exists, then skip creation
+    let source_exists = list_response
+        .iter()
+        .any(|source_data| source_data.from_sources == src);
+
+    if let Some(name) = name {
+        if !source_exists {
+            create_source(&src, &client, &config, &api_key).await?;
+        }
+        println!(
+            "Creating database ({}) in source ({})",
+            name.yellow(),
+            src.yellow()
+        );
+        create_database(name, metrics, &src, dim, &client, &config, &api_key).await?;
+
+        return Ok(());
     }
+
+    println!("Creating source ({})", src.yellow());
+    create_source(&src, &client, &config, &api_key).await?;
+
+    Ok(())
 }
 
 async fn create_database(
@@ -33,11 +60,10 @@ async fn create_database(
     metrics: Option<Metrics>,
     src: &String,
     dimensions: usize,
+    client: &Client,
+    config: &UserConfig,
+    api_key: &String,
 ) -> Result<()> {
-    println!("Creating a new database: {}", name.yellow());
-
-    let config = UserConfig::load_config(&UserConfig::get_default_path()?).await?;
-
     let request_body = CreateDatabaseRequest {
         name,
         source: src.clone(),
@@ -45,11 +71,14 @@ async fn create_database(
         dimensions,
     };
 
-    dotenv::dotenv().ok();
-    let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
-
-    let response = reqwest::Client::new()
-        .post(config.server.instance_url + "/v1/blazedb/databases/create")
+    let response = client
+        .post(
+            &config
+                .server
+                .instance_url
+                .to_string()
+                .add("/v1/blazedb/databases/create"),
+        )
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&request_body)
         .send()
@@ -69,20 +98,24 @@ async fn create_database(
     }
 }
 
-async fn create_source(name: &String) -> Result<()> {
-    println!("Creating a new source: {}", name.yellow());
-
-    let config = UserConfig::load_config(&UserConfig::get_default_path()?).await?;
-
+async fn create_source(
+    name: &String,
+    client: &Client,
+    config: &UserConfig,
+    api_key: &String,
+) -> Result<()> {
     let request_body = CreateSourceRequest {
         source_name: name.to_string(),
     };
 
-    dotenv::dotenv().ok();
-    let api_key = std::env::var("BLAZE_API_KEY").unwrap_or("local_dev_key".to_string());
-
-    let response = reqwest::Client::new()
-        .post(config.server.instance_url + "/v1/blazedb/sources/create")
+    let response = client
+        .post(
+            &config
+                .server
+                .instance_url
+                .to_string()
+                .add("/v1/blazedb/sources/create"),
+        )
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&request_body)
         .send()

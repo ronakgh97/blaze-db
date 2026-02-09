@@ -1,8 +1,8 @@
 use bincode::{Decode, Encode};
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use std::collections::BinaryHeap;
-use clap::ValueEnum;
 use wide::f32x8;
 
 #[allow(unused)]

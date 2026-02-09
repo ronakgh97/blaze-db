@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
             source,
             name,
             dimensions,
-            metrics
+            metrics,
         }) => {
             create_run(name, source, metrics, dimensions).await?; // TODO: source is unused (will be used in server uses multiple sources)
         }
