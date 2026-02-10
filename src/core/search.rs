@@ -1,9 +1,9 @@
-use bincode::{Decode, Encode};
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use std::collections::BinaryHeap;
 use wide::f32x8;
+use wincode::{SchemaRead, SchemaWrite};
 
 #[allow(unused)]
 #[deprecated(since = "2026-01-08", note = "Use `HNSW::new` instead")]
@@ -59,7 +59,7 @@ pub struct SearchResult {
 //     }
 // }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode, PartialEq, ValueEnum)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ValueEnum, SchemaWrite, SchemaRead)]
 pub enum Metrics {
     Cosine,
     Euclidean,

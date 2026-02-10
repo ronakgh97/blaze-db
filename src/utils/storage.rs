@@ -1,6 +1,5 @@
 use crate::core::HNSW;
 use anyhow::{Context, Result, anyhow};
-use bincode::{Decode, Encode};
 use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -12,8 +11,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tokio::fs;
+use wincode::{SchemaRead, SchemaWrite};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
+#[derive(Serialize, Deserialize, Debug, Clone, SchemaWrite, SchemaRead)]
 pub struct EmbeddingStore {
     pub hnsw_store: HNSW,
     // pub checksum: String, What the hell i was thinking here? Stupid me
@@ -69,8 +69,8 @@ impl EmbeddingStore {
                 .with_context(|| format!("Failed to memory map file: {:?}", path_clone))?;
 
             // Deserialize from the memory-mapped bytes
-            // This creates an owned copy of the data, so it's safe to return across thread boundaries
-            let (store, _) = bincode::decode_from_slice(&mmap[..], bincode::config::standard())
+            // This creates a zero copy of the data, so it's safe to return across thread boundaries
+            let store = wincode::deserialize(&mmap[..])
                 .with_context(|| format!("Failed to deserialize: {:?}", path_clone))?;
 
             // mmap is automatically unmapped here when it goes out of scope
@@ -150,7 +150,7 @@ impl EmbeddingStore {
         };
 
         // Serialize to bytes and calculate checksum
-        let initial_bytes = bincode::encode_to_vec(&*self, bincode::config::standard())?;
+        let initial_bytes = wincode::serialize(&*self)?;
         let mut hasher = sha2::Sha256::new();
         hasher.update(&initial_bytes);
         let checksum = format!("{:x}", hasher.finalize());

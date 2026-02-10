@@ -1,5 +1,4 @@
 use crate::core::{Metrics, cosine_similarity, dot_product, euclidean_similarity};
-use bincode::{Decode, Encode};
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
@@ -8,6 +7,7 @@ use rayon::prelude::IntoParallelRefIterator;
 use serde::{Deserialize, Serialize};
 #[allow(unused)]
 use std::collections::{HashMap, HashSet};
+use wincode::{SchemaRead, SchemaWrite};
 
 /// # Hierarchical Navigable Small World (HNSW)
 ///
@@ -22,8 +22,7 @@ use std::collections::{HashMap, HashSet};
 /// **Search**: Greedy descent through upper layers, beam search at bottom layer
 /// **Pruning**: Keep only M closest neighbors per node per layer
 
-#[allow(unused)]
-#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
+#[derive(Serialize, Deserialize, Debug, Clone, SchemaWrite, SchemaRead)]
 pub struct HNSW {
     /// All nodes in the graph, not layer-wise
     pub nodes: Vec<Node>,
@@ -663,8 +662,7 @@ impl HNSW {
 /// Unique identifier for a node in the HNSW graph.
 pub type NodeId = usize;
 
-#[allow(unused)]
-#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
+#[derive(Serialize, Deserialize, Debug, Clone, SchemaWrite, SchemaRead)]
 /// Represents a node in the HNSW graph.
 pub struct Node {
     /// Unique identifier for the node

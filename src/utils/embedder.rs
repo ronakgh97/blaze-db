@@ -1,5 +1,4 @@
 use anyhow::Result;
-use bincode::{Decode, Encode};
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -85,7 +84,7 @@ pub struct Embeddings {
 }
 
 /// Wrapper just for serialize external embedding API response
-#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EmbeddingData {
     pub index: usize,
     #[serde(default)]
