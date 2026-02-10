@@ -1,5 +1,8 @@
 use anyhow::Result;
-use blaze_db::prelude::{CreateDatabaseRequest, CreateSourceRequest, InsertRequest, VectorDataDto};
+use blaze_db::prelude::{
+    CreateDatabaseRequest, CreateSourceRequest, InsertRequest, VectorDataDto, VectorQueryRequest,
+    VectorQueryResponse,
+};
 use rand::RngExt;
 
 #[ignore]
@@ -88,14 +91,30 @@ async fn a_very_generic_simple_test() -> Result<()> {
 
     let time_took = start_time.elapsed().as_secs_f64();
 
-    println!("Inserted {} vectors in {} seconds", batch_size, time_took);
+    println!("Inserted {} vectors in {} seconds", nodes_num, time_took);
 
-    // let query_resquest = QueryRequest {
-    //     query: "".to_string(),
-    //     database: database_name.clone(),
-    //     source: src_name.clone(),
-    //     top_k: 5,
-    // }
+    let query_resquest = VectorQueryRequest {
+        query_vector: generate_random_vectors(1, dimensions)[0].clone(),
+        database: database_name.clone(),
+        source: src_name.clone(),
+        top_k: 5,
+    };
+
+    let resp = client
+        .post("http://localhost:8080/v1/blazedb/query/vector")
+        .json(&query_resquest)
+        .send()?;
+
+    assert!(
+        resp.status().is_success(),
+        "Failed to query vectors: {}",
+        resp.status()
+    );
+
+    let json: VectorQueryResponse = resp.json()?;
+
+    println!("Top vector: {:?}", json.results[0]);
+    print!("Took Time: {}", json.search_time_sec + json.io_time_sec);
 
     Ok(())
 }
