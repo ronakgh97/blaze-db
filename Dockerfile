@@ -1,9 +1,13 @@
 FROM rust:1.92-slim-bookworm AS builder
 
-# Install build dependencies
+# Install build dependencies (including libclang for llama-cpp-sys-2 bindings)
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
+    libclang-dev \
+    clang \
+    cmake \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a new directory for the application

@@ -318,6 +318,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - Missing Database ops endpoints are missing!!!
 - Configurable distance metrics and search parameters. `PARTIALLY DONE`
 - Tombstone deletion and Background reindexing for better performance. `IN PROGRESS`
+- Add embedded Embeddings model, no more API shit `NEED_HELP`
 
 ## References
 
