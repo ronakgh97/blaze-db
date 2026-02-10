@@ -31,8 +31,8 @@ pub async fn insert_run(
 
     let total_entries = vector_batch_data
         .iter()
-        .map(|vec_data| vec_data.iter().map(|v| v.embedding.len()).sum::<usize>())
-        .sum();
+        .map(|batch| batch.len())
+        .sum::<usize>();
 
     // Checks source and database existence
     if !check_source_valid(&source).await? {

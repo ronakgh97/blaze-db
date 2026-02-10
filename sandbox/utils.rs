@@ -1,6 +1,6 @@
 #[allow(unused)]
 use blaze_db::prelude::{EmbeddingStore, VectorData};
-use rand::Rng;
+use rand::RngExt;
 use std::path::PathBuf;
 use wide::f32x8;
 

@@ -9,7 +9,7 @@ use blaze_db::prelude::{EmbeddingStore, Provider};
 use blaze_db::utils::VectorData;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
-use rand::Rng;
+use rand::RngExt;
 use rand::seq::SliceRandom;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;

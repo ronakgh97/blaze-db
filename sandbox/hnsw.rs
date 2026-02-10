@@ -6,7 +6,7 @@ use anyhow::Result;
 use blaze_db::core::{Metrics, dot_product, euclidean_similarity};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
-use rand::Rng;
+use rand::RngExt;
 use rayon::iter::IndexedParallelIterator;
 #[allow(unused)]
 use rayon::iter::ParallelIterator;

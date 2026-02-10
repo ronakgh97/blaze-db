@@ -1,7 +1,7 @@
 use blaze_db::core::Metrics;
 use blaze_db::core::hnsw::HNSW;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use rand::Rng;
+use rand::RngExt;
 use std::hint::black_box;
 
 #[allow(unused)]
