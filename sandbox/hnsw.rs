@@ -728,7 +728,7 @@ async fn main() -> Result<()> {
 
     // let loaded_vector_data = load_sample_hnsw_index().await;
 
-    let node_count = 10_000 * 5;
+    let node_count = 10_000 * 2;
     // let node_count = loaded_vector_data.hnsw_store.nodes.len();
     let dimension = 1024;
 
@@ -784,7 +784,7 @@ async fn main() -> Result<()> {
 
     for (i, (node_id, similarity, _metadata)) in results.iter().enumerate() {
         println!(
-            "  {}. Node {:5} - similarity: {:.4}\n Metadata: {}",
+            "  {}. Node {:5} - similarity: {:.4}, Metadata: {}",
             i + 1,
             node_id.to_string().yellow(),
             similarity.to_string().green(),
@@ -808,7 +808,7 @@ async fn main() -> Result<()> {
 
     for (i, (node_id, similarity, _metadata)) in brute_results.iter().enumerate() {
         println!(
-            "  {}. Node {:5} - similarity: {:.4}\n Metadata: {}",
+            "  {}. Node {:5} - similarity: {:.4}, Metadata: {}",
             i + 1,
             node_id.to_string().yellow(),
             similarity.to_string().green(),

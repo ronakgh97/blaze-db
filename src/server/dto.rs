@@ -61,7 +61,7 @@ pub struct VectorDataDto {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct InsertRequest {
-    pub vectors: Vec<VectorDataDto>, // TODO: Change to batch insert later
+    pub nodes: Vec<Vec<VectorDataDto>>, // batch of vectors with metadata, now batch index can be done
     pub database: String,
     pub source: String,
 }

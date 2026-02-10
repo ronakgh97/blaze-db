@@ -14,7 +14,10 @@ use tokio::sync::RwLock;
 /// Prefix for HNSW index files (batch-wise), for example: "hnsw_index_1", "hnsw_index_2", etc.
 pub const INDEX_FILE_NAME: &str = "HNSW_INDEX"; // TODO: Need to find other way to manage multiple indexes
 
-//TODO: Both insert_run and embed_run have a lot of duplicated code, need to refactor later
+// TODO: Ok so, batching is cool anf all but liitle tricky to manage multiple index files
+// Either we got merge it (periodically or instantly, Idk) or so smart batching based on a threshold or something, hmm?
+
+//TODO: SERIOUSLY REFACTOR TOMORROW Both insert_run and embed_run have a lot of duplicated code, need to refactor later
 
 /// Insert pre-computed embeddings into the specified database
 pub async fn insert_run(
@@ -22,11 +25,14 @@ pub async fn insert_run(
     _hnsw: Option<HNSW>,
     _provider: &Provider,
 ) -> Result<InsertResponse> {
-    let vector_data = &request.vectors;
+    let vector_batch_data = &request.nodes;
     let database_name = &request.database;
     let source = &request.source;
 
-    let total_entries = vector_data.len();
+    let total_entries = vector_batch_data
+        .iter()
+        .map(|vec_data| vec_data.iter().map(|v| v.embedding.len()).sum::<usize>())
+        .sum();
 
     // Checks source and database existence
     if !check_source_valid(&source).await? {
@@ -56,9 +62,15 @@ pub async fn insert_run(
     // DO THIS LAST TO AVOID WASTING TIME
     // VERY IMPORTANT!!, OR ELSE IT WILL CORRUPT THE INDEX WITH INCONSISTENT DIMENSIONS
     // Fast check in parallel using rayon
-    let inconsistent_vectors: Vec<&VectorDataDto> = vector_data
+    let inconsistent_vectors: Vec<Vec<&VectorDataDto>> = vector_batch_data
         .par_iter()
-        .filter(|vec_data| vec_data.embedding.len() != expected_dimensions)
+        .map(|vec_data| {
+            vec_data
+                .iter()
+                .filter(|v| v.embedding.len() != expected_dimensions)
+                .collect::<Vec<&VectorDataDto>>()
+        })
+        .filter(|inconsistent| !inconsistent.is_empty())
         .collect();
 
     if !inconsistent_vectors.is_empty() {
@@ -113,18 +125,23 @@ pub async fn insert_run(
     let _write_guard = lock.write().await;
     info!("Acquired write lock for database '{}'", database_name);
 
-    // TODO: Use batch-wise
-    // let mut total_embedded = 0;
-    for (_index, vector_data) in vector_data.iter().enumerate() {
-        // let batch_index = index;
+    let mut total_embedded = 0;
+    for (index, vector_data) in vector_batch_data.iter().enumerate() {
+        let batch_index = index;
 
-        // This is just inserting pre-computed embeddings, so no need to fetch from provider
-        let embeddings = &vector_data.embedding;
-        let metadata = &vector_data.metadata;
+        let embedded_count = vector_data.len();
 
-        // Insert embeddings into HNSW index
-        let random_level = hnsw.get_random_level();
-        hnsw.insert(embeddings, metadata.clone(), random_level);
+        for (_index, vec_data) in vector_data.iter().enumerate() {
+            let vector = &vec_data.embedding;
+            let metadata = &vec_data.metadata;
+            let random_level = hnsw.get_random_level();
+            hnsw.insert(&vector, metadata.clone(), random_level);
+        }
+        total_embedded += embedded_count;
+        info!(
+            "Batch: {}, Embedded: {} Vectors (Total so far: {})",
+            batch_index, embedded_count, total_embedded
+        );
     }
 
     // TODO: Is there a better method to manage multiple index files? or merge them? or overwrite them lastest ones? or prune last 'N' indexes?

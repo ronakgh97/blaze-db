@@ -408,12 +408,12 @@ pub async fn new_embeddings(Json(payload): Json<EmbedRequest>) -> impl IntoRespo
 pub async fn new_insert(Json(payload): Json<InsertRequest>) -> impl IntoResponse {
     info!(
         "[POST /insert] Request to insert {} vectors into database '{}'",
-        payload.vectors.len(),
+        payload.nodes.len(),
         payload.database
     );
 
     // Check for empty's
-    if payload.vectors.is_empty() {
+    if payload.nodes.is_empty() {
         error!("[POST /insert] Invalid insert request: vectors array is empty");
         return (
             StatusCode::BAD_REQUEST,
@@ -438,8 +438,14 @@ pub async fn new_insert(Json(payload): Json<InsertRequest>) -> impl IntoResponse
     }
 
     // TODO: Maybe this is little overhead
-    if payload.vectors.par_iter().any(|v| v.embedding.is_empty()) {
-        error!("[POST /insert] Invalid insert request: one or more vectors have empty embeddings");
+    if payload
+        .nodes
+        .par_iter()
+        .any(|vector| vector.iter().any(|node| node.embedding.is_empty()))
+    {
+        error!(
+            "[POST /insert] Invalid insert request: one or more vectors in nodes has empty embedding"
+        );
         return (
             StatusCode::BAD_REQUEST,
             Json(InsertResponse {

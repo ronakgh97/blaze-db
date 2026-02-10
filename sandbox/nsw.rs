@@ -315,7 +315,7 @@ async fn main() -> anyhow::Result<()> {
     for (i, result) in parallel_results.iter().enumerate() {
         let similarity = cosine_similarity(&query_vector, &result.vector);
         println!(
-            "Result {}: Node Index: {}, Similarity: {:.4}\n Metadata: {}",
+            "Result {}: Node Index: {}, Similarity: {:.4}, Metadata: {}",
             i + 1,
             result.index.to_string().cyan(),
             similarity.to_string().cyan(),
