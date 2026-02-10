@@ -30,6 +30,18 @@ pub struct CreateDatabaseResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CreateSourceRequest {
+    pub source_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CreateSourceResponse {
+    pub id: String,
+    pub source: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ListResponse {
     pub from_sources: String,
     pub databases: Vec<String>,
@@ -54,9 +66,24 @@ pub struct EmbedResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct VectorDataDto {
-    pub embedding: Vec<f32>,
-    pub metadata: String,
+pub struct QueryRequest {
+    pub query: String,
+    pub database: String,
+    pub source: String,
+    pub top_k: usize,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct QueryResponse {
+    pub results: Vec<QueryResult>,
+    pub io_time_sec: f64,
+    pub search_time_sec: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct QueryResult {
+    pub chunk: String,
+    pub score: f32,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -74,35 +101,30 @@ pub struct InsertResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct QueryRequest {
-    pub query: String,
+pub struct VectorDataDto {
+    pub embedding: Vec<f32>,
+    pub metadata: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct VectorQueryRequest {
+    pub query_vector: Vec<f32>,
     pub database: String,
     pub source: String,
     pub top_k: usize,
 }
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct QueryResponse {
-    pub results: Vec<QueryResult>,
+pub struct VectorQueryResponse {
+    pub results: Vec<VectorQueryResult>,
     pub io_time_sec: f64,
     pub search_time_sec: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct QueryResult {
-    pub chunk: String,
+pub struct VectorQueryResult {
+    pub vectordata: VectorDataDto,
     pub score: f32,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct CreateSourceRequest {
-    pub source_name: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct CreateSourceResponse {
-    pub id: String,
-    pub source: String,
-    pub created_at: String,
 }
 
 // #[derive(Debug, Deserialize, Serialize, Clone)]

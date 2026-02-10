@@ -1,11 +1,15 @@
 use crate::core::Metrics;
-use crate::server::dto::{CreateSourceRequest, CreateSourceResponse, ListResponse};
+use crate::server::dto::{
+    CreateSourceRequest, CreateSourceResponse, ListResponse, VectorQueryResponse,
+};
 use crate::server::service::{
     create_new_database, create_new_source, embed_run, insert_run, list_source, query_search,
+    query_vector,
 };
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
     HealthCheckResponse, InsertRequest, InsertResponse, QueryRequest, QueryResponse,
+    VectorQueryRequest,
 };
 use crate::utils::{EmbeddingMetadata, EmbeddingStore, Provider};
 use crate::{error, info, warn};
@@ -35,6 +39,12 @@ lazy_static! {
     pub static ref DB_WRITE_LOCKS: Arc<Mutex<HashMap<String, Arc<RwLock<()>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
+    /// Per-database loading locks to prevent duplicate index loads during cache misses
+    /// Ensures only one thread loads a specific database at a time, while allowing
+    /// concurrent loading of different databases
+    pub static ref LOADING_LOCKS: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
     // TODO: Maybe use wrapper struct to keep most used metadata in memory too for faster access
     /// LRU Cache for loaded indexes to limit memory usage during queries
     /// Caches up to 10 databases in memory
@@ -54,7 +64,7 @@ async fn create_router() -> Router {
         //.route("/v1/blaze/sources/del", del(delete_src)) TODO: Endpoint to delete source and all associated databases and indexes
         //.route("/v1/blaze/databases/del", det(delete_db)) TODO: Endpoint to delete database and all associated indexes
         //.route("/v1/blaze/vectors/del", det(delete_vectors)) TODO: Endpoint to delete specific vectors from a database
-        //.route("/v1/blaze/query/vector", post(search_vector)) TODO: Endpoint for direct vector queries
+        .route("/v1/blazedb/query/vector", post(search_vector))
         .route("/v1/blazedb/embed", post(new_embeddings))
         .route("/v1/blazedb/query", post(search_query))
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
@@ -638,6 +648,123 @@ pub async fn search_query(Json(payload): Json<QueryRequest>) -> impl IntoRespons
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(QueryResponse {
+                    results: vec![],
+                    search_time_sec: 0.0,
+                    io_time_sec: 0.0,
+                }),
+            )
+        }
+    }
+}
+
+pub async fn search_vector(Json(payload): Json<VectorQueryRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /query/vector] Vector query request on database '{}' with {} dimensions (top_k={})",
+        payload.database,
+        payload.query_vector.len(),
+        payload.top_k
+    );
+
+    // Check for empty's
+    if payload.query_vector.is_empty()
+        || !validate_empty_string(&payload.database)
+        || !validate_empty_string(&payload.source)
+    {
+        error!(
+            "[POST /query/vector] Invalid vector query request: query_vector is empty, or database/source is empty"
+        );
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(VectorQueryResponse {
+                results: vec![],
+                search_time_sec: 0.0,
+                io_time_sec: 0.0,
+            }),
+        );
+    }
+
+    let db_name = payload.database.clone();
+    match query_vector(payload, PROVIDER.wait()).await {
+        Ok(response) => {
+            info!(
+                "[POST /query/vector] Vector query successful on database '{}', returning {} results",
+                db_name,
+                response.results.len()
+            );
+            (StatusCode::OK, Json(response))
+        }
+        Err(e) => {
+            if let Some(error_type) = e.downcast_ref::<ErrorTypes>() {
+                match error_type {
+                    ErrorTypes::DatabaseNotFound(msg) => {
+                        error!(
+                            "[POST /query/vector] Database not found error during vector query: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NO_CONTENT,
+                            Json(VectorQueryResponse {
+                                results: vec![],
+                                search_time_sec: 0.0,
+                                io_time_sec: 0.0,
+                            }),
+                        );
+                    }
+
+                    ErrorTypes::SourceNotFound(msg) => {
+                        error!(
+                            "[POST /query/vector] Source not found error during vector query: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NO_CONTENT,
+                            Json(VectorQueryResponse {
+                                results: vec![],
+                                search_time_sec: 0.0,
+                                io_time_sec: 0.0,
+                            }),
+                        );
+                    }
+
+                    ErrorTypes::IndexNotFound(msg) => {
+                        error!(
+                            "[POST /query/vector] Index not found error during vector query: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NO_CONTENT,
+                            Json(VectorQueryResponse {
+                                results: vec![],
+                                search_time_sec: 0.0,
+                                io_time_sec: 0.0,
+                            }),
+                        );
+                    }
+
+                    ErrorTypes::InvalidField(msg) => {
+                        error!(
+                            "[POST /query/vector] Invalid field error during vector query: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(VectorQueryResponse {
+                                results: vec![],
+                                search_time_sec: 0.0,
+                                io_time_sec: 0.0,
+                            }),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+            error!(
+                "[POST /query/vector] Failed to execute vector query on database '{}' - Error: {:?}",
+                db_name, e
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(VectorQueryResponse {
                     results: vec![],
                     search_time_sec: 0.0,
                     io_time_sec: 0.0,

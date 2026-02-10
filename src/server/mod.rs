@@ -6,6 +6,6 @@ pub use controller::start_server;
 pub use dto::{
     CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse,
     EmbedRequest, EmbedResponse, HealthCheckResponse, InsertRequest, InsertResponse, ListResponse,
-    QueryRequest, QueryResponse, VectorDataDto,
+    QueryRequest, QueryResponse, VectorDataDto, VectorQueryRequest, VectorQueryResponse,
 };
 pub use service::list_databases_from_disk;
