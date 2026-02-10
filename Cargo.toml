@@ -24,6 +24,10 @@ path = "sandbox/nsw.rs"
 name = "hnsw"
 path = "sandbox/hnsw.rs"
 
+[[bin]]
+name = "fst-emd"
+path = "sandbox/fastembedd.rs"
+
 [[bench]]
 name = "benchmark"
 path = "benches/benchmark.rs"
@@ -91,6 +95,8 @@ dotenv = "0.15.0"
 cliclack = "0.3.8"
 regex = "1.12.2"
 # rkyv = "0.8.15"
+embellama = "0.8.0"
+# fastembed = "5.8.1"
 # thiserror = "2.0.18"
 
 [dev-dependencies]

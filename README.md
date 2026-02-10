@@ -16,6 +16,7 @@ embeddings using HNSW Indexing.
 - CLI client for local/remote database querying.
 - Uses semantic similarity search with multiple distance metrics (Cosine, Euclidean, Dot Product).
 - Performance benchmarking suite (<1ms per search on War and Peace dataset, <5ms per search on Amazon Product Dataset).
+- Safe Index cache-locks for concurrent access, with cache validation and eviction policies.
 
 ## Quick Links
 
@@ -120,44 +121,51 @@ Title: ASUS ROG Swift 27” 1440P Gaming Monitor (PG279QM) - WQHD, Fast IPS, 240
 ### SEARCH ON WAR AND PEACE DATASET
 
 ```shell
-Query: War and Peace
-Embedding (First 3): [0.024166137, -0.016076643, -0.011579157]
+blzdb query --search "War and peace" --database def_db --source default_src --top-k 10 
 
-Lastest index file loaded: 5
-Checksum: 2a9da1ce3b23bf82e3d01836a91e1128561374bede53ba06ed2d0b165ef45f33
-Loaded HNSW index with 5981 nodes
-Index parameters: M=18, ef_construction=200, layers=12
+Search querying the database: def_db
 
-Top 5 similar chunks (HNSW):
 
-Node ID: 1
-Similarity: 0.56
-Vector (first 5): [0.10298232, 0.048900284, -0.007921904, -0.009048831, -0.01950096]
-Metadata: Author: graf Leo Tolstoy Translator: Aylmer Maude Louise Maude Release date: April 1, 2001 [eBook #2600] Most recently updated: June 14, 2022 Language: English Credits: An Anonymous Volunteer and David Widger *** START OF THE PROJECT GUTENBERG EBOOK WAR AND PEACE *** WAR AND PEACE By Leo Tolstoy/Tolstoi CHAPTER I “Well, Prince, so Genoa and Lucca are now just family estates of the Buonapartes. But I warn you, if you don’t tell me that this means war, if you still try to defend the infamies and horrors perpetrated by that Antichrist—I really believe he is Antichrist—I will have nothing more to do with you and you are no longer my friend, no longer my ‘faithful slave,’ as you call yourself! But how do you do? I see I have frightened you—sit down and tell me all the news.”
+Item 1:
+Metadata: thousand corpses lay there, but even on the island of St. Helena in the peaceful solitude where he said he intended to devote his leisure to an account of the great deeds he had done, he wrote: The Russian war should have been the most popular war of modern times: it was a war of good sense, for real interests, for the tranquillity and security of all; it was purely pacific and conservative. It was a war for a great cause, the end of uncertainties and the beginning of security. A new horizon and new labors were opening out, full of well-being and prosperity for all. The European system was already founded; all that remained was to organize it. Satisfied on these great points and with tranquility everywhere, I too should have had my Congress and my Holy Alliance. Those ideas were
+Score: 0.56
 
-Node ID: 0
-Similarity: 0.53
-Vector (first 5): [0.036207102, 0.030403586, -0.004078724, -0.037874907, -0.022600956]
-Metadata: The Project Gutenberg eBook of War and Peace This ebook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this ebook or online at www.gutenberg.org. If you are not located in the United States, you will have to check the laws of the country where you are located before using this eBook. Title: War and Peace Author: graf Leo Tolstoy Translator: Aylmer Maude Louise Maude Release date: April 1, 2001 [eBook #2600] Most recently updated: June 14, 2022 Language: English Credits: An Anonymous Volunteer and David Widger *** START OF THE PROJECT GUTENBERG EBOOK WAR AND PEACE *** WAR AND PEACE By Leo Tolstoy/Tolstoi CHAPTER I
+Item 2:
+Metadata: when there was a war, like this one, it would be war! And then the determination of the troops would be quite different. Then all these Westphalians and Hessians whom Napoleon is leading would not follow him into Russia, and we should not go to fight in Austria and Prussia without knowing why. War is not courtesy but the most horrible thing in life; and we ought to understand that and not play at war. We ought to accept this terrible necessity sternly and seriously. It all lies in that: get rid of falsehood and let war be war and not a game. As it is now, war is the favorite pastime of the idle and frivolous. The military calling is the most highly honored. “But what is war? What is needed for success in warfare? What are the           
+Score: 0.54
 
-Node ID: 983
-Similarity: 0.48
-Vector (first 5): [0.08092821, -0.03397273, -0.013446445, -0.04074625, -0.0458255]
-Metadata: such a nation and would endeavor to be worthy of it. This rescript began with the words: “Sergéy Kuzmích, From all sides reports reach me,” etc. “Well, and so he never got farther than: ‘Sergéy Kuzmích’?” asked one of the ladies. “Exactly, not a hair’s breadth farther,” answered Prince Vasíli, laughing, “‘Sergéy Kuzmích... From all sides... From all sides... Sergéy Kuzmích...’ Poor Vyazmítinov could not get any farther! He began the rescript again and again, but as soon as he uttered ‘Sergéy’ he sobbed, ‘Kuz-mí-ch,’ tears, and ‘From all sides’ was smothered in sobs and he could get no farther. And again his handkerchief, and again: ‘Sergéy Kuzmích, From all sides,’... and tears, till at last somebody else was asked to read it.” “Kuzmích... From all sides... and then tears,” someone repeated laughing. “Don’t be unkind,” cried Anna Pávlovna from her end of the table
+Item 3:
+Metadata: that: get rid of falsehood and let war be war and not a game. As it is now, war is the favorite pastime of the idle and frivolous. The military calling is the most highly honored. “But what is war? What is needed for success in warfare? What are the habits of the military? The aim of war is murder; the methods of war are spying, treachery, and their encouragement, the ruin of a country’s inhabitants, robbing them or stealing to provision the army, and fraud and falsehood termed military craft. The habits of the military class are the absence of freedom, that is, discipline, idleness, ignorance, cruelty, debauchery, and drunkenness. And in spite of all this it is the highest class, respected by everyone. All the kings, except the Chinese, wear military uniforms, and he who kills most people receives the highest rewards.                                          
+Score: 0.53
 
-Node ID: 51
-Similarity: 0.48
-Vector (first 5): [0.024561673, -0.021977345, -0.009440806, 0.028978676, -0.02957123]
-Metadata: disapproved. “The means are ... the balance of power in Europe and the rights of the people,” the abbé was saying. “It is only necessary for one powerful nation like Russia—barbaric as she is said to be—to place herself disinterestedly at the head of an alliance having for its object the maintenance of the balance of power of Europe, and it would save the world!” “But how are you to get that balance?” Pierre was beginning. At that moment Anna Pávlovna came up and, looking severely at Pierre, asked the Italian how he stood Russian climate. The Italian’s face instantly changed and assumed an offensively affected, sugary expression, evidently habitual to him when conversing with women. “I am so enchanted by the brilliancy of the wit and culture of the society, more especially of the feminine society, in which I have had
+Item 4:
+Metadata: did in 1813—salute according to all the rules of art, and, presenting the hilt of their rapier gracefully and politely, hand it to their magnanimous conqueror, but at the moment of trial, without asking what rules others have adopted in similar cases, simply and easily pick up the first cudgel that comes to hand and strike with it till the feeling of resentment and revenge in their soul yields to a feeling of contempt and compassion. CHAPTER II One of the most obvious and advantageous departures from the so-called laws of war is the action of scattered groups against men pressed together in a mass. Such action always occurs in wars that take on a national character. In such actions, instead of two crowds opposing each other, the men disperse, attack singly, run away when attacked by stronger forces, but again attack when opportunity offers. This was done      
+Score: 0.51
 
-Node ID: 4575
-Similarity: 0.47
-Vector (first 5): [0.04066606, -0.019811766, -0.011853991, 0.023033887, -0.0025452946]
-Metadata: Pávlovna whispered the next words in advance, like an old woman muttering the prayer at Communion: “Let the bold and insolent Goliath...” she whispered. Prince Vasíli continued. “Let the bold and insolent Goliath from the borders of France encompass the realms of Russia with death-bearing terrors; humble Faith, the sling of the Russian David, shall suddenly smite his head in his bloodthirsty pride. This icon of the Venerable Sergius, the servant of God and zealous champion of old of our country’s weal, is offered to Your Imperial Majesty. I grieve that my waning strength prevents rejoicing in the sight of your most gracious presence. I raise fervent prayers to Heaven that the Almighty may exalt the race of the just, and mercifully fulfill the desires of Your Majesty.” “What force! What a style!” was uttered in approval both of reader and of author.
+Item 5:
+Metadata: had thought it was all the same to him whether or not Moscow was taken as Smolénsk had been, was suddenly checked in his speech by an unexpected cramp in his throat. He paced up and down a few times in silence, but his eyes glittered feverishly and his lips quivered as he began speaking. “If there was none of this magnanimity in war, we should go to war only when it was worth while going to certain death, as now. Then there would not be war because Paul Ivánovich had offended Michael Ivánovich. And when there was a war, like this one, it would be war! And then the determination of the troops would be quite different. Then all these Westphalians and Hessians whom Napoleon is leading would not follow him into Russia, and we should not go to fight in Austria and Prussia                                                                                               
+Score: 0.50
 
-I/O took: 32.6335ms to load 5981 nodes
-HNSW search took: 393.5µs for 5981 nodes
-Total took: 37.3125ms
+Item 6:
+Metadata: don’t understand what is meant by ‘a skillful commander,’” replied Prince Andrew ironically. “A skillful commander?” replied Pierre. “Why, one who foresees all contingencies... and foresees the adversary’s intentions.” “But that’s impossible,” said Prince Andrew as if it were a matter settled long ago. Pierre looked at him in surprise. “And yet they say that war is like a game of chess?” he remarked. “Yes,” replied Prince Andrew, “but with this little difference, that in chess you may think over each move as long as you please and are not limited for time, and with this difference too, that a knight is always stronger than a pawn, and two pawns are always stronger than one, while in war a battalion is sometimes stronger than a division and sometimes weaker than a company. The relative strength of bodies of troops can                                            
+Score: 0.50
+
+Item 7:
+Metadata: on never came. In the morning, on an empty stomach, all the old questions appeared as insoluble and terrible as ever, and Pierre hastily picked up a book, and if anyone came to see him he was glad. Sometimes he remembered how he had heard that soldiers in war when entrenched under the enemy’s fire, if they have nothing to do, try hard to find some occupation the more easily to bear the danger. To Pierre all men seemed like those soldiers, seeking refuge from life: some in ambition, some in cards, some in framing laws, some in women, some in toys, some in horses, some in politics, some in sport, some in wine, and some in governmental affairs. “Nothing is trivial, and nothing is important, it’s all the same—only to save oneself from it as best one can,” thought Pierre. “Only not to see it, that dreadful it!”                                                       
+Score: 0.49
+
+Item 8:
+Metadata: not their own—there were many secondary personages accompanying the army because their principals were there. Among the opinions and voices in this immense, restless, brilliant, and proud sphere, Prince Andrew noticed the following sharply defined subdivisions of tendencies and parties: The first party consisted of Pfuel and his adherents—military theorists who believed in a science of war with immutable laws—laws of oblique movements, outflankings, and so forth. Pfuel and his adherents demanded a retirement into the depths of the country in accordance with precise laws defined by a pseudo-theory of war, and they saw only barbarism, ignorance, or evil intention in every deviation from that theory. To this party belonged the foreign nobles, Wolzogen, Wintzingerode, and others, chiefly Germans. The second party was directly opposed to the first; one extreme, as always happens, was met by representatives of the other. The members of                                                       
+Score: 0.49
+
+Item 9:
+Metadata: are here?” “I am speaking ze truce,” replied the hussar with a smile. “It’s all about the war,” the count shouted down the table. “You know my son’s going, Márya Dmítrievna? My son is going.” “I have four sons in the army but still I don’t fret. It is all in God’s hands. You may die in your bed or God may spare you in a battle,” replied Márya Dmítrievna’s deep voice, which easily carried the whole length of the table. “That’s true!” Once more the conversations concentrated, the ladies’ at the one end and the men’s at the other. “You won’t ask,” Natásha’s little brother was saying; “I know you won’t ask!” “I will,” replied Natásha. Her face suddenly flushed with reckless and joyous resolution. She half rose, by a glance inviting Pierre, who sat opposite, to listen to what was coming, and turning to her mother:                                                    
+Score: 0.48
+
+Item 10:
+Metadata: my brother, who announces his speedy arrival at Bald Hills with his wife. This pleasure will be but a brief one, however, for he will leave us again to take part in this unhappy war into which we have been drawn, God knows how or why. Not only where you are—at the heart of affairs and of the world—is the talk all of war, even here amid fieldwork and the calm of nature—which townsfolk consider characteristic of the country—rumors of war are heard and painfully felt. My father talks of nothing but marches and countermarches, things of which I understand nothing; and the day before yesterday during my daily walk through the village I witnessed a heartrending scene.... It was a convoy of conscripts enrolled from our people and starting to join the army. You should have seen the state of                                                                               
+Score: 0.48
+Time taken (sec): 0.0008125
 ```
 
 ### NSW DEMO WITH BENCHMARKING (RANDOM 50,000 VECTORS)
