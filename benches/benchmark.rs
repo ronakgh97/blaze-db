@@ -17,6 +17,7 @@ fn generate_random_vectors(num_vectors: usize, dimensions: usize) -> Vec<Vec<f32
         .collect()
 }
 
+#[inline]
 /// Generate deterministic vectors for reproducible benchmarks
 fn generate_deterministic_vectors(num_vectors: usize, dimensions: usize) -> Vec<Vec<f32>> {
     (0..num_vectors)

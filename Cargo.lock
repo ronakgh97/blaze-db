@@ -209,6 +209,7 @@ dependencies = [
  "csv",
  "dirs",
  "dotenv",
+ "fastrand",
  "futures",
  "indicatif",
  "lazy_static",

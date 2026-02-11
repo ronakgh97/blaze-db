@@ -25,10 +25,9 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, OnceLock};
-use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 
-static START_TIME: OnceLock<Instant> = OnceLock::new();
+static START_TIME: OnceLock<chrono::DateTime<chrono::Local>> = OnceLock::new();
 static PROVIDER: OnceLock<Provider> = OnceLock::new();
 
 // pub static LOADED_INDEXES: OnceLock<Arc<Mutex<HashMap<String, EmbeddingStore>>>> = OnceLock::new();
@@ -76,7 +75,6 @@ pub async fn start_server(
     source: Vec<String>,
     provider: &Provider,
 ) -> anyhow::Result<()> {
-    START_TIME.get_or_init(Instant::now);
     PROVIDER.set(provider.clone()).unwrap();
 
     // TODO: Add SourceManager to manage multiple sources dynamically and load/unload indexes as needed
@@ -87,19 +85,27 @@ pub async fn start_server(
 
     let app = create_router().await;
     let listener = tokio::net::TcpListener::bind(&addr).await?;
+    let server_time = chrono::Local::now();
+
+    // Initialize server start time
+    START_TIME.get_or_init(|| server_time);
+
     axum::serve(listener, app).await?;
 
     Ok(())
 }
 
 /// Get the server uptime in hours
-pub fn get_uptime_hrs() -> f32 {
-    let uptime_secs = START_TIME
-        .get()
-        .map(|start| start.elapsed().as_secs_f32())
-        .unwrap_or(0.0);
+pub fn get_uptime_hrs() -> f64 {
+    let uptime_hrs = if let Some(start_time) = START_TIME.get() {
+        let now = chrono::Local::now();
+        let duration = now.signed_duration_since(*start_time);
+        duration.num_hours() as f64
+    } else {
+        0.0
+    };
 
-    (uptime_secs / 3600.0 * 10_000.0).round() / 10_000.0
+    uptime_hrs
 }
 
 /// Health check handler
