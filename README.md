@@ -1,5 +1,7 @@
 # Blaze-DB
 
+![Blaze-DB Logo](blazedb-icon.png)
+
 Blaze-DB is a high-performance vector database written in Rust, designed for efficient storage and fast retrieval of
 embeddings using HNSW Indexing.
 
