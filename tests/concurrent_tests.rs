@@ -35,7 +35,7 @@ async fn test_concurrent_writes_different_databases() {
             // Save to disk
             let index_path = db_path.join("HNSW_INDEX_1".to_string());
             let mut store = EmbeddingStore::new(hnsw.clone());
-            store.write_to_disk(&index_path, 1).await.unwrap();
+            store.write_to_disk(&index_path).await.unwrap();
 
             (db_idx, hnsw.nodes.len())
         });
@@ -102,7 +102,7 @@ async fn test_concurrent_writes_same_database() {
             // Load existing index or create new one
             let index_file = db_path.join("HNSW_INDEX_1.bin");
             let mut hnsw = if index_file.exists() {
-                match EmbeddingStore::load_binary_file(&index_file).await {
+                match EmbeddingStore::load_index_file(&index_file).await {
                     Ok(store) => store.hnsw_store,
                     Err(_) => HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine)),
                 }
@@ -125,7 +125,7 @@ async fn test_concurrent_writes_same_database() {
             // Save to disk
             let index_path = db_path.join("HNSW_INDEX_1");
             let mut store = EmbeddingStore::new(hnsw.clone());
-            store.write_to_disk(&index_path, 1).await.unwrap();
+            store.write_to_disk(&index_path).await.unwrap();
 
             let write_elapsed = write_start.elapsed();
 
@@ -159,7 +159,7 @@ async fn test_concurrent_writes_same_database() {
 
     // Load final index and verify
     let index_file = db_path.join("HNSW_INDEX_1.bin");
-    let final_store = EmbeddingStore::load_binary_file(&index_file).await.unwrap();
+    let final_store = EmbeddingStore::load_index_file(&index_file).await.unwrap();
     let final_count = final_store.hnsw_store.nodes.len();
 
     println!("Total vectors written: {}", total_vectors_written);
@@ -190,7 +190,7 @@ async fn test_concurrent_reads_with_write() {
 
     let index_path = db_path.join("HNSW_INDEX_1");
     let mut store = EmbeddingStore::new(hnsw);
-    store.write_to_disk(&index_path, 1).await.unwrap();
+    store.write_to_disk(&index_path).await.unwrap();
 
     // Create RwLock for the database
     let db_lock = Arc::new(RwLock::new(()));
@@ -216,7 +216,7 @@ async fn test_concurrent_reads_with_write() {
 
             // Load index
             let index_file = db_path.join("HNSW_INDEX_1.bin");
-            let store = EmbeddingStore::load_binary_file(&index_file).await.unwrap();
+            let store = EmbeddingStore::load_index_file(&index_file).await.unwrap();
 
             // Simulate some read operation
             let node_count = store.hnsw_store.nodes.len();
@@ -250,7 +250,7 @@ async fn test_concurrent_reads_with_write() {
 
         // Load and modify index
         let index_file = db_path_writer.join("HNSW_INDEX_1.bin");
-        let mut store = EmbeddingStore::load_binary_file(&index_file).await.unwrap();
+        let mut store = EmbeddingStore::load_index_file(&index_file).await.unwrap();
 
         // Add new vectors
         for i in 100..120 {
@@ -262,7 +262,7 @@ async fn test_concurrent_reads_with_write() {
 
         // Save
         let index_path = db_path_writer.join("HNSW_INDEX_2");
-        store.write_to_disk(&index_path, 1).await.unwrap();
+        store.write_to_disk(&index_path).await.unwrap();
 
         let write_elapsed = write_start.elapsed();
 
@@ -331,7 +331,7 @@ async fn test_cumulative_writes() {
         // Load existing or create new
         let mut hnsw = if max_index > 0 {
             let index_file = db_path.join(format!("HNSW_INDEX_{}.bin", max_index));
-            match EmbeddingStore::load_binary_file(&index_file).await {
+            match EmbeddingStore::load_index_file(&index_file).await {
                 Ok(store) => store.hnsw_store,
                 Err(_) => HNSW::new(18, 200, 12, 0.8, &Some(Metrics::Cosine)),
             }
@@ -355,7 +355,7 @@ async fn test_cumulative_writes() {
         let new_index = max_index + 1;
         let index_path = db_path.join(format!("HNSW_INDEX_{}", new_index));
         let mut store = EmbeddingStore::new(hnsw.clone());
-        store.write_to_disk(&index_path, 1).await.unwrap();
+        store.write_to_disk(&index_path).await.unwrap();
 
         println!(
             "Batch {}: {}→{} nodes, saved to HNSW_INDEX_{}",
@@ -370,7 +370,7 @@ async fn test_cumulative_writes() {
 
     // Verify final state
     let final_index_file = db_path.join(format!("HNSW_INDEX_{}.bin", num_batches));
-    let final_store = EmbeddingStore::load_binary_file(&final_index_file)
+    let final_store = EmbeddingStore::load_index_file(&final_index_file)
         .await
         .unwrap();
     let final_count = final_store.hnsw_store.nodes.len();

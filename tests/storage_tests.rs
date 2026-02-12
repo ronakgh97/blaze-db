@@ -1,5 +1,6 @@
 use blaze_db::core::Metrics;
 use blaze_db::prelude::{EmbeddingStore, HNSW, VectorData};
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 #[tokio::test]
@@ -31,11 +32,11 @@ async fn test_write_read_binary() {
     let mut store = EmbeddingStore::new(hnsw);
 
     // Write binary
-    store.write_to_disk(&file_path, 0).await.unwrap();
+    store.write_to_disk(&file_path).await.unwrap();
 
     // Read binary back
     let binary_path = format!("{}.bin", file_path.to_str().unwrap());
-    let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
+    let loaded_store = EmbeddingStore::load_index_file(&PathBuf::from(&binary_path))
         .await
         .unwrap();
 
@@ -66,11 +67,11 @@ async fn test_read_binary_multiple_files() {
 
         let mut store = EmbeddingStore::new(cumulative_hnsw.clone());
         let file_path = embeddings_dir.join(format!("batch_{}", i));
-        store.write_to_disk(&file_path, 0).await.unwrap();
+        store.write_to_disk(&file_path).await.unwrap();
     }
 
     // Read all files
-    let stores = EmbeddingStore::load_binaries(embeddings_dir.to_str().unwrap())
+    let stores = EmbeddingStore::load_indexes(embeddings_dir.to_str().unwrap())
         .await
         .unwrap();
 
@@ -87,7 +88,7 @@ async fn test_read_binary_empty_directory() {
     let empty_dir = dir.path().join("empty");
     std::fs::create_dir_all(&empty_dir).unwrap();
 
-    let result = EmbeddingStore::load_binaries(empty_dir.to_str().unwrap()).await;
+    let result = EmbeddingStore::load_indexes(empty_dir.to_str().unwrap()).await;
 
     assert!(result.is_err());
     assert!(
@@ -100,7 +101,7 @@ async fn test_read_binary_empty_directory() {
 
 #[tokio::test]
 async fn test_read_binary_nonexistent_directory() {
-    let result = EmbeddingStore::load_binaries("/nonexistent/directory").await;
+    let result = EmbeddingStore::load_indexes("/nonexistent/directory").await;
 
     assert!(result.is_err());
     assert!(
@@ -235,11 +236,11 @@ async fn test_embedding_store_with_checksum() {
     let mut store = EmbeddingStore::new(hnsw);
 
     // Write to disk (should generate checksum)
-    store.write_to_disk(&file_path, 0).await.unwrap();
+    store.write_to_disk(&file_path).await.unwrap();
 
     // Load it back and verify
     let binary_path = format!("{}.bin", file_path.to_str().unwrap());
-    let loaded_store = EmbeddingStore::load_binary_file(&std::path::PathBuf::from(&binary_path))
+    let loaded_store = EmbeddingStore::load_index_file(&PathBuf::from(&binary_path))
         .await
         .unwrap();
 
@@ -262,16 +263,16 @@ async fn test_concurrent_file_loading_thread_safety() {
     }
 
     let mut store = EmbeddingStore::new(hnsw);
-    store.write_to_disk(&file_path, 0).await.unwrap();
+    store.write_to_disk(&file_path).await.unwrap();
 
-    let binary_path = std::path::PathBuf::from(format!("{}.bin", file_path.to_str().unwrap()));
+    let binary_path = PathBuf::from(format!("{}.bin", file_path.to_str().unwrap()));
 
     // Spawn multiple concurrent tasks to load the same file
     let mut tasks = Vec::new();
     for i in 0..10 {
         let path = binary_path.clone();
         let task = tokio::spawn(async move {
-            let loaded = EmbeddingStore::load_binary_file(&path).await.unwrap();
+            let loaded = EmbeddingStore::load_index_file(&path).await.unwrap();
             (i, loaded)
         });
         tasks.push(task);
@@ -311,9 +312,9 @@ async fn test_concurrent_different_files_loading() {
         }
 
         let mut store = EmbeddingStore::new(hnsw);
-        store.write_to_disk(&file_path, 0).await.unwrap();
+        store.write_to_disk(&file_path).await.unwrap();
 
-        file_paths.push(std::path::PathBuf::from(format!(
+        file_paths.push(PathBuf::from(format!(
             "{}.bin",
             file_path.to_str().unwrap()
         )));
@@ -323,7 +324,7 @@ async fn test_concurrent_different_files_loading() {
     let mut tasks = Vec::new();
     for (i, path) in file_paths.into_iter().enumerate() {
         let task = tokio::spawn(async move {
-            let loaded = EmbeddingStore::load_binary_file(&path).await.unwrap();
+            let loaded = EmbeddingStore::load_index_file(&path).await.unwrap();
             (i, loaded)
         });
         tasks.push(task);

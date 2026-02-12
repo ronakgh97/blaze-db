@@ -96,7 +96,7 @@ cliclack = "0.3.8"
 regex = "1.12.2"
 zstd = "0.13.3"
 tar = "0.4.44"
-walkdir = "2.5.0"
+# walkdir = "2.5.0"
 # rkyv = { version = "0.8.15" , features = ["std", "bytecheck"] }
 # thiserror = "2.0.18"
 
