@@ -59,10 +59,10 @@ async fn create_router() -> Router {
         .route("/v1/blazedb/databases/create", post(create_database))
         .route("/v1/blazedb/sources/create", post(create_src))
         .route("/v1/blazedb/list", get(list_sources))
-        .route("/v1/blazedb/insert", post(new_insert))
         //.route("/v1/blaze/sources/del", del(delete_src)) TODO: Endpoint to delete source and all associated databases and indexes
         //.route("/v1/blaze/databases/del", det(delete_db)) TODO: Endpoint to delete database and all associated indexes
         //.route("/v1/blaze/vectors/del", det(delete_vectors)) TODO: Endpoint to delete specific vectors from a database
+        .route("/v1/blazedb/insert", post(new_insert))
         .route("/v1/blazedb/query/vector", post(search_vector))
         .route("/v1/blazedb/embed", post(new_embeddings))
         .route("/v1/blazedb/query", post(search_query))

@@ -1,4 +1,4 @@
-use crate::core::{SERVER_FILE, UserConfig, get_source_path, save_config};
+use crate::core::{SERVER_FILE, UserConfig, get_default_backups_dir, get_source_path, save_config};
 use anyhow::Result;
 
 // TODO: FIX 'if' statements
@@ -30,7 +30,12 @@ pub async fn init_run_server() -> Result<()> {
         println!(" Created default source");
     }
 
-    println!(" Server defaults initialized");
+    // Create backups dir if it doesn't exist
+    let backup_dir = get_default_backups_dir()?;
+    if !backup_dir.exists() {
+        tokio::fs::create_dir_all(&backup_dir).await?;
+        println!(" Created backups directory");
+    }
 
     Ok(())
 }

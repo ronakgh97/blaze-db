@@ -14,7 +14,7 @@ use tokio::sync::RwLock;
 /// Prefix for HNSW index files (batch-wise), for example: "hnsw_index_1", "hnsw_index_2", etc.
 pub const INDEX_FILE_NAME: &str = "HNSW_INDEX"; // TODO: Need to find other way to manage multiple indexes
 
-// TODO: Ok so, batching is cool anf all but liitle tricky to manage multiple index files
+// TODO: Ok so, batching is cool and all but little tricky to manage multiple index files
 // Either we got merge it (periodically or instantly, Idk) or so smart batching based on a threshold or something, hmm?
 
 //TODO: SERIOUSLY REFACTOR TOMORROW Both insert_run and embed_run have a lot of duplicated code, need to refactor later
@@ -33,6 +33,17 @@ pub async fn insert_run(
         .iter()
         .map(|batch| batch.len())
         .sum::<usize>();
+
+    // If the total_entries more than this, we save the index version again instead of versioning on every insert query
+    // This is to prevent too many index files being created, and also to optimize the performance of disk I/O
+    let batch_threshold = 4096;
+
+    let do_versioning = total_entries >= batch_threshold;
+
+    info!(
+        "Starting insert_run: total_entries={}, batch_threshold={}, do_versioning={}",
+        total_entries, batch_threshold, do_versioning
+    );
 
     // Checks source and database existence
     if !check_source_valid(&source).await? {
@@ -120,8 +131,7 @@ pub async fn insert_run(
     // Multiple databases can still be written to concurrently
     // TODO: PERFORMANCE - Write lock held during HNSW insertions + disk I/O
     // Lock duration: ~100-500ms depending on batch size and disk speed
-    // This is INTENTIONAL to prevent index corruption - DO NOT CHANGE
-    // Alternative optimization: Use copy-on-write or shadow index technique
+    // This is INTENTIONAL to prevent index corruption - DO NOT CHANGE, unless we implement a more sophisticated locking mechanism that allows concurrent writes with proper merging or versioning
     let _write_guard = lock.write().await;
     info!("Acquired write lock for database '{}'", database_name);
 
@@ -146,7 +156,18 @@ pub async fn insert_run(
 
     // TODO: Is there a better method to manage multiple index files? or merge them? or overwrite them lastest ones? or prune last 'N' indexes?
     // Save the final cumulative index ONCE at the end
-    let final_index_number = max_index + 1;
+
+    let final_index_number = match do_versioning {
+        true => {
+            // if let Some(_) = loaded_hnsw {
+            max_index + 1
+            // } else {
+            //     0 // Start from 0 if no existing index, even if doing versioning - this is to avoid confusion with index numbers
+            // }
+        }
+        false => max_index, // Overwrite the last index file if not doing versioning
+    };
+
     let final_filename = database_path.join(format!("{}_{}", INDEX_FILE_NAME, final_index_number));
 
     let node_count = hnsw.nodes.len();
@@ -203,6 +224,17 @@ pub async fn embed_run(
     let source = &request.source;
 
     let total_items: usize = batch_content.iter().map(|batch| batch.len()).sum();
+
+    // If the total_entries more than this, we save the index version again instead of versioning on every insert query
+    // This is to prevent too many index files being created, and also to optimize the performance of disk I/O
+    let batch_threshold = 4096;
+
+    let do_versioning = total_items >= batch_threshold;
+
+    info!(
+        "Starting insert_run: total_entries={}, batch_threshold={}, do_versioning={}",
+        total_items, batch_threshold, do_versioning
+    );
 
     // Checks source and database existence
     if !check_source_valid(&source).await? {
@@ -306,9 +338,11 @@ pub async fn embed_run(
         }
     }
 
-    // TODO: Is there a better method to manage multiple index files? or merge them? or overwrite them lastest ones? or prune last 'N' indexes?
-    // Save the final cumulative index ONCE at the end
-    let final_index_number = max_index + 1;
+    let final_index_number = match do_versioning {
+        true => max_index + 1,
+        false => max_index, // Overwrite the last index file if not doing versioning
+    };
+
     let final_filename = database_path.join(format!("{}_{}", INDEX_FILE_NAME, final_index_number));
 
     let node_count = hnsw.nodes.len();

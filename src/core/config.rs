@@ -483,6 +483,13 @@ pub fn get_source_path() -> Result<PathBuf> {
     Ok(home_dir.join("blaze").join("sources"))
 }
 
+/// Get the default directory for database backups
+pub fn get_default_backups_dir() -> Result<PathBuf> {
+    let backup_dir =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    Ok(backup_dir.join("blaze").join("backups"))
+}
+
 /// Check if a source is valid (exists in store AND on disk)
 /// This is a convenience function that holds the read lock internally
 pub async fn check_source_valid(source_name: &str) -> Result<bool> {
