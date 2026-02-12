@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tokio::fs;
+use tokio::time::Instant;
 use wincode::{SchemaRead, SchemaWrite};
 
 #[derive(Serialize, Deserialize, Debug, Clone, SchemaWrite, SchemaRead)]
@@ -21,8 +22,8 @@ pub struct EmbeddingStore {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct EmbeddingMetadata {
-    pub index_version: usize,
     pub checksum: String,
+    pub total_backups: usize, // TODO: Gotta implement this, soon, maybe tracks number of backups made for this index
     pub total_vectors: usize,
     pub dimensions: usize,
     pub last_modified: String,
@@ -54,7 +55,7 @@ impl EmbeddingStore {
     /// - We only read from the mmap (no writes)
     /// - The file is not modified during the mapping
     /// - The mmap lifetime is scoped to the blocking task
-    pub async fn load_binary_file(path: &PathBuf) -> Result<Self> {
+    pub async fn load_index_file(path: &PathBuf) -> Result<Self> {
         let path_clone = path.to_path_buf();
 
         let store = tokio::task::spawn_blocking(move || -> Result<Self> {
@@ -84,7 +85,7 @@ impl EmbeddingStore {
 
     #[allow(unused)]
     /// Load multiple binary files from a directory //TODO: Will this ever be needed?
-    pub async fn load_binaries(dir_path: &str) -> Result<Vec<Self>> {
+    pub async fn load_indexes(dir_path: &str) -> Result<Vec<Self>> {
         // Read directory to get all .bin files
         let mut read_dir = fs::read_dir(dir_path)
             .await
@@ -111,7 +112,7 @@ impl EmbeddingStore {
         let mut tasks = Vec::new();
         for path in bin_files {
             let task = tokio::spawn(async move {
-                match Self::load_binary_file(&path).await {
+                match Self::load_index_file(&path).await {
                     Ok(store) => Some(store),
                     Err(e) => {
                         eprintln!("Failed to load {:?}: {}", path, e);
@@ -134,7 +135,7 @@ impl EmbeddingStore {
     }
 
     /// Write the EmbeddingStore to disk and store the hash checksum
-    pub async fn write_to_disk(&mut self, file_path: &PathBuf, file_index: usize) -> Result<()> {
+    pub async fn write_to_disk(&mut self, file_path: &PathBuf) -> Result<()> {
         // Add extension if not present
         let formatted_path = if file_path
             .extension()
@@ -161,7 +162,7 @@ impl EmbeddingStore {
                 .ok_or_else(|| anyhow!("File path has no parent directory"))?
                 .to_path_buf(), // TODO: Unwrap safe?
             &EmbeddingMetadata {
-                index_version: file_index,
+                total_backups: 0, // TODO: Implement backup tracking
                 checksum,
                 total_vectors: self.hnsw_store.nodes.len(),
                 dimensions: self.hnsw_store.nodes[0].vector.len(), //TODO: Very hacky but works for now (hopes does not panic 🛐)
@@ -179,12 +180,9 @@ impl EmbeddingStore {
         Ok(())
     }
 
+    /// Write the EmbeddingStore to disk as a JSON file and store the hash checksum (for human readability and debugging)
     #[allow(unused)]
-    pub async fn write_to_disk_json(
-        &mut self,
-        file_path: PathBuf,
-        file_index: usize,
-    ) -> Result<()> {
+    pub async fn write_to_disk_json(&mut self, file_path: PathBuf) -> Result<()> {
         // Add extension if not present
         let formatted_path = if file_path
             .extension()
@@ -210,7 +208,7 @@ impl EmbeddingStore {
                 .ok_or_else(|| anyhow!("File path has no parent directory"))?
                 .to_path_buf(), // TODO: Unwrap safe?
             &EmbeddingMetadata {
-                index_version: file_index,
+                total_backups: 0, // TODO: Implement backup tracking
                 checksum,
                 total_vectors: self.hnsw_store.nodes.len(),
                 dimensions: self.hnsw_store.nodes[0].vector.len(), //TODO: Very hacky but works for now (hopes does not panic 🛐)
@@ -228,44 +226,44 @@ impl EmbeddingStore {
         Ok(())
     }
 
-    pub async fn load_lastest_index(prefix: &str, dir_path: &str) -> Result<(Option<Self>, usize)> {
-        let (loaded_hnsw, max_index) = {
-            let mut latest_path: Option<PathBuf> = None;
-            let mut max_num = 0;
-            for entry in std::fs::read_dir(dir_path)? {
-                let entry = entry?;
-                let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    // Check if it's an index file (e.g., hnsw_index_1.bin)
-                    if let Some(suffix) = file_name.strip_prefix(prefix) {
-                        // Remove .bin extension if present
-                        let suffix = suffix.strip_suffix(".bin").unwrap_or(suffix);
-                        let suffix = suffix.strip_prefix('_').unwrap_or(suffix);
-                        // Try to parse the number
-                        if let Ok(num) = suffix.parse::<usize>() {
-                            if num > max_num {
-                                max_num = num;
-                                latest_path = Some(path);
-                            }
-                        }
-                    }
-                }
-            }
-            let loaded = if let Some(path) = latest_path {
-                Some(EmbeddingStore::load_binary_file(&path).await?)
-            } else {
-                None
-            };
-            (loaded, max_num)
-        };
-
-        Ok((loaded_hnsw, max_index))
-    }
+    // pub async fn load_lastest_index(prefix: &str, dir_path: &str) -> Result<(Option<Self>, usize)> {
+    //     let (loaded_hnsw, max_index) = {
+    //         let mut latest_path: Option<PathBuf> = None;
+    //         let mut max_num = 0;
+    //         for entry in std::fs::read_dir(dir_path)? {
+    //             let entry = entry?;
+    //             let path = entry.path();
+    //             if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+    //                 // Check if it's an index file (e.g., hnsw_index_1.bin)
+    //                 if let Some(suffix) = file_name.strip_prefix(prefix) {
+    //                     // Remove .bin extension if present
+    //                     let suffix = suffix.strip_suffix(".bin").unwrap_or(suffix);
+    //                     let suffix = suffix.strip_prefix('_').unwrap_or(suffix);
+    //                     // Try to parse the number
+    //                     if let Ok(num) = suffix.parse::<usize>() {
+    //                         if num > max_num {
+    //                             max_num = num;
+    //                             latest_path = Some(path);
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         let loaded = if let Some(path) = latest_path {
+    //             Some(EmbeddingStore::load_binary_file(&path).await?)
+    //         } else {
+    //             None
+    //         };
+    //         (loaded, max_num)
+    //     };
+    //
+    //     Ok((loaded_hnsw, max_index))
+    // }
 }
 
 /// Write or update the EmbeddingMetadata on disk, this is auto called when writing the EmbeddingStore
 /// Thread-safe with atomic writes using temp-file-rename pattern
-async fn write_metadata(dir_path: &PathBuf, metadata: &EmbeddingMetadata) -> Result<()> {
+pub async fn write_metadata(dir_path: &PathBuf, metadata: &EmbeddingMetadata) -> Result<()> {
     let metadata_path = dir_path.join("metadata.json");
     let metadata = metadata.clone();
 
@@ -735,3 +733,383 @@ struct LSMTree {}
 
 #[allow(dead_code)]
 struct SSTable {}
+
+/// Result of a backup operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupInfo {
+    pub file_name: String,
+    pub timestamp: String,
+    pub size_mb: f64,
+    pub time_taken_seconds: f64,
+}
+
+/// Creates a compressed backup of a single database index file (NOT the entire directory)
+/// using a tar archive with zstd compression.
+///
+/// - Executes compression in a blocking task to avoid stalling the async runtime
+/// - Uses atomic file operations (temporary file + rename) to ensure consistency
+/// - Thread-safe and safe for concurrent usage
+pub async fn create_file_backup(
+    backup_dir: &PathBuf,
+    file_to_backup: &PathBuf,
+    backup_filename: String, // Expected format: my_source_my_database_20240601_153000.tar.zst
+    compression_level: i32,
+) -> Result<BackupInfo> {
+    if !file_to_backup.exists() {
+        anyhow::bail!("Specified file does not exist");
+    }
+
+    if !backup_dir.is_dir() {
+        anyhow::bail!("Backup path is not a valid directory");
+    }
+
+    let timestamp = chrono::Utc::now();
+    let temp_backup_path = backup_dir.join(format!("{}.tmp", backup_filename));
+    let final_backup_path = backup_dir.join(backup_filename);
+
+    // Clone paths for blocking task
+    let temp_backup_path_clone = temp_backup_path.clone();
+    let file_to_backup_clone = file_to_backup.clone();
+
+    // Perform compression inside a blocking task
+    let (size_bytes, elapsed) = tokio::task::spawn_blocking(move || -> Result<(u64, f64)> {
+        let start = Instant::now();
+        // Create temporary output file
+        let temp_file = File::create(&temp_backup_path_clone)
+            .with_context(|| format!("Failed to create temp file: {:?}", temp_backup_path_clone))?;
+
+        let encoder = zstd::Encoder::new(temp_file, compression_level)
+            .with_context(|| "Failed to initialize zstd encoder")?;
+
+        let mut tar_builder = tar::Builder::new(encoder);
+
+        let file_name = file_to_backup_clone
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("HNSW_INDEX.replica");
+
+        tar_builder
+            .append_path_with_name(&file_to_backup_clone, file_name)
+            .with_context(|| {
+                format!(
+                    "Failed to append file to archive: {:?}",
+                    file_to_backup_clone
+                )
+            })?;
+
+        // Finalize tar archive
+        let encoder = tar_builder
+            .into_inner()
+            .with_context(|| "Failed to finalize tar archive")?;
+
+        // Finalize compression
+        let mut file = encoder
+            .finish()
+            .with_context(|| "Failed to finalize zstd compression")?;
+
+        // Ensure data is fully written to disk
+        file.flush()
+            .with_context(|| "Failed to flush backup file")?;
+        file.sync_all()
+            .with_context(|| "Failed to sync backup file")?;
+
+        // Retrieve file size
+        let metadata = file
+            .metadata()
+            .with_context(|| "Failed to retrieve backup metadata")?;
+
+        let elapsed = start.elapsed().as_secs_f64();
+        Ok((metadata.len(), elapsed))
+    })
+    .await
+    .with_context(|| "Backup task panicked during execution")??;
+
+    // Atomically move temp file to final location
+    fs::rename(&temp_backup_path, &final_backup_path)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to rename backup from {:?} to {:?}",
+                temp_backup_path, final_backup_path
+            )
+        })?;
+
+    Ok(BackupInfo {
+        file_name: final_backup_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown_backup.tar.zst")
+            .to_string(),
+        timestamp: timestamp.to_rfc3339(),
+        size_mb: size_bytes as f64 / (1024.0 * 1024.0),
+        time_taken_seconds: elapsed,
+    })
+}
+
+#[allow(unused)]
+/// Creates a compressed backup of an entire directory using tar + zstd.
+///
+/// - Archives the full directory recursively
+/// - Runs compression inside a blocking task
+/// - Uses atomic temp file + rename strategy
+/// - Ensures data is flushed and synced to disk
+pub async fn create_directory_backup(
+    backup_dir: &PathBuf,
+    directory_to_backup: &PathBuf,
+    backup_filename: String, // e.g. my_source_my_database_20240601_153000.tar.zst
+    compression_level: i32,
+) -> Result<BackupInfo> {
+    // Validate inputs
+    if !directory_to_backup.is_dir() {
+        anyhow::bail!("Source path is not a valid directory");
+    }
+
+    if !backup_dir.is_dir() {
+        anyhow::bail!("Backup directory is not valid");
+    }
+
+    let timestamp = chrono::Utc::now();
+    let start_time = std::time::Instant::now();
+
+    let temp_backup_path = backup_dir.join(format!("{}.tmp", backup_filename));
+    let final_backup_path = backup_dir.join(&backup_filename);
+
+    let temp_backup_path_clone = temp_backup_path.clone();
+    let dir_to_backup_clone = directory_to_backup.to_path_buf();
+
+    // Perform compression in blocking thread
+    let size_bytes = tokio::task::spawn_blocking(move || -> Result<u64> {
+        let temp_file = std::fs::File::create(&temp_backup_path_clone)
+            .with_context(|| format!("Failed to create temp file: {:?}", temp_backup_path_clone))?;
+
+        let encoder = zstd::Encoder::new(temp_file, compression_level)
+            .with_context(|| "Failed to initialize zstd encoder")?;
+
+        let mut tar_builder = tar::Builder::new(encoder);
+
+        // Append directory recursively
+        tar_builder
+            .append_dir_all(".", &dir_to_backup_clone)
+            .with_context(|| {
+                format!(
+                    "Failed to append directory to archive: {:?}",
+                    dir_to_backup_clone
+                )
+            })?;
+
+        // Finalize tar
+        let encoder = tar_builder
+            .into_inner()
+            .with_context(|| "Failed to finalize tar archive")?;
+
+        // Finalize compression
+        let mut file = encoder
+            .finish()
+            .with_context(|| "Failed to finalize zstd compression")?;
+
+        file.flush()
+            .with_context(|| "Failed to flush backup file")?;
+        file.sync_all()
+            .with_context(|| "Failed to sync backup file")?;
+
+        let metadata = file
+            .metadata()
+            .with_context(|| "Failed to retrieve backup metadata")?;
+
+        Ok(metadata.len())
+    })
+    .await
+    .with_context(|| "Backup task panicked during execution")??;
+
+    // Atomic rename
+    tokio::fs::rename(&temp_backup_path, &final_backup_path)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to rename backup from {:?} to {:?}",
+                temp_backup_path, final_backup_path
+            )
+        })?;
+
+    let elapsed = start_time.elapsed().as_secs_f64();
+
+    Ok(BackupInfo {
+        file_name: final_backup_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown_backup.tar.zst")
+            .to_string(),
+        timestamp: timestamp.to_rfc3339(),
+        size_mb: size_bytes as f64 / (1024.0 * 1024.0),
+        time_taken_seconds: elapsed,
+    })
+}
+
+/// Remove old backups, by pattern (e.g., "my_source_my_database_{timestamp}") and keep only the latest N backups, where N is configurable (e.g., 5)
+///
+/// ### Thread Safety
+/// - Safe to call concurrently for different databases
+/// - Sorts backups by modification time to determine which to delete
+pub async fn cleanup_old_backups(
+    backup_dir: &PathBuf,
+    pattern: &str, // e.g., "my_source_my_database"
+    max_backups: usize,
+) -> Result<()> {
+    let mut backups = Vec::new();
+
+    // Read all backup files for this database
+    let mut entries = fs::read_dir(backup_dir)
+        .await
+        .with_context(|| format!("Failed to read backup directory: {:?}", backup_dir))?;
+
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+            // Match backup files: my_source_my_database_20240601_153000.tar.zst
+            if filename.starts_with(pattern) && filename.ends_with(".tar.zst") {
+                let metadata = entry.metadata().await?;
+                if metadata.is_file() {
+                    backups.push((path, metadata.modified()?));
+                }
+            }
+        }
+    }
+
+    // If we have more backups than max_backups, delete the oldest ones
+    if backups.len() > max_backups {
+        // Sort by modification time (newest first)
+        backups.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // Delete backups beyond max_backups
+        for (old_backup, _) in backups.iter().skip(max_backups) {
+            fs::remove_file(old_backup)
+                .await
+                .with_context(|| format!("Failed to remove old backup: {:?}", old_backup))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// List all backups for a specific database, no filtering, just return all .tar.zst files in the backup directory with their metadata (timestamp, size, etc.)
+///
+/// ### Thread Safety
+/// - Read-only operation, safe to call concurrently
+/// - Returns snapshot of available backups at time of call
+pub async fn list_database_backups(backup_root: &PathBuf) -> Result<Vec<BackupInfo>> {
+    if !backup_root.exists() {
+        anyhow::bail!("Backup root directory does not exist: {:?}", backup_root);
+    }
+
+    if !backup_root.is_dir() {
+        anyhow::bail!("Backup root is not a valid directory: {:?}", backup_root);
+    }
+
+    let mut backups = Vec::new();
+    let mut entries = fs::read_dir(&backup_root)
+        .await
+        .with_context(|| format!("Failed to read backup directory: {:?}", backup_root))?;
+
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+            if filename.ends_with(".tar.zst") {
+                let metadata = entry.metadata().await?;
+                if metadata.is_file() {
+                    let size_bytes = metadata.len();
+                    let modified = metadata.modified()?;
+                    let timestamp: chrono::DateTime<chrono::Utc> = modified.into();
+
+                    backups.push(BackupInfo {
+                        file_name: filename.to_string(),
+                        timestamp: timestamp.to_rfc3339(),
+                        size_mb: size_bytes as f64 / (1024.0 * 1024.0),
+                        time_taken_seconds: 0.0,
+                    });
+                }
+            }
+        }
+    }
+
+    // Sort by timestamp (newest first)
+    backups.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+    Ok(backups)
+}
+
+/// Restore a database from a backup file (tar + zstd), this will extract the backup to the specified restore path
+/// THIS FUNCTION OVERWRITE EXISTING FILES IN THE RESTORE PATH, USE WITH CAUTION!!!
+pub async fn restore_database_backup(backup_path: &PathBuf, restore_path: &PathBuf) -> Result<()> {
+    // Validate backup file exists
+    if !backup_path.exists() {
+        anyhow::bail!("Backup file does not exist: {:?}", backup_path);
+    }
+
+    if !backup_path.is_file() {
+        anyhow::bail!("Backup path is not a file: {:?}", backup_path);
+    }
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = restore_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("Failed to create restore parent directory: {:?}", parent))?;
+    }
+
+    // Remove existing directory and files if they exist (overwrite)
+    if restore_path.exists() {
+        fs::remove_dir_all(restore_path).await.with_context(|| {
+            format!(
+                "Failed to remove existing database directory: {:?}",
+                restore_path
+            )
+        })?;
+    }
+
+    // Create restore directory
+    fs::create_dir_all(restore_path)
+        .await
+        .with_context(|| format!("Failed to create restore directory: {:?}", restore_path))?;
+
+    // Clone paths for blocking task
+    let backup_path_clone = backup_path.clone();
+    let restore_path_clone = restore_path.clone();
+
+    // Perform tar+zstd decompression in blocking task
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        // Open backup file
+        let backup_file = File::open(&backup_path_clone)
+            .with_context(|| format!("Failed to open backup file: {:?}", backup_path_clone))?;
+
+        // Create zstd decoder
+        let decoder =
+            zstd::Decoder::new(backup_file).with_context(|| "Failed to create zstd decoder")?;
+
+        // Create tar archive reader
+        let mut tar_archive = tar::Archive::new(decoder);
+
+        // Extract all files
+        tar_archive
+            .unpack(&restore_path_clone)
+            .with_context(|| format!("Failed to extract backup to: {:?}", restore_path_clone))?;
+
+        Ok(())
+    })
+    .await
+    .with_context(|| "Blocking task panicked during backup restoration")??;
+
+    Ok(())
+}
+
+/// Delete a specific backup file
+pub async fn delete_backup(backup_path: &PathBuf) -> Result<()> {
+    if !backup_path.exists() {
+        anyhow::bail!("Backup file does not exist: {:?}", backup_path);
+    }
+
+    fs::remove_file(backup_path)
+        .await
+        .with_context(|| format!("Failed to delete backup file: {:?}", backup_path))?;
+
+    Ok(())
+}
