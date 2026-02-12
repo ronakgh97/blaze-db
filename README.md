@@ -273,15 +273,51 @@ test test_cache_and_bench ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.82s
 
-        PASS [   3.849s] (1/1) blaze-db::query_test test_cache_and_bench
-────────────
-     Summary [   3.850s] 1 test run: 1 passed, 0 skipped
 ```
 
 - Almost around 480x faster (I/O) with cache hits on repeated queries on same index. 😭🔥
 - Although there is still I/O overhead during cache validation (reading checksum from metadata.json),but it's
   significantly
   reduced. Checkout this file: [Cache Impl](./src/server/service/queries.rs)
+
+### Concurrent Benchmarking
+
+```shell
+cargo nextest run stress_test_concurrent_writes_different_databases --release --run-ignored only --no-capture
+   Compiling blaze-db v0.1.0 (C:\codes\blaze-db)
+    Finished `release` profile [optimized] target(s) in 25.59s
+------------
+ Nextest run ID dd45f926-c746-491b-a9d3-cd57d943f8ad with nextest profile: default
+    Starting 1 test across 17 binaries (83 tests skipped)
+     Running [ 00:00:00] 0/1: 0 running, 0 passed, 0 skipped
+       START (1/1) blaze-db::stress_tests stress_test_concurrent_writes_different_databases
+
+running 1 test
+Source created, creating 50 databases...
+Databases created, starting concurrent writes...
+test stress_test_concurrent_writes_different_databases has been running for over 60 seconds
+        SLOW [> 60.000s] (-----) blaze-db::stress_tests stress_test_concurrent_writes_different_databases
+
+ CONCURRENT WRITES TEST RESULTS:
+  Databases written: 50
+  Vectors per database: 4096
+  Successful: 50/50
+  Total time: 74.3236711s
+  Min write time: 32.3023285s
+  Max write time: 68.0414242s
+  Avg write time: 47.294857942s
+  Expected if sequential: 2364.7428971s
+  Speedup: 31.82x
+Concurrent writes to different databases work in parallel!
+test stress_test_concurrent_writes_different_databases ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 75.01s
+```
+
+- Concurrent writes to different databases work in parallel, with significant speedup over sequential writes! 😎🔥
+- Each write operation is still quite slow due to HNSW indexing and disk I/O, but at least they don't block each
+  other. (Which is a huge improvement over the previous version where all writes were serialized due to global locks. 😭)
+- Checkout this file: [Stress Test](tests/stress_tests.rs)
 
 ### TODO:
 
@@ -321,6 +357,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - Configurable distance metrics and search parameters. `PARTIALLY DONE`
 - Tombstone deletion and Background reindexing for better performance. `IN PROGRESS`
 - Add embedded Embeddings model, no more API shit `NEED_HELP`
+- Add Backup Mechanism, Background Jobs? API Endpoint? or something else
 
 ## References
 

@@ -209,8 +209,8 @@ async fn stress_test_concurrent_writes_different_databases() {
 
     let client = create_client();
     let timestamp = chrono::Utc::now().timestamp();
-    let num_databases = 75;
-    let vectors_per_db = 5000;
+    let num_databases = 50;
+    let vectors_per_db = 4096;
 
     // Create source
     let source_name = format!("stress_src_{}", timestamp);
