@@ -40,13 +40,13 @@ lazy_static! {
 
     /// Per-database loading locks to prevent duplicate index loads during cache misses
     /// Ensures only one thread loads a specific database at a time, while allowing
-    /// concurrent loading of different databases
+    /// concurrent loading of different databases not same database!!
     pub static ref LOADING_LOCKS: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
     // TODO: Maybe use wrapper struct to keep most used metadata in memory too for faster access
     /// LRU Cache for loaded indexes to limit memory usage during queries
-    /// Caches up to 10 databases in memory
+    /// Caches up to 12 databases in memory
     pub static ref INDEX_CACHE: Arc<RwLock<LruCache<String, (Arc<EmbeddingMetadata>, Arc<EmbeddingStore>)>>> =
         Arc::new(RwLock::new(LruCache::new(
             NonZeroUsize::new(12).unwrap() // Cache 12 databases

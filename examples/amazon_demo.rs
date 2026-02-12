@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
 
     let mut index_store = EmbeddingStore::new(hnsw);
 
-    index_store.write_to_disk(&index_path, 0).await?;
+    index_store.write_to_disk(&index_path).await?;
 
     let duration = start_indexing.elapsed();
     progress_bar.finish_with_message("Index Completed");
@@ -83,7 +83,7 @@ async fn load_amazon_reviews_csv(file_path: &str) -> Result<Vec<CsvDataPoint>> {
 #[tokio::test]
 async fn index_health_check() -> Result<()> {
     let hnsw_index =
-        EmbeddingStore::load_binary_file(&PathBuf::from("examples/amazon_index/amazon_index.bin"))
+        EmbeddingStore::load_index_file(&PathBuf::from("examples/amazon_index/amazon_index.bin"))
             .await?;
 
     println!(
@@ -150,7 +150,7 @@ async fn check_csv() -> Result<()> {
 async fn bench_search() -> Result<()> {
     use colored::Colorize;
     let index =
-        EmbeddingStore::load_binary_file(&PathBuf::from("examples/amazon_index/amazon_index.bin"))
+        EmbeddingStore::load_index_file(&PathBuf::from("examples/amazon_index/amazon_index.bin"))
             .await;
 
     let embedding_store = match index {

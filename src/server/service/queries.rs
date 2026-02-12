@@ -5,7 +5,7 @@ use crate::prelude::Provider;
 use crate::server::controller::{ErrorTypes, INDEX_CACHE, LOADING_LOCKS};
 use crate::server::dto::{QueryResult, VectorQueryRequest, VectorQueryResponse, VectorQueryResult};
 use crate::server::service::database::search_database_on_disk;
-use crate::server::service::load_embeddings_index_from_database;
+use crate::server::service::load_index_from_database;
 use crate::server::{QueryRequest, QueryResponse, VectorDataDto};
 use crate::utils::read_embeddings_metadata;
 use crate::{error, info, warn};
@@ -230,8 +230,7 @@ pub async fn query_vector(
 
     // Still missing or stale - load from disk (only one thread per database does this)
     info!("Loading index from disk for database '{}'", from_database);
-    let (store, _) =
-        load_embeddings_index_from_database(from_database.clone(), source.clone()).await;
+    let store = load_index_from_database(from_database.clone(), source.clone()).await;
 
     // Read the metadata
     let metadata = match read_embeddings_metadata(&db_path).await {
@@ -546,8 +545,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
         "Loading index from disk for database '{}'",
         request.database
     );
-    let (store, _idx) =
-        load_embeddings_index_from_database(request.database.clone(), request.source.clone()).await;
+    let store = load_index_from_database(request.database.clone(), request.source.clone()).await;
 
     // Read the metadata
     let metadata = match read_embeddings_metadata(&db_path).await {

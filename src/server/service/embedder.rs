@@ -11,11 +11,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-/// Prefix for HNSW index files (batch-wise), for example: "hnsw_index_1", "hnsw_index_2", etc.
-pub const INDEX_FILE_NAME: &str = "HNSW_INDEX"; // TODO: Need to find other way to manage multiple indexes
-
-// TODO: Ok so, batching is cool and all but little tricky to manage multiple index files
-// Either we got merge it (periodically or instantly, Idk) or so smart batching based on a threshold or something, hmm?
+/// Prefix for HNSW index files
+/// Now using fixed names: HNSW_INDEX.bin (current), HNSW_INDEX.old (previous)
+// const INDEX_FILE_NAME: &str = "HNSW_INDEX"; // No longer needed with atomic rotation
 
 //TODO: SERIOUSLY REFACTOR TOMORROW Both insert_run and embed_run have a lot of duplicated code, need to refactor later
 
@@ -34,16 +32,7 @@ pub async fn insert_run(
         .map(|batch| batch.len())
         .sum::<usize>();
 
-    // If the total_entries more than this, we save the index version again instead of versioning on every insert query
-    // This is to prevent too many index files being created, and also to optimize the performance of disk I/O
-    let batch_threshold = 4096;
-
-    let do_versioning = total_entries >= batch_threshold;
-
-    info!(
-        "Starting insert_run: total_entries={}, batch_threshold={}, do_versioning={}",
-        total_entries, batch_threshold, do_versioning
-    );
+    info!("Starting indexing with total entries: {}", total_entries);
 
     // Checks source and database existence
     if !check_source_valid(&source).await? {
@@ -111,8 +100,7 @@ pub async fn insert_run(
         })?;
 
     // Load latest HNSW from database directory if it exists, otherwise create a new one
-    let (loaded_hnsw, max_index) =
-        load_embeddings_index_from_database(database_name.clone(), source.clone()).await;
+    let loaded_hnsw = load_index_from_database(database_name.clone(), source.clone()).await;
     let mut hnsw = match loaded_hnsw {
         Some(store) => store.hnsw_store,
         None => HNSW::new(18, 200, 12, 0.8, &Some(metrics)),
@@ -154,34 +142,47 @@ pub async fn insert_run(
         );
     }
 
-    // TODO: Is there a better method to manage multiple index files? or merge them? or overwrite them lastest ones? or prune last 'N' indexes?
-    // Save the final cumulative index ONCE at the end
+    // Copy-on-Write (CoW) Replication Strategy:
+    // Write to HNSW_INDEX_TEMP.bin
+    // Atomic rename: TEMP → HNSW_INDEX.bin (crash-safe!)
+    // Copy .bin → HNSW_INDEX.replica (exact snapshot for backups!)
+    //
+    // Benefits:
+    // - .replica is EXACT copy of .bin (no version drift)
+    // - Can backup .replica with ZERO locks (it's frozen)
+    // - Simpler than rotation (no threshold logic needed)
+    //
+    // Cons: (TODO)
+    // - Double disk I/O during writes (write temp, then copy to replica) - but this is acceptable for data safety and simplicity
+    // - Should be performed asynchronously to avoid blocking the main thread, especially for large indexes or use background jobs
 
-    let final_index_number = match do_versioning {
-        true => {
-            // if let Some(_) = loaded_hnsw {
-            max_index + 1
-            // } else {
-            //     0 // Start from 0 if no existing index, even if doing versioning - this is to avoid confusion with index numbers
-            // }
-        }
-        false => max_index, // Overwrite the last index file if not doing versioning
-    };
-
-    let final_filename = database_path.join(format!("{}_{}", INDEX_FILE_NAME, final_index_number));
+    let temp_filename = database_path.join("HNSW_INDEX_TEMP.bin");
+    let current_filename = database_path.join("HNSW_INDEX.bin");
+    let replica_filename = database_path.join("HNSW_INDEX.replica");
 
     let node_count = hnsw.nodes.len();
     let mut embedding_store = EmbeddingStore::new(hnsw);
-    embedding_store
-        .write_to_disk(&final_filename, final_index_number)
-        .await
-        .with_context(|| "Failed to write final index")?;
 
-    info!(
-        "Final index saved: {} nodes total → {:?}",
-        node_count,
-        final_filename.display()
-    );
+    // Write to temporary file
+    embedding_store
+        .write_to_disk(&database_path.join("HNSW_INDEX_TEMP.bin"))
+        .await
+        .with_context(|| "Failed to write index to temp file")?;
+
+    // Atomic rename (crash-safe! If crash here, previous .bin is still valid)
+    tokio::fs::rename(&temp_filename, &current_filename)
+        .await
+        .with_context(|| "Failed to rename temp index to current")?;
+
+    info!("Index saved: {} nodes total → HNSW_INDEX.bin", node_count);
+
+    // Create replica snapshot (exact copy for backups)
+    // This is NON-CRITICAL - if it fails, .bin is still valid
+    if let Err(e) = tokio::fs::copy(&current_filename, &replica_filename).await {
+        warn!("Failed to create replica snapshot (non-critical): {}", e);
+    } else {
+        info!("Created replica snapshot → HNSW_INDEX.replica");
+    }
 
     // Write lock will be automatically released here when _write_guard goes out of scope
     drop(_write_guard);
@@ -225,16 +226,7 @@ pub async fn embed_run(
 
     let total_items: usize = batch_content.iter().map(|batch| batch.len()).sum();
 
-    // If the total_entries more than this, we save the index version again instead of versioning on every insert query
-    // This is to prevent too many index files being created, and also to optimize the performance of disk I/O
-    let batch_threshold = 4096;
-
-    let do_versioning = total_items >= batch_threshold;
-
-    info!(
-        "Starting insert_run: total_entries={}, batch_threshold={}, do_versioning={}",
-        total_items, batch_threshold, do_versioning
-    );
+    info!("Starting embed_run: total_items={}", total_items);
 
     // Checks source and database existence
     if !check_source_valid(&source).await? {
@@ -275,8 +267,7 @@ pub async fn embed_run(
         })?;
 
     // Load latest HNSW from database directory if it exists, otherwise create a new one
-    let (loaded_hnsw, max_index) =
-        load_embeddings_index_from_database(database_name.clone(), source.clone()).await;
+    let loaded_hnsw = load_index_from_database(database_name.clone(), source.clone()).await;
     let mut hnsw = match loaded_hnsw {
         Some(store) => store.hnsw_store,
         None => HNSW::new(18, 200, 12, 0.8, &Some(metrics)),
@@ -338,25 +329,38 @@ pub async fn embed_run(
         }
     }
 
-    let final_index_number = match do_versioning {
-        true => max_index + 1,
-        false => max_index, // Overwrite the last index file if not doing versioning
-    };
+    // Copy-on-Write (CoW) Replication Strategy (same as insert_run):
+    //  Write to HNSW_INDEX_TEMP.bin
+    //  Atomic rename: TEMP → HNSW_INDEX.bin (crash-safe!)
+    //  Copy .bin → HNSW_INDEX.replica (exact snapshot for backups!)
 
-    let final_filename = database_path.join(format!("{}_{}", INDEX_FILE_NAME, final_index_number));
+    let temp_filename = database_path.join("HNSW_INDEX_TEMP.bin");
+    let current_filename = database_path.join("HNSW_INDEX.bin");
+    let replica_filename = database_path.join("HNSW_INDEX.replica");
 
     let node_count = hnsw.nodes.len();
     let mut embedding_store = EmbeddingStore::new(hnsw);
-    embedding_store
-        .write_to_disk(&final_filename, final_index_number)
-        .await
-        .with_context(|| "Failed to write final index")?;
 
-    info!(
-        "Final index saved: {} nodes total → {:?}",
-        node_count,
-        final_filename.display()
-    );
+    // Write to temporary file
+    embedding_store
+        .write_to_disk(&database_path.join("HNSW_INDEX_TEMP.bin"))
+        .await
+        .with_context(|| "Failed to write index to temp file")?;
+
+    // Atomic rename (crash-safe!)
+    tokio::fs::rename(&temp_filename, &current_filename)
+        .await
+        .with_context(|| "Failed to rename temp index to current")?;
+
+    info!("Index saved: {} nodes total → HNSW_INDEX.bin", node_count);
+
+    // Create replica snapshot (exact copy for backups)
+    // This is NON-CRITICAL - if it fails, .bin is still valid
+    if let Err(e) = tokio::fs::copy(&current_filename, &replica_filename).await {
+        warn!("Failed to create replica snapshot (non-critical): {}", e);
+    } else {
+        info!("Created replica snapshot → HNSW_INDEX.replica");
+    }
 
     // Write lock will be automatically released here when _write_guard goes out of scope
     drop(_write_guard);
@@ -386,19 +390,15 @@ pub async fn embed_run(
     })
 }
 
-/// Load the lastest HNSW Index from the specified database
-/// Returns the EmbeddingStore and the max index number found or (None, 0) if not found
+/// Loads the HNSW index from the database directory, with crash recovery fallback
 /// Uses read lock to allow concurrent reads while blocking writes
-pub async fn load_embeddings_index_from_database(
-    database: String,
-    source: String,
-) -> (Option<EmbeddingStore>, usize) {
+pub async fn load_index_from_database(database: String, source: String) -> Option<EmbeddingStore> {
     info!("Reading embeddings from database '{}'", database);
     let database_name = match search_database_on_disk(&database, &source).await {
         Ok(path) => path,
         Err(e) => {
             error!("Database '{}' not found, e: {}", database, e.to_string());
-            return (None, 0);
+            return None;
         }
     };
     info!("Loading binary embeddings from: {:?}", database_name);
@@ -415,23 +415,54 @@ pub async fn load_embeddings_index_from_database(
     let _read_guard = lock.read().await;
     info!("Acquired read lock for database '{}'", database);
 
-    let (loaded_hnsw, max_index) =
-        match EmbeddingStore::load_lastest_index(INDEX_FILE_NAME, database_name.to_str().unwrap())
-            .await
-        {
-            Ok((store, max_idx)) => (store, max_idx),
+    // Try loading HNSW_INDEX.bin (current index)
+    // If that fails, try HNSW_INDEX.replica (crash recovery fallback!)
+    let bin_path = database_name.join("HNSW_INDEX.bin");
+    let replica_path = database_name.join("HNSW_INDEX.replica");
+
+    let loaded_hnsw = if bin_path.exists() {
+        // Normal case: Load current index
+        match EmbeddingStore::load_index_file(&bin_path).await {
+            Ok(store) => {
+                info!("Loaded current index: HNSW_INDEX.bin");
+                Some(store)
+            }
             Err(e) => {
                 error!(
-                    "Error loading embeddings from database '{}': {}",
+                    "Error loading HNSW_INDEX.bin from database '{}': {}",
                     database, e
                 );
-                (None, 0)
+                None
             }
-        };
+        }
+    } else if replica_path.exists() {
+        // Crash recovery: .bin missing/corrupted, but .replica exists
+        // This happens if server crashed during write or .bin got corrupted
+        warn!(
+            "[CRASH RECOVERY] HNSW_INDEX.bin not found/corrupted for '{}', recovering from HNSW_INDEX.replica",
+            database
+        );
+        match EmbeddingStore::load_index_file(&replica_path).await {
+            Ok(store) => {
+                info!("Successfully recovered from HNSW_INDEX.replica");
+                Some(store)
+            }
+            Err(e) => {
+                error!(
+                    "Error loading HNSW_INDEX.replica from database '{}': {}",
+                    database, e
+                );
+                None
+            }
+        }
+    } else {
+        // No index at all - first time or corrupted
+        None
+    };
 
     if loaded_hnsw.is_none() {
         warn!(
-            "No existing embeddings found in database, Creating one... '{}'",
+            "No existing embeddings found in database, Creating new index... '{}'",
             database
         );
     }
@@ -439,7 +470,8 @@ pub async fn load_embeddings_index_from_database(
     drop(_read_guard);
     info!("Released read lock for database '{}'", database);
 
-    (loaded_hnsw, max_index)
+    // Return (store) - we don't use version numbers anymore
+    loaded_hnsw
 }
 
 // TODO: Schedule this to run periodically in background task (use this)
