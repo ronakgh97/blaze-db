@@ -10,8 +10,15 @@ async fn main() -> Result<()> {
             init_run_server().await?;
         }
 
-        Some(ServerCommands::Serve { port, source }) => {
-            serve_run(port, source).await?;
+        Some(ServerCommands::Serve {
+            port,
+            backup,
+            source,
+        }) => {
+            serve_run(port, backup, source).await?;
+        }
+        Some(ServerCommands::Bench { .. }) => {
+            todo!("Benchmarking")
         }
         None => {
             let _ = print_ascii().await;

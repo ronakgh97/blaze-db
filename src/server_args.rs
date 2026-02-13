@@ -26,8 +26,23 @@ pub enum ServerCommands {
         #[arg(short, long)]
         port: Option<u16>,
 
+        /// Enable automatic backups on server startup
+        #[arg(short, long)]
+        backup: bool,
+
         /// Use specified source path or use all [sources] if not provided, during server startup
         #[arg(short, long)]
-        source: Option<Vec<String>>, //TODO: Will use this later, very very later...
+        source: Option<Vec<String>>, //TODO: Will use this later...
+    },
+
+    /// Run benchmarks
+    Bench {
+        /// Test HNSW index performance (TODO: Add more benchmark options later)
+        #[arg(short, long)]
+        index: bool,
+
+        /// Test Concurrency model performance (TODO: Add more benchmark options later)
+        #[arg(short, long)]
+        concurrency: bool,
     },
 }

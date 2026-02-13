@@ -81,23 +81,27 @@ async fn create_router() -> Router {
 pub async fn start_server(
     port: u16,
     source: Vec<String>,
+    run_backup_scheduler: bool,
     provider: &Provider,
 ) -> anyhow::Result<()> {
     PROVIDER.set(provider.clone()).unwrap();
 
-    // Initialize backup service
-    let backup_config = BackupConfig::default();
-    let mut backup_service = BackupService::new(backup_config);
-    backup_service.start_scheduler().await;
-    BACKUP_SERVICE
-        .set(Arc::new(RwLock::new(backup_service)))
-        .map_err(|_| anyhow::anyhow!("Failed to initialize backup service"))?;
+    if run_backup_scheduler {
+        // Initialize backup service
+        let backup_config = BackupConfig::default();
+        let mut backup_service = BackupService::new(backup_config);
+        backup_service.start_scheduler().await;
+        BACKUP_SERVICE
+            .set(Arc::new(RwLock::new(backup_service)))
+            .map_err(|_| anyhow::anyhow!("Failed to initialize backup service"))?;
+    }
 
     // TODO: Add SourceManager to manage multiple sources dynamically and load/unload indexes as needed
 
     let addr = format!("0.0.0.0:{}", port);
     info!("Server is running on http://{}", addr);
     info!("Using Sources: {:?}", source);
+    info!("Backup scheduler enabled: {}", run_backup_scheduler);
 
     let app = create_router().await;
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -106,10 +110,69 @@ pub async fn start_server(
     // Initialize server start time
     START_TIME.get_or_init(|| server_time);
 
-    axum::serve(listener, app).await?;
+    let shutdown_signal = setup_shutdown_signal();
 
-    // TODO: Add graceful shutdown handling to clean up resources and stop background tasks like backup scheduler
+    // Create server and wrap with graceful shutdown
+    let server = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal);
+
+    info!("Server started");
+    server.await?;
+
+    // Graceful shutdown cleanup
+    info!("Server shutting down gracefully...");
+    cleanup_on_shutdown().await;
+
     Ok(())
+}
+
+/// Setup signal handlers for graceful shutdown (Unix: SIGTERM/SIGINT, Windows: Ctrl+C)
+async fn setup_shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+
+        let mut sigterm = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(e) => {
+                return;
+            }
+        };
+        let mut sigint = match signal(SignalKind::interrupt()) {
+            Ok(s) => s,
+            Err(e) => {
+                return;
+            }
+        };
+
+        tokio::select! {
+            _ = sigterm.recv() => {
+            }
+            _ = sigint.recv() => {
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // Windows or other non-Unix systems
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {}
+            Err(_) => {}
+        }
+    }
+}
+
+/// Cleanup resources on graceful shutdown
+async fn cleanup_on_shutdown() {
+    // Stop backup scheduler if it was started
+    if let Some(backup_service_lock) = BACKUP_SERVICE.get() {
+        info!(" Stopping schedulers..");
+        let mut backup_service = backup_service_lock.write().await;
+        backup_service.stop_scheduler().await;
+        info!("Backup scheduler stopped");
+    }
+
+    info!("Server shutdown complete");
 }
 
 /// Get the server uptime in hours
@@ -879,10 +942,24 @@ pub async fn create_backup(Json(payload): Json<CreateBackupRequest>) -> impl Int
         );
     }
 
-    // Get backup service
-    let backup_service = BACKUP_SERVICE
-        .get()
-        .expect("Backup service not initialized");
+    // Get backup service - check if it was initialized
+    let backup_service = match BACKUP_SERVICE.get() {
+        Some(service) => service,
+        None => {
+            error!(
+                "[POST /backup/create] Backup service not initialized - start server with --backup flag"
+            );
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(CreateBackupResponse {
+                    success: false,
+                    backup_info: None,
+                    message: "Backup service not enabled".to_string(),
+                }),
+            );
+        }
+    };
+
     let service = backup_service.read().await;
 
     match service
@@ -939,9 +1016,20 @@ pub async fn list_backups(Json(payload): Json<ListBackupsRequest>) -> impl IntoR
         );
     }
 
-    let backup_service = BACKUP_SERVICE
-        .get()
-        .expect("Backup service not initialized");
+    // Get backup service - check if it was initialized
+    let backup_service = match BACKUP_SERVICE.get() {
+        Some(service) => service,
+        None => {
+            error!(
+                "[POST /backup/list] Backup service not initialized - start server with --backup flag"
+            );
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ListBackupsResponse { backups: vec![] }),
+            );
+        }
+    };
+
     let service = backup_service.read().await;
 
     match service
@@ -1000,9 +1088,23 @@ pub async fn restore_backup(Json(payload): Json<RestoreBackupRequest>) -> impl I
         );
     }
 
-    let backup_service = BACKUP_SERVICE
-        .get()
-        .expect("Backup service not initialized");
+    // Get backup service - check if it was initialized
+    let backup_service = match BACKUP_SERVICE.get() {
+        Some(service) => service,
+        None => {
+            error!(
+                "[POST /backup/restore] Backup service not initialized - start server with --backup flag"
+            );
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(RestoreBackupResponse {
+                    success: false,
+                    message: "Backup service not enabled".to_string(),
+                }),
+            );
+        }
+    };
+
     let service = backup_service.read().await;
 
     match service
@@ -1059,9 +1161,23 @@ pub async fn delete_backup(Json(payload): Json<DeleteBackupRequest>) -> impl Int
         );
     }
 
-    let backup_service = BACKUP_SERVICE
-        .get()
-        .expect("Backup service not initialized");
+    // Get backup service - check if it was initialized
+    let backup_service = match BACKUP_SERVICE.get() {
+        Some(service) => service,
+        None => {
+            error!(
+                "[POST /backup/delete] Backup service not initialized - start server with --backup flag"
+            );
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(DeleteBackupResponse {
+                    success: false,
+                    message: "Backup service not enabled".to_string(),
+                }),
+            );
+        }
+    };
+
     let service = backup_service.read().await;
 
     match service

@@ -5,7 +5,11 @@ use crate::{error, info, warn};
 use anyhow::Result;
 use dotenv::dotenv;
 
-pub async fn serve_run(cli_port: Option<u16>, _source: Option<Vec<String>>) -> Result<Provider> {
+pub async fn serve_run(
+    cli_port: Option<u16>,
+    enable_backup: bool,
+    _source: Option<Vec<String>>,
+) -> Result<Provider> {
     info!("Starting the Server...");
 
     // Get all sources from ServerFile
@@ -64,7 +68,7 @@ pub async fn serve_run(cli_port: Option<u16>, _source: Option<Vec<String>>) -> R
         "Starting server with {} valid source(s)",
         valid_sources.len()
     );
-    start_server(final_port, valid_sources, &provider).await?;
+    start_server(final_port, valid_sources, enable_backup, &provider).await?;
 
     Ok(provider)
 }
