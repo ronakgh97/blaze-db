@@ -23,9 +23,13 @@ pub async fn create_new_source(request: CreateSourceRequest) -> Result<CreateSou
     }
 
     // Add new source (creates directory automatically)
-    let source = server_file
+    let mut source = server_file
         .add_source(src_id.clone(), source_name.clone(), timestamp.clone())
         .await?;
+
+    // Set backup interval if provided
+    source.backup_interval_hours = request.backup_interval_hours;
+    server_file.update_source(source.clone())?;
 
     Ok(CreateSourceResponse {
         id: src_id,

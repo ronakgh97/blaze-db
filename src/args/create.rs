@@ -69,6 +69,7 @@ async fn create_database(
         source: src.clone(),
         metrics,
         dimensions,
+        backup_interval_hours: None,
     };
 
     let response = client
@@ -106,6 +107,7 @@ async fn create_source(
 ) -> Result<()> {
     let request_body = CreateSourceRequest {
         source_name: name.to_string(),
+        backup_interval_hours: None,
     };
 
     let response = client

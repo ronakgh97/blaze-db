@@ -17,10 +17,12 @@ pub mod prelude {
         get_source_path, list_sources, save_config,
     };
     pub use crate::server::{
-        CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse,
-        EmbedRequest, EmbedResponse, InsertRequest, InsertResponse, ListResponse, QueryRequest,
-        QueryResponse, VectorDataDto, VectorQueryRequest, VectorQueryResponse,
-        list_databases_from_disk, start_server,
+        BackupInfoDto, CreateBackupRequest, CreateBackupResponse, CreateDatabaseRequest,
+        CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse, DeleteBackupRequest,
+        DeleteBackupResponse, EmbedRequest, EmbedResponse, InsertRequest, InsertResponse,
+        ListBackupsRequest, ListBackupsResponse, ListResponse, QueryRequest, QueryResponse,
+        RestoreBackupRequest, RestoreBackupResponse, VectorDataDto, VectorQueryRequest,
+        VectorQueryResponse, list_databases_from_disk, start_server,
     };
     pub use crate::server_args::{ServerArgs, ServerCommands};
     pub use crate::utils::{EmbeddingStore, Ingestor, Provider, VectorData, log};

@@ -16,6 +16,8 @@ pub struct CreateDatabaseRequest {
     pub source: String,
     pub metrics: Option<Metrics>, // COSINE, EUCLIDEAN, DOT_PRODUCT, etc. Default to COSINE if not provided
     pub dimensions: usize,
+    /// Backup interval in hours (None = inherit from source, 0 = disabled)
+    pub backup_interval_hours: Option<u32>,
 }
 
 /// Response DTO for database creation
@@ -32,6 +34,8 @@ pub struct CreateDatabaseResponse {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CreateSourceRequest {
     pub source_name: String,
+    /// Backup interval in hours for all databases in this source (0 = disabled, None = use global default)
+    pub backup_interval_hours: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -150,3 +154,71 @@ pub struct VectorQueryResult {
 //     pub database: String,
 //     pub total_unloaded: usize,
 // }
+
+/// Request DTO for creating a backup
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CreateBackupRequest {
+    pub source: String,
+    pub database: String,
+}
+
+/// Response DTO for backup creation
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CreateBackupResponse {
+    pub success: bool,
+    pub backup_info: Option<BackupInfoDto>,
+    pub message: String,
+}
+
+/// Request DTO for listing backups
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ListBackupsRequest {
+    pub source: String,
+    pub database: String,
+}
+
+/// Response DTO for listing backups
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ListBackupsResponse {
+    pub backups: Vec<BackupInfoDto>,
+}
+
+/// Request DTO for restoring from backup
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RestoreBackupRequest {
+    pub source: String,
+    pub database: String,
+    pub backup_filename: String,
+}
+
+/// Response DTO for restore operation
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RestoreBackupResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// Request DTO for deleting a backup
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct DeleteBackupRequest {
+    pub source: String,
+    pub database: String,
+    pub backup_filename: String,
+}
+
+/// Response DTO for delete backup operation
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct DeleteBackupResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// DTO for backup information
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct BackupInfoDto {
+    pub filename: String,
+    pub timestamp: String,
+    pub size_mb: f64,
+    pub source: String,
+    pub database: String,
+}

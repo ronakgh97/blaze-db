@@ -8,6 +8,12 @@ pub struct Source {
     pub source_name: String,
     pub vector_bases: Vec<VectorBase>,
     pub created_at: String,
+    /// Backup interval in hours (0 = use default from global config, None = disabled)
+    pub backup_interval_hours: Option<u32>,
+    /// When the next backup is scheduled (ISO 8601 timestamp)
+    pub will_backup_at: Option<String>,
+    /// When the last backup completed successfully (ISO 8601 timestamp)
+    pub last_backup_at: Option<String>,
 }
 
 /// Represents a vector database within a source
@@ -20,6 +26,12 @@ pub struct VectorBase {
     pub created_at: String,
     pub last_queried_at: String,
     pub metric_type: Metrics,
+    /// Backup interval in hours (overrides source-level setting, 0 = inherit from source)
+    pub backup_interval_hours: Option<u32>,
+    /// When the next backup is scheduled (ISO 8601 timestamp)
+    pub will_backup_at: Option<String>,
+    /// When the last backup completed successfully (ISO 8601 timestamp)
+    pub last_backup_at: Option<String>,
 }
 
 impl Default for Source {
@@ -31,6 +43,9 @@ impl Default for Source {
             source_name: "default_src".to_string(),
             vector_bases: vec![],
             created_at: timestamp,
+            backup_interval_hours: None,
+            will_backup_at: None,
+            last_backup_at: None,
         }
     }
 }
@@ -43,6 +58,9 @@ impl Source {
             source_name,
             vector_bases: vec![],
             created_at,
+            backup_interval_hours: None,
+            will_backup_at: None,
+            last_backup_at: None,
         }
     }
 
@@ -55,6 +73,30 @@ impl Source {
             source_name,
             vector_bases: vec![],
             created_at: timestamp,
+            backup_interval_hours: None,
+            will_backup_at: None,
+            last_backup_at: None,
+        }
+    }
+
+    /// Calculate when the next backup should occur based on interval
+    pub fn schedule_next_backup(&mut self, interval_hours: u32) {
+        if interval_hours == 0 {
+            self.will_backup_at = None;
+            return;
+        }
+        let next_backup = chrono::Utc::now() + chrono::Duration::hours(interval_hours as i64);
+        self.will_backup_at = Some(next_backup.to_rfc3339());
+    }
+
+    /// Check if backup is due (will_backup_at <= now)
+    pub fn is_backup_due(&self) -> bool {
+        match &self.will_backup_at {
+            None => false,
+            Some(timestamp) => match chrono::DateTime::parse_from_rfc3339(timestamp) {
+                Ok(backup_time) => chrono::Utc::now() >= backup_time.with_timezone(&chrono::Utc),
+                Err(_) => false,
+            },
         }
     }
 
@@ -111,6 +153,9 @@ impl Default for VectorBase {
             created_at: timestamp.clone(),
             last_queried_at: timestamp,
             metric_type: Metrics::Cosine,
+            backup_interval_hours: None,
+            will_backup_at: None,
+            last_backup_at: None,
         }
     }
 }
@@ -127,6 +172,30 @@ impl VectorBase {
             created_at: timestamp.clone(),
             last_queried_at: timestamp,
             metric_type,
+            backup_interval_hours: None,
+            will_backup_at: None,
+            last_backup_at: None,
+        }
+    }
+
+    /// Calculate when the next backup should occur based on interval
+    pub fn schedule_next_backup(&mut self, interval_hours: u32) {
+        if interval_hours == 0 {
+            self.will_backup_at = None;
+            return;
+        }
+        let next_backup = chrono::Utc::now() + chrono::Duration::hours(interval_hours as i64);
+        self.will_backup_at = Some(next_backup.to_rfc3339());
+    }
+
+    /// Check if backup is due (will_backup_at <= now)
+    pub fn is_backup_due(&self) -> bool {
+        match &self.will_backup_at {
+            None => false,
+            Some(timestamp) => match chrono::DateTime::parse_from_rfc3339(timestamp) {
+                Ok(backup_time) => chrono::Utc::now() >= backup_time.with_timezone(&chrono::Utc),
+                Err(_) => false,
+            },
         }
     }
 

@@ -1,17 +1,20 @@
 use crate::core::Metrics;
 use crate::server::dto::{
-    CreateSourceRequest, CreateSourceResponse, ListResponse, VectorQueryResponse,
+    BackupInfoDto, CreateBackupRequest, CreateBackupResponse, CreateSourceRequest,
+    CreateSourceResponse, DeleteBackupRequest, DeleteBackupResponse, ListBackupsRequest,
+    ListBackupsResponse, ListResponse, RestoreBackupRequest, RestoreBackupResponse,
+    VectorQueryResponse,
 };
 use crate::server::service::{
-    create_new_database, create_new_source, embed_run, insert_run, list_source, query_search,
-    query_vector,
+    BackupConfig, BackupService, create_new_database, create_new_source, embed_run, insert_run,
+    list_source, query_search, query_vector,
 };
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
     HealthCheckResponse, InsertRequest, InsertResponse, QueryRequest, QueryResponse,
     VectorQueryRequest,
 };
-use crate::utils::{EmbeddingMetadata, EmbeddingStore, Provider};
+use crate::utils::{BackupInfo, EmbeddingMetadata, EmbeddingStore, Provider};
 use crate::{error, info, warn};
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
@@ -29,6 +32,7 @@ use tokio::sync::{Mutex, RwLock};
 
 static START_TIME: OnceLock<chrono::DateTime<chrono::Local>> = OnceLock::new();
 static PROVIDER: OnceLock<Provider> = OnceLock::new();
+static BACKUP_SERVICE: OnceLock<Arc<tokio::sync::RwLock<BackupService>>> = OnceLock::new();
 
 // pub static LOADED_INDEXES: OnceLock<Arc<Mutex<HashMap<String, EmbeddingStore>>>> = OnceLock::new();
 
@@ -59,6 +63,10 @@ async fn create_router() -> Router {
         .route("/v1/blazedb/databases/create", post(create_database))
         .route("/v1/blazedb/sources/create", post(create_src))
         .route("/v1/blazedb/list", get(list_sources))
+        .route("/v1/blazedb/backup/create", post(create_backup))
+        .route("/v1/blazedb/backup/list", post(list_backups))
+        .route("/v1/blazedb/backup/restore", post(restore_backup))
+        .route("/v1/blazedb/backup/delete", post(delete_backup))
         //.route("/v1/blaze/sources/del", del(delete_src)) TODO: Endpoint to delete source and all associated databases and indexes
         //.route("/v1/blaze/databases/del", det(delete_db)) TODO: Endpoint to delete database and all associated indexes
         //.route("/v1/blaze/vectors/del", det(delete_vectors)) TODO: Endpoint to delete specific vectors from a database
@@ -77,6 +85,14 @@ pub async fn start_server(
 ) -> anyhow::Result<()> {
     PROVIDER.set(provider.clone()).unwrap();
 
+    // Initialize backup service
+    let backup_config = BackupConfig::default();
+    let mut backup_service = BackupService::new(backup_config);
+    backup_service.start_scheduler().await;
+    BACKUP_SERVICE
+        .set(Arc::new(RwLock::new(backup_service)))
+        .map_err(|_| anyhow::anyhow!("Failed to initialize backup service"))?;
+
     // TODO: Add SourceManager to manage multiple sources dynamically and load/unload indexes as needed
 
     let addr = format!("0.0.0.0:{}", port);
@@ -92,6 +108,7 @@ pub async fn start_server(
 
     axum::serve(listener, app).await?;
 
+    // TODO: Add graceful shutdown handling to clean up resources and stop background tasks like backup scheduler
     Ok(())
 }
 
@@ -841,4 +858,252 @@ fn validate_empty_string(field: &str) -> bool {
         return false;
     }
     true
+}
+
+pub async fn create_backup(Json(payload): Json<CreateBackupRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /backup/create] Backup request for {}:{}",
+        payload.source, payload.database
+    );
+
+    // Validation
+    if !validate_empty_string(&payload.source) || !validate_empty_string(&payload.database) {
+        error!("[POST /backup/create] Invalid request: source or database is empty");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(CreateBackupResponse {
+                success: false,
+                backup_info: None,
+                message: "Source and database names are required".to_string(),
+            }),
+        );
+    }
+
+    // Get backup service
+    let backup_service = BACKUP_SERVICE
+        .get()
+        .expect("Backup service not initialized");
+    let service = backup_service.read().await;
+
+    match service
+        .trigger_backup(&payload.source, &payload.database)
+        .await
+    {
+        Ok(backup_info) => {
+            info!(
+                "[POST /backup/create] Backup created successfully: {} ({} MB)",
+                backup_info.file_name, backup_info.size_mb
+            );
+            (
+                StatusCode::CREATED,
+                Json(CreateBackupResponse {
+                    success: true,
+                    backup_info: Some(convert_backup_info(
+                        backup_info,
+                        &payload.source,
+                        &payload.database,
+                    )),
+                    message: "Backup created successfully".to_string(),
+                }),
+            )
+        }
+        Err(e) => {
+            let error_msg = e.to_string();
+            error!(
+                "[POST /backup/create] Backup failed for {}:{} - {}",
+                payload.source, payload.database, error_msg
+            );
+            (
+                StatusCode::CONFLICT,
+                Json(CreateBackupResponse {
+                    success: false,
+                    backup_info: None,
+                    message: error_msg,
+                }),
+            )
+        }
+    }
+}
+
+pub async fn list_backups(Json(payload): Json<ListBackupsRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /backup/list] List backups request for {}:{}",
+        payload.source, payload.database
+    );
+
+    if !validate_empty_string(&payload.source) || !validate_empty_string(&payload.database) {
+        error!("[POST /backup/list] Invalid request: source or database is empty");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ListBackupsResponse { backups: vec![] }),
+        );
+    }
+
+    let backup_service = BACKUP_SERVICE
+        .get()
+        .expect("Backup service not initialized");
+    let service = backup_service.read().await;
+
+    match service
+        .list_backups(&payload.source, &payload.database)
+        .await
+    {
+        Ok(backups) => {
+            let backup_dtos: Vec<BackupInfoDto> = backups
+                .into_iter()
+                .map(|b| convert_backup_info(b, &payload.source, &payload.database))
+                .collect();
+
+            info!(
+                "[POST /backup/list] Found {} backups for {}:{}",
+                backup_dtos.len(),
+                payload.source,
+                payload.database
+            );
+            (
+                StatusCode::OK,
+                Json(ListBackupsResponse {
+                    backups: backup_dtos,
+                }),
+            )
+        }
+        Err(e) => {
+            error!(
+                "[POST /backup/list] Failed to list backups for {}:{} - {}",
+                payload.source, payload.database, e
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ListBackupsResponse { backups: vec![] }),
+            )
+        }
+    }
+}
+
+pub async fn restore_backup(Json(payload): Json<RestoreBackupRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /backup/restore] Restore request for {}:{} from {}",
+        payload.source, payload.database, payload.backup_filename
+    );
+
+    if !validate_empty_string(&payload.source)
+        || !validate_empty_string(&payload.database)
+        || !validate_empty_string(&payload.backup_filename)
+    {
+        error!("[POST /backup/restore] Invalid request: missing required fields");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(RestoreBackupResponse {
+                success: false,
+                message: "Source, database, and backup filename are required".to_string(),
+            }),
+        );
+    }
+
+    let backup_service = BACKUP_SERVICE
+        .get()
+        .expect("Backup service not initialized");
+    let service = backup_service.read().await;
+
+    match service
+        .restore_backup(&payload.source, &payload.database, &payload.backup_filename)
+        .await
+    {
+        Ok(()) => {
+            info!(
+                "[POST /backup/restore] Successfully restored {}:{} from {}",
+                payload.source, payload.database, payload.backup_filename
+            );
+            (
+                StatusCode::OK,
+                Json(RestoreBackupResponse {
+                    success: true,
+                    message: "Database restored successfully".to_string(),
+                }),
+            )
+        }
+        Err(e) => {
+            let error_msg = e.to_string();
+            error!(
+                "[POST /backup/restore] Restore failed for {}:{} - {}",
+                payload.source, payload.database, error_msg
+            );
+            (
+                StatusCode::CONFLICT,
+                Json(RestoreBackupResponse {
+                    success: false,
+                    message: error_msg,
+                }),
+            )
+        }
+    }
+}
+
+pub async fn delete_backup(Json(payload): Json<DeleteBackupRequest>) -> impl IntoResponse {
+    info!(
+        "[POST /backup/delete] Delete backup request: {} for {}:{}",
+        payload.backup_filename, payload.source, payload.database
+    );
+
+    if !validate_empty_string(&payload.source)
+        || !validate_empty_string(&payload.database)
+        || !validate_empty_string(&payload.backup_filename)
+    {
+        error!("[POST /backup/delete] Invalid request: missing required fields");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(DeleteBackupResponse {
+                success: false,
+                message: "Source, database, and backup filename are required".to_string(),
+            }),
+        );
+    }
+
+    let backup_service = BACKUP_SERVICE
+        .get()
+        .expect("Backup service not initialized");
+    let service = backup_service.read().await;
+
+    match service
+        .delete_backup(&payload.source, &payload.database, &payload.backup_filename)
+        .await
+    {
+        Ok(()) => {
+            info!(
+                "[POST /backup/delete] Successfully deleted {} for {}:{}",
+                payload.backup_filename, payload.source, payload.database
+            );
+            (
+                StatusCode::OK,
+                Json(DeleteBackupResponse {
+                    success: true,
+                    message: "Backup deleted successfully".to_string(),
+                }),
+            )
+        }
+        Err(e) => {
+            let error_msg = e.to_string();
+            error!(
+                "[POST /backup/delete] Delete failed for {}:{} - {}",
+                payload.source, payload.database, error_msg
+            );
+            (
+                StatusCode::NOT_FOUND,
+                Json(DeleteBackupResponse {
+                    success: false,
+                    message: error_msg,
+                }),
+            )
+        }
+    }
+}
+
+fn convert_backup_info(info: BackupInfo, source: &str, database: &str) -> BackupInfoDto {
+    BackupInfoDto {
+        filename: info.file_name,
+        timestamp: info.timestamp,
+        size_mb: info.size_mb,
+        source: source.to_string(),
+        database: database.to_string(),
+    }
 }

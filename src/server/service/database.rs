@@ -58,6 +58,9 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
         created_at: timestamp.clone(),
         last_queried_at: timestamp.clone(),
         metric_type: metrics.clone(),
+        backup_interval_hours: request.backup_interval_hours,
+        will_backup_at: None,
+        last_backup_at: None,
     };
 
     // TODO: PERFORMANCE - This triggers immediate disk write (save_to_disk in DataStore)
@@ -199,7 +202,7 @@ pub async fn list_databases_from_disk(source: &String) -> Result<Vec<String>> {
 }
 
 /// Search (Scan) a database dir by name in the specified source directory.
-pub async fn search_database_on_disk(db_name: &String, sources: &String) -> Result<PathBuf> {
+pub async fn search_database_on_disk(db_name: &str, sources: &str) -> Result<PathBuf> {
     info!("Searching for database '{}'", db_name);
     let source_path = get_source_path()?;
     let dir_path = source_path.join(sources);

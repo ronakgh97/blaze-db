@@ -11,10 +11,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-/// Prefix for HNSW index files
-/// Now using fixed names: HNSW_INDEX.bin (current), HNSW_INDEX.old (previous)
-// const INDEX_FILE_NAME: &str = "HNSW_INDEX"; // No longer needed with atomic rotation
-
 //TODO: SERIOUSLY REFACTOR TOMORROW Both insert_run and embed_run have a lot of duplicated code, need to refactor later
 
 /// Insert pre-computed embeddings into the specified database
@@ -176,8 +172,8 @@ pub async fn insert_run(
 
     info!("Index saved: {} nodes total → HNSW_INDEX.bin", node_count);
 
-    // Create replica snapshot (exact copy for backups)
-    // This is NON-CRITICAL - if it fails, .bin is still valid
+    // Create replica snapshot (exact copy for backups) under write lock to ensure it's an exact snapshot of the current .bin
+    // This is NON-CRITICAL, BUT FOR BACKUPS - if it fails, .bin is still valid
     if let Err(e) = tokio::fs::copy(&current_filename, &replica_filename).await {
         warn!("Failed to create replica snapshot (non-critical): {}", e);
     } else {
@@ -354,7 +350,7 @@ pub async fn embed_run(
 
     info!("Index saved: {} nodes total → HNSW_INDEX.bin", node_count);
 
-    // Create replica snapshot (exact copy for backups)
+    // Create replica snapshot (exact copy for backups) under write lock to ensure it's an exact snapshot of the current .bin
     // This is NON-CRITICAL - if it fails, .bin is still valid
     if let Err(e) = tokio::fs::copy(&current_filename, &replica_filename).await {
         warn!("Failed to create replica snapshot (non-critical): {}", e);
