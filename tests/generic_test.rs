@@ -14,6 +14,7 @@ async fn a_very_generic_simple_test() -> Result<()> {
 
     let create_source = CreateSourceRequest {
         source_name: src_name.clone(),
+        backup_interval_hours: None,
     };
 
     let resp = client
@@ -36,6 +37,7 @@ async fn a_very_generic_simple_test() -> Result<()> {
         source: src_name.clone(),
         metrics: None, // default to COSINE
         dimensions,
+        backup_interval_hours: None,
     };
 
     let resp = client

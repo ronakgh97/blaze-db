@@ -55,6 +55,7 @@ async fn test_create_source_success() {
 
     let client = create_client();
     let request = CreateSourceRequest {
+        backup_interval_hours: None,
         source_name: format!("TEST_source_{}", chrono::Utc::now().timestamp()),
     };
 
@@ -84,6 +85,7 @@ async fn test_create_database_success() {
     // First create a source
     let source_name = format!("test_src_{}", chrono::Utc::now().timestamp());
     let source_request = CreateSourceRequest {
+        backup_interval_hours: None,
         source_name: source_name.clone(),
     };
 
@@ -102,6 +104,7 @@ async fn test_create_database_success() {
         source: source_name,
         metrics: None,
         dimensions: 1024,
+        backup_interval_hours: None,
     };
 
     let response = client
@@ -132,6 +135,7 @@ async fn test_create_database_empty_source() {
         source: "".to_string(), // Invalid: empty
         metrics: None,
         dimensions: 1024,
+        backup_interval_hours: None,
     };
 
     let response = client
@@ -158,6 +162,7 @@ async fn test_create_database_low_dimensions() {
         source: "test_src".to_string(),
         metrics: None,
         dimensions: 767, // Less than 768 - INVALID
+        backup_interval_hours: None,
     };
 
     let response = client
@@ -182,6 +187,7 @@ async fn test_create_database_invalid_source() {
         source: "nonexistent_source_12345".to_string(), // Invalid: doesn't exist
         metrics: None,
         dimensions: 1024,
+        backup_interval_hours: None,
     };
 
     let response = client
@@ -206,6 +212,7 @@ async fn test_create_database_duplicate_name_same_source() {
     // Create a unique source for this test
     let source_name = format!("test_source_{}", chrono::Utc::now().timestamp());
     let source_request = CreateSourceRequest {
+        backup_interval_hours: None,
         source_name: source_name.clone(),
     };
 
@@ -225,6 +232,7 @@ async fn test_create_database_duplicate_name_same_source() {
         source: source_name.clone(),
         metrics: None,
         dimensions: 1024,
+        backup_interval_hours: None,
     };
 
     let response1 = client
@@ -243,6 +251,7 @@ async fn test_create_database_duplicate_name_same_source() {
         source: source_name.clone(), // Same source!
         metrics: None,
         dimensions: 1536, // Different dimensions - doesn't matter
+        backup_interval_hours: None,
     };
 
     let response2 = client
@@ -270,6 +279,7 @@ async fn test_create_database_same_name_different_sources() {
 
     // Create source 1
     let source_request1 = CreateSourceRequest {
+        backup_interval_hours: None,
         source_name: source_name1.clone(),
     };
     let source_response1 = client
@@ -282,6 +292,7 @@ async fn test_create_database_same_name_different_sources() {
 
     // Create source 2
     let source_request2 = CreateSourceRequest {
+        backup_interval_hours: None,
         source_name: source_name2.clone(),
     };
     let source_response2 = client
@@ -299,6 +310,7 @@ async fn test_create_database_same_name_different_sources() {
         source: source_name1.clone(),
         metrics: None,
         dimensions: 1024,
+        backup_interval_hours: None,
     };
 
     let response1 = client
@@ -317,6 +329,7 @@ async fn test_create_database_same_name_different_sources() {
         source: source_name2.clone(), // Different source!
         metrics: None,
         dimensions: 1024,
+        backup_interval_hours: None,
     };
 
     let response2 = client

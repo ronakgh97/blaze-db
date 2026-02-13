@@ -70,6 +70,7 @@ async fn stress_test_thundering_herd_same_database() {
     let db_name = format!("stress_db_{}", timestamp);
 
     let source_req = CreateSourceRequest {
+        backup_interval_hours: None,
         source_name: source_name.clone(),
     };
     client
@@ -84,6 +85,7 @@ async fn stress_test_thundering_herd_same_database() {
         source: source_name.clone(),
         metrics: None,
         dimensions: 1024,
+        backup_interval_hours: None,
     };
     client
         .post(format!("{}{}", BASE_URL, CREATE_DB_ENDPOINT))
@@ -215,6 +217,7 @@ async fn stress_test_concurrent_writes_different_databases() {
     // Create source
     let source_name = format!("stress_src_{}", timestamp);
     let source_req = CreateSourceRequest {
+        backup_interval_hours: None,
         source_name: source_name.clone(),
     };
     client
@@ -235,6 +238,7 @@ async fn stress_test_concurrent_writes_different_databases() {
             source: source_name.clone(),
             metrics: None,
             dimensions: 1024,
+            backup_interval_hours: None,
         };
         client
             .post(format!("{}{}", BASE_URL, CREATE_DB_ENDPOINT))
@@ -352,6 +356,7 @@ async fn stress_test_mixed_read_write_workload() {
     // Create source and 10 databases
     let source_name = format!("stress_src_{}", timestamp);
     let source_req = CreateSourceRequest {
+        backup_interval_hours: None,
         source_name: source_name.clone(),
     };
     client
@@ -371,6 +376,7 @@ async fn stress_test_mixed_read_write_workload() {
             source: source_name.clone(),
             metrics: None,
             dimensions: 1024,
+            backup_interval_hours: None,
         };
         client
             .post(format!("{}{}", BASE_URL, CREATE_DB_ENDPOINT))
