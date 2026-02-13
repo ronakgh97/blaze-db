@@ -4,6 +4,8 @@ mod embedder;
 mod queries;
 mod source;
 
+#[allow(unused)]
+pub use backup::{BackupConfig, BackupService, BackupState};
 pub use database::{create_new_database, list_databases_from_disk};
 pub use embedder::{embed_run, insert_run, load_index_from_database};
 pub use queries::{query_search, query_vector};

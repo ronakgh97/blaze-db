@@ -23,7 +23,6 @@ pub struct EmbeddingStore {
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct EmbeddingMetadata {
     pub checksum: String,
-    pub total_backups: usize, // TODO: Gotta implement this, soon, maybe tracks number of backups made for this index
     pub total_vectors: usize,
     pub dimensions: usize,
     pub last_modified: String,
@@ -162,7 +161,6 @@ impl EmbeddingStore {
                 .ok_or_else(|| anyhow!("File path has no parent directory"))?
                 .to_path_buf(), // TODO: Unwrap safe?
             &EmbeddingMetadata {
-                total_backups: 0, // TODO: Implement backup tracking
                 checksum,
                 total_vectors: self.hnsw_store.nodes.len(),
                 dimensions: self.hnsw_store.nodes[0].vector.len(), //TODO: Very hacky but works for now (hopes does not panic 🛐)
@@ -208,7 +206,6 @@ impl EmbeddingStore {
                 .ok_or_else(|| anyhow!("File path has no parent directory"))?
                 .to_path_buf(), // TODO: Unwrap safe?
             &EmbeddingMetadata {
-                total_backups: 0, // TODO: Implement backup tracking
                 checksum,
                 total_vectors: self.hnsw_store.nodes.len(),
                 dimensions: self.hnsw_store.nodes[0].vector.len(), //TODO: Very hacky but works for now (hopes does not panic 🛐)
@@ -833,6 +830,108 @@ pub async fn create_file_backup(
                 temp_backup_path, final_backup_path
             )
         })?;
+
+    Ok(BackupInfo {
+        file_name: final_backup_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown_backup.tar.zst")
+            .to_string(),
+        timestamp: timestamp.to_rfc3339(),
+        size_mb: size_bytes as f64 / (1024.0 * 1024.0),
+        time_taken_seconds: elapsed,
+    })
+}
+
+/// Creates a compressed backup of multiple specific files using tar + zstd.
+///
+/// - Backs up only the specified files (not entire directory)
+/// - Executes compression in a blocking task
+/// - Uses atomic file operations (temp file + rename)
+/// - Files are archived with their original filenames
+pub async fn create_multi_file_backup(
+    backup_dir: &PathBuf,
+    files_to_backup: &[PathBuf],
+    backup_filename: String,
+    compression_level: i32,
+) -> Result<BackupInfo> {
+    // Validate inputs
+    for file in files_to_backup {
+        if !file.exists() {
+            anyhow::bail!("File to backup does not exist: {:?}", file);
+        }
+    }
+
+    if !backup_dir.is_dir() {
+        anyhow::bail!("Backup directory is not valid");
+    }
+
+    let timestamp = chrono::Utc::now();
+    let start_time = std::time::Instant::now();
+
+    let temp_backup_path = backup_dir.join(format!("{}.tmp", backup_filename));
+    let final_backup_path = backup_dir.join(&backup_filename);
+
+    let temp_backup_path_clone = temp_backup_path.clone();
+    let files_clone: Vec<PathBuf> = files_to_backup.to_vec();
+
+    // Perform compression in blocking thread
+    let size_bytes = tokio::task::spawn_blocking(move || -> Result<u64> {
+        let temp_file = std::fs::File::create(&temp_backup_path_clone)
+            .with_context(|| format!("Failed to create temp file: {:?}", temp_backup_path_clone))?;
+
+        let encoder = zstd::Encoder::new(temp_file, compression_level)
+            .with_context(|| "Failed to initialize zstd encoder")?;
+
+        let mut tar_builder = tar::Builder::new(encoder);
+
+        // Append each file individually
+        for file_path in &files_clone {
+            let file_name = file_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or_else(|| anyhow::anyhow!("Invalid file name: {:?}", file_path))?;
+
+            tar_builder
+                .append_path_with_name(file_path, file_name)
+                .with_context(|| format!("Failed to append file to archive: {:?}", file_path))?;
+        }
+
+        // Finalize tar
+        let encoder = tar_builder
+            .into_inner()
+            .with_context(|| "Failed to finalize tar archive")?;
+
+        // Finalize compression
+        let mut file = encoder
+            .finish()
+            .with_context(|| "Failed to finalize zstd compression")?;
+
+        file.flush()
+            .with_context(|| "Failed to flush backup file")?;
+        file.sync_all()
+            .with_context(|| "Failed to sync backup file")?;
+
+        let metadata = file
+            .metadata()
+            .with_context(|| "Failed to retrieve backup metadata")?;
+
+        Ok(metadata.len())
+    })
+    .await
+    .with_context(|| "Backup task panicked during execution")??;
+
+    // Atomic rename
+    tokio::fs::rename(&temp_backup_path, &final_backup_path)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to rename backup from {:?} to {:?}",
+                temp_backup_path, final_backup_path
+            )
+        })?;
+
+    let elapsed = start_time.elapsed().as_secs_f64();
 
     Ok(BackupInfo {
         file_name: final_backup_path
