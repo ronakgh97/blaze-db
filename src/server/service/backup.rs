@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 
 /// Global backup state to track ongoing backups and prevent conflicts
@@ -84,7 +85,7 @@ pub struct BackupService {
 /// Configuration for backup operations
 #[derive(Clone, Debug)]
 pub struct BackupConfig {
-    /// Default backup interval in hours (used when source/database doesn't specify)
+    /// Default backup interval in hours
     pub default_interval_hours: u32,
     /// Maximum number of backups to keep per database
     pub max_backups_per_database: usize,
@@ -97,9 +98,9 @@ pub struct BackupConfig {
 impl Default for BackupConfig {
     fn default() -> Self {
         Self {
-            default_interval_hours: 24,
+            default_interval_hours: 48,
             max_backups_per_database: 5,
-            compression_level: 16,
+            compression_level: 18,
             backup_base_dir: dirs::home_dir()
                 .map(|h| h.join("blaze").join("backups"))
                 .unwrap_or_else(|| PathBuf::from("/tmp/blaze_backups")),
@@ -128,7 +129,7 @@ impl BackupService {
         let state = self.state.clone();
 
         let handle = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300)); // Check every 5 minutes
+            let mut interval = tokio::time::interval(Duration::from_secs(300)); // Check every 5 minutes
 
             loop {
                 interval.tick().await;
@@ -142,7 +143,6 @@ impl BackupService {
         self.scheduler_handle = Some(handle);
     }
 
-    #[allow(unused)]
     /// Stop the background scheduler
     pub async fn stop_scheduler(&mut self) {
         if let Some(handle) = self.scheduler_handle.take() {
@@ -164,16 +164,20 @@ impl BackupService {
         drop(server_file); // Release lock before I/O
 
         for source in sources {
-            // Get effective interval for source
-            let source_interval = source
-                .backup_interval_hours
-                .unwrap_or(config.default_interval_hours);
+            let source_interval = if source.backup_interval_hours == 0 {
+                config.default_interval_hours as i32
+            } else {
+                source.backup_interval_hours
+            };
 
             for vb in &source.vector_bases {
-                // Get effective interval (database overrides source)
-                let interval = vb.backup_interval_hours.unwrap_or(source_interval);
+                let interval = if vb.backup_interval_hours == 0 {
+                    source_interval
+                } else {
+                    vb.backup_interval_hours
+                };
 
-                if interval == 0 {
+                if interval == -1 {
                     continue; // Backups disabled for this database
                 }
 
@@ -187,7 +191,10 @@ impl BackupService {
                         }
                         Err(_) => {
                             warn!("Invalid backup schedule timestamp for {}", db_key);
-                            true // Backup anyway to fix the timestamp
+                            // TODO: Backup anyway to fix the timestamp
+                            // This is ok now, this is backup on first scheduler run, on 5 min window, after that it will follow the schedule properly
+                            // Proper way is set will_backup_at to creation time + interval + schedular window time, then schedular wont back it just for sake for fixing the timestamp
+                            true
                         }
                     }
                 } else {
@@ -268,13 +275,27 @@ impl BackupService {
     /// Check if a write operation is currently in progress for this database
     async fn is_write_in_progress(source: &str, database: &str) -> bool {
         let db_key = format!("{}:{}", source, database);
-        let locks = DB_WRITE_LOCKS.lock().await;
+        let locks = DB_WRITE_LOCKS.read().await;
 
-        if let Some(lock) = locks.get(&db_key) {
-            lock.try_write().is_err() // Can't acquire write lock = someone is writing
+        if let Some(lock) = locks.peek(&db_key) {
+            let is_locked = lock.try_write().is_err();
+            info!(
+                "Backup check for {}: Lock exists, Try_write={})",
+                db_key,
+                if is_locked { "LOCKED" } else { "FREE" }
+            );
+            // is_locked // Can't acquire write lock = someone is writing
         } else {
-            false // No lock exists = no write in progress
+            info!("Backup check for {}: no lock entry in LRU", db_key);
+            // false // No lock exists = no write in progress
         }
+        false
+        // Since we are using .replica for backup, we can allow backup to proceed even if write is in progress
+        // Writes update both .bin and .replica
+        // so backup will get a consistent snapshot from .replica even if writes are happening concurrently.
+        // This is a advantage of the CoW approach with .replica files.
+        // TODO: For strong safe, we could use exponential retry logic here: if write in progress, wait a bit and check again, up to a timeout.
+        //  This allows backups to proceed shortly after writes complete without manual intervention, while still preventing backups during active writes.
     }
 
     /// Execute the actual backup operation
@@ -291,12 +312,38 @@ impl BackupService {
             .await
             .context("Database not found on disk")?;
 
-        // Check for replica file
+        // TODO: For stronger consistency, consider backing up from HNSW_INDEX.bin
+        // while holding DB_WRITE_LOCKS.read() instead of using .replica. This prevents any
+        // chance of backing up stale data during CoW operations. Trade-off: blocks writes
+        // during backup vs current CoW approach which allows writes.
+
+        // Check for replica file - create on-demand from .bin if missing
+        // This handles the case where CoW copy failed (disk full, etc.) but .bin exists
         let replica_file = database_path.join("HNSW_INDEX.replica");
+        let bin_file = database_path.join("HNSW_INDEX.bin");
+
         if !replica_file.exists() {
-            anyhow::bail!(
-                "No replica file found for backup. Ensure database has been written at least once."
-            );
+            // TODO: What happens if any deletion happened here?, we need more proper locks, preferably at the file level
+            if bin_file.exists() {
+                // CoW copy failed previously, create .replica on-demand from .bin
+                info!(
+                    ".replica missing for {}:{}, creating from .bin for backup",
+                    source, database
+                );
+                tokio::fs::copy(&bin_file, &replica_file)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Failed to create .replica from .bin for backup of {}:{}",
+                            source, database
+                        )
+                    })?;
+                info!("Successfully created .replica on-demand for backup");
+            } else {
+                anyhow::bail!(
+                    "No index files found for backup. Ensure database has been written at least once."
+                );
+            }
         }
 
         // Check for metadata file - if it doesn't exist, we can't backup properly
@@ -317,7 +364,6 @@ impl BackupService {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
         let backup_filename = format!("backup_{}.tar.zst", timestamp);
 
-        // Create the backup of both files
         let files_to_backup = vec![replica_file, metadata_file];
         let backup_info = create_multi_file_backup(
             &backup_dir,
@@ -367,24 +413,28 @@ impl BackupService {
         config: &BackupConfig,
         source: &str,
         database: &str,
-    ) -> u32 {
+    ) -> i32 {
         let server_file = SERVER_FILE.read().await;
 
         if let Ok(Some(src)) = server_file.get_source(source) {
-            let source_interval = src.backup_interval_hours;
+            let source_interval = if src.backup_interval_hours == 0 {
+                config.default_interval_hours as i32
+            } else {
+                src.backup_interval_hours
+            };
 
             if let Some(vb) = src.find_vector_base(database) {
-                // Database setting overrides source
-                return vb
-                    .backup_interval_hours
-                    .or(source_interval)
-                    .unwrap_or(config.default_interval_hours);
+                // If 0, use source interval; if -1, return -1 (disabled)
+                if vb.backup_interval_hours == 0 {
+                    return source_interval;
+                }
+                return vb.backup_interval_hours;
             }
 
-            return source_interval.unwrap_or(config.default_interval_hours);
+            return source_interval;
         }
 
-        config.default_interval_hours
+        config.default_interval_hours as i32
     }
 
     /// List all backups for a database

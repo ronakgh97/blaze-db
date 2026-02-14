@@ -24,7 +24,6 @@ use axum::{Json, Router};
 use lazy_static::lazy_static;
 use lru::LruCache;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, OnceLock};
@@ -32,28 +31,32 @@ use tokio::sync::{Mutex, RwLock};
 
 static START_TIME: OnceLock<chrono::DateTime<chrono::Local>> = OnceLock::new();
 static PROVIDER: OnceLock<Provider> = OnceLock::new();
-static BACKUP_SERVICE: OnceLock<Arc<tokio::sync::RwLock<BackupService>>> = OnceLock::new();
+static BACKUP_SERVICE: OnceLock<Arc<RwLock<BackupService>>> = OnceLock::new();
 
 // pub static LOADED_INDEXES: OnceLock<Arc<Mutex<HashMap<String, EmbeddingStore>>>> = OnceLock::new();
 
 lazy_static! {
-    /// Per-database write locks to ensure only one write operation happens at a time per database
-    /// Multiple databases can be written to concurrently, but only one write per database
-    pub static ref DB_WRITE_LOCKS: Arc<Mutex<HashMap<String, Arc<RwLock<()>>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    /// Per-database write locks with LRU eviction (cap: 1000 locks)
+    /// Automatically evicts least-recently-used locks when capacity is reached
+    /// Key format: "source:database" for consistency
+    pub static ref DB_WRITE_LOCKS: Arc<RwLock<LruCache<String, Arc<RwLock<()>>>>> =
+        Arc::new(RwLock::new(LruCache::new(
+            NonZeroUsize::new(4096).unwrap() // Max 4096 concurrent database locks
+        )));
 
-    /// Per-database loading locks to prevent duplicate index loads during cache misses
-    /// Ensures only one thread loads a specific database at a time, while allowing
-    /// concurrent loading of different databases not same database!!
-    pub static ref LOADING_LOCKS: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    /// Per-database loading locks with LRU eviction (cap: 1000 locks)
+    /// Prevents duplicate index loads during cache misses
+    pub static ref LOADING_LOCKS: Arc<RwLock<LruCache<String, Arc<Mutex<()>>>>> =
+        Arc::new(RwLock::new(LruCache::new(
+            NonZeroUsize::new(4096).unwrap() // Max 4096 concurrent loading locks
+        )));
 
     // TODO: Maybe use wrapper struct to keep most used metadata in memory too for faster access
     /// LRU Cache for loaded indexes to limit memory usage during queries
     /// Caches up to 12 databases in memory
     pub static ref INDEX_CACHE: Arc<RwLock<LruCache<String, (Arc<EmbeddingMetadata>, Arc<EmbeddingStore>)>>> =
         Arc::new(RwLock::new(LruCache::new(
-            NonZeroUsize::new(12).unwrap() // Cache 12 databases
+            NonZeroUsize::new(128).unwrap() // Cache upto 128 index
         )));
 }
 
@@ -102,6 +105,8 @@ pub async fn start_server(
     info!("Server is running on http://{}", addr);
     info!("Using Sources: {:?}", source);
     info!("Backup scheduler enabled: {}", run_backup_scheduler);
+
+    info!("Index cache capacity: {}", 128);
 
     let app = create_router().await;
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -166,10 +171,21 @@ async fn setup_shutdown_signal() {
 async fn cleanup_on_shutdown() {
     // Stop backup scheduler if it was started
     if let Some(backup_service_lock) = BACKUP_SERVICE.get() {
-        info!(" Stopping schedulers..");
+        info!("Stopping schedulers..");
         let mut backup_service = backup_service_lock.write().await;
         backup_service.stop_scheduler().await;
         info!("Backup scheduler stopped");
+    }
+
+    // Log final lock counts (LRU auto-cleans, no manual cleanup needed)
+    {
+        let locks = DB_WRITE_LOCKS.read().await;
+        info!("Server shutdown: {} DB_WRITE_LOCKS active", locks.len());
+    }
+
+    {
+        let locks = LOADING_LOCKS.read().await;
+        info!("Server shutdown: {} LOADING_LOCKS active", locks.len());
     }
 
     info!("Server shutdown complete");

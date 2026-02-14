@@ -133,10 +133,9 @@ pub async fn query_vector(
 
     // Get per-database loading lock to prevent duplicate loads
     let loading_lock = {
-        let mut locks = LOADING_LOCKS.lock().await;
+        let mut locks = LOADING_LOCKS.write().await;
         locks
-            .entry(cache_key.clone())
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .get_or_insert_mut(cache_key.clone(), || Arc::new(tokio::sync::Mutex::new(())))
             .clone()
     };
 
@@ -446,10 +445,9 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
 
     // Get per-database loading lock to prevent duplicate loads
     let loading_lock = {
-        let mut locks = LOADING_LOCKS.lock().await;
+        let mut locks = LOADING_LOCKS.write().await;
         locks
-            .entry(cache_key.clone())
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .get_or_insert_mut(cache_key.clone(), || Arc::new(tokio::sync::Mutex::new(())))
             .clone()
     };
 

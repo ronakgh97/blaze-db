@@ -103,11 +103,12 @@ pub async fn insert_run(
     };
 
     // Get or create lock for this database
+    // Key format: "source:database" for consistency with backup.rs
+    let db_key = format!("{}:{}", source, database_name);
     let lock = {
-        let mut locks = DB_WRITE_LOCKS.lock().await;
+        let mut locks = DB_WRITE_LOCKS.write().await;
         locks
-            .entry(database_name.clone())
-            .or_insert_with(|| Arc::new(RwLock::new(())))
+            .get_or_insert_mut(db_key.clone(), || Arc::new(RwLock::new(())))
             .clone()
     };
 
@@ -117,7 +118,10 @@ pub async fn insert_run(
     // Lock duration: ~100-500ms depending on batch size and disk speed
     // This is INTENTIONAL to prevent index corruption - DO NOT CHANGE, unless we implement a more sophisticated locking mechanism that allows concurrent writes with proper merging or versioning
     let _write_guard = lock.write().await;
-    info!("Acquired write lock for database '{}'", database_name);
+    info!(
+        "Acquired write lock for database '{}:{}'",
+        source, database_name
+    );
 
     let mut total_embedded = 0;
     for (index, vector_data) in vector_batch_data.iter().enumerate() {
@@ -280,11 +284,12 @@ pub async fn embed_run(
     // }
 
     // Get or create lock for this database
+    // Key format: "source:database" for consistency with backup.rs
+    let db_key = format!("{}:{}", source, database_name);
     let lock = {
-        let mut locks = DB_WRITE_LOCKS.lock().await;
+        let mut locks = DB_WRITE_LOCKS.write().await;
         locks
-            .entry(database_name.clone())
-            .or_insert_with(|| Arc::new(RwLock::new(())))
+            .get_or_insert_mut(db_key.clone(), || Arc::new(RwLock::new(())))
             .clone()
     };
 
@@ -294,7 +299,10 @@ pub async fn embed_run(
     // Lock duration: Can be VERY long (seconds) for large batches
     // This prevents concurrent writes to same DB - necessary for index consistency
     let _write_guard = lock.write().await;
-    info!("Acquired write lock for database '{}'", database_name);
+    info!(
+        "Acquired write lock for database '{}:{}'",
+        source, database_name
+    );
 
     let mut total_embedded = 0;
     for (index, chunks) in batch_content.iter().enumerate() {
@@ -400,16 +408,17 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
     info!("Loading binary embeddings from: {:?}", database_name);
 
     // Acquire read lock to allow concurrent reads but block if a write is in progress
+    // Key format: "source:database" for consistency with backup.rs
+    let db_key = format!("{}:{}", source, database);
     let lock = {
-        let mut locks = DB_WRITE_LOCKS.lock().await;
+        let mut locks = DB_WRITE_LOCKS.write().await;
         locks
-            .entry(database.clone())
-            .or_insert_with(|| Arc::new(RwLock::new(())))
+            .get_or_insert_mut(db_key.clone(), || Arc::new(RwLock::new(())))
             .clone()
     };
 
     let _read_guard = lock.read().await;
-    info!("Acquired read lock for database '{}'", database);
+    info!("Acquired read lock for database '{}:{}'", source, database);
 
     // Try loading HNSW_INDEX.bin (current index)
     // If that fails, try HNSW_INDEX.replica (crash recovery fallback!)
