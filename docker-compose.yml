@@ -14,6 +14,7 @@ services:
     volumes:
       - blazedb-config:/home/blazedb/.config/blaze
       - blazedb-sources:/home/blazedb/blaze
+      - blazedb-backups:/home/blazedb/backups
     environment:
       - RUST_LOG=info
       - HOME=/home/blazedb
@@ -49,6 +50,8 @@ volumes:
   blazedb-config:
     driver: local
   blazedb-sources:
+    driver: local
+  blazedb-backups:
     driver: local
 
 networks:

@@ -39,7 +39,7 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Create config and source directories upfront
-RUN mkdir -p /home/blazedb/.config/blaze /home/blazedb/blaze/sources
+RUN mkdir -p /home/blazedb/.config/blaze /home/blazedb/blaze/sources /home/blazedb/blaze/backups
 
 EXPOSE 8080
 

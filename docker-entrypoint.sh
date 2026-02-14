@@ -16,7 +16,8 @@ else
 fi
 
 # Ensure source directory exists
-if [ ! -d "/home/blazedb/blaze/sources/default_src" ]; then
+# shellcheck disable=SC2107
+if [ ! -d "/home/blazedb/blaze/sources/default_src" && ! -d "/home/blazedb/blaze/backups" ]; then
     echo "Source directory not found. Creating default_src..."
     mkdir -p /home/blazedb/blaze/sources/default_src
     chmod -R 755 /home/blazedb/blaze/sources/default_src
