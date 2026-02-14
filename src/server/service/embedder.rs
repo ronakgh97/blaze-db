@@ -439,9 +439,44 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
             database
         );
         match EmbeddingStore::load_index_file(&replica_path).await {
-            Ok(store) => {
+            Ok(mut store) => {
                 info!("Successfully recovered from HNSW_INDEX.replica");
-                Some(store)
+
+                // Drop read lock BEFORE writing to disk (can't write while holding read lock!)
+                drop(_read_guard);
+                info!("Released read lock for database '{}'", database);
+
+                // CRITICAL: Write recovered index back to .bin to restore disk consistency
+                warn!("[CRASH RECOVERY] Acquiring write lock to restore HNSW_INDEX.bin");
+                let _write_guard = lock.write().await;
+                info!("[CRASH RECOVERY] Acquired write lock for recovery");
+
+                // Check again if .bin still doesn't exist (race condition check)
+                // Another thread might have recovered while we were waiting for lock
+                if bin_path.exists() {
+                    warn!(
+                        "[CRASH RECOVERY] HNSW_INDEX.bin already exists (recovered by another thread)"
+                    );
+                    drop(_write_guard);
+                    return Some(store);
+                }
+
+                warn!("[CRASH RECOVERY] Writing recovered index back to HNSW_INDEX.bin");
+                if let Err(e) = store.write_to_disk(&bin_path).await {
+                    error!(
+                        "[CRASH RECOVERY] Failed to write recovered index to disk: {}. \
+                        Index loaded in memory but disk state inconsistent!",
+                        e
+                    );
+                    // Still return the store - it's usable in memory even if disk write failed
+                } else {
+                    info!("[CRASH RECOVERY] Successfully restored HNSW_INDEX.bin from replica");
+                }
+
+                drop(_write_guard);
+                info!("[CRASH RECOVERY] Released write lock");
+
+                return Some(store);
             }
             Err(e) => {
                 error!(
@@ -451,7 +486,9 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
                 None
             }
         }
-    } else {
+    }
+    // TODO: We could to restore from backups
+    else {
         // No index at all - first time or corrupted
         None
     };

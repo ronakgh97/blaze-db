@@ -121,9 +121,9 @@ impl Provider {
 
     pub fn pretty_display(&self) -> String {
         format!(
-            "Provider(model: {}, url: {}, api_key: {}...)",
+            "Provider (Model: {}, Url: {}..., Key: {}...)",
             &self.model,
-            &self.url,
+            &self.url[..12.min(self.url.len())],
             &self.api_key[..4.min(self.api_key.len())]
         )
     }
