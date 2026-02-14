@@ -533,7 +533,7 @@ async fn test_backup_restore_full_workflow_concurrent() {
 async fn test_backup_restore_workflow_concurrent_shared_db() {
     assert!(wait_for_server(10).await, "Server not running!");
 
-    let num_users = 3;
+    let num_users = 100;
     let dimensions = 1024;
     let vectors_per_user = 200;
 
@@ -624,32 +624,7 @@ async fn test_backup_restore_workflow_concurrent_shared_db() {
             // Wait for all users to be ready
             barrier.wait().await;
 
-            // User 0: Try to create backup
-            if user_id == 0 {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                println!("  User {}: Attempting to create backup...", user_id);
-                let backup_req = CreateBackupRequest {
-                    source: source_name.clone(),
-                    database: db_name.clone(),
-                };
-                let resp = client
-                    .post(format!("{}{}", BASE_URL, BACKUP_CREATE_ENDPOINT))
-                    .json(&backup_req)
-                    .send()
-                    .await;
-
-                if let Ok(resp) = resp {
-                    if resp.status() == 201 {
-                        backup_success.fetch_add(1, Ordering::SeqCst);
-                        println!("  User {}: ✓ Backup created successfully", user_id);
-                    } else if resp.status() == 409 {
-                        backup_conflict.fetch_add(1, Ordering::SeqCst);
-                        println!("  User {}: Backup conflict (expected)", user_id);
-                    }
-                }
-            }
-
-            // All users: Insert their own vectors
+            // All users: Insert their own vectors FIRST
             println!(
                 "  User {}: Inserting {} vectors...",
                 user_id, vectors_per_user
@@ -684,9 +659,9 @@ async fn test_backup_restore_workflow_concurrent_shared_db() {
                 }
             }
 
-            // User 1: Try to create another backup (should conflict or succeed after first)
-            if user_id == 1 {
-                tokio::time::sleep(Duration::from_millis(100)).await;
+            // User 0: Try to create backup AFTER all inserts complete
+            if user_id == 0 {
+                // tokio::time::sleep(Duration::from_millis(300)).await;
                 println!("  User {}: Attempting to create backup...", user_id);
                 let backup_req = CreateBackupRequest {
                     source: source_name.clone(),
@@ -705,6 +680,38 @@ async fn test_backup_restore_workflow_concurrent_shared_db() {
                     } else if resp.status() == 409 {
                         backup_conflict.fetch_add(1, Ordering::SeqCst);
                         println!("  User {}: Backup conflict (expected)", user_id);
+                    }
+                }
+            }
+
+            // User 1: Try to create another backup (should either succeed or conflict)
+            if user_id == 1 {
+                // tokio::time::sleep(Duration::from_millis(100)).await;
+                println!("  User {}: Attempting to create backup...", user_id);
+                let backup_req = CreateBackupRequest {
+                    source: source_name.clone(),
+                    database: db_name.clone(),
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, BACKUP_CREATE_ENDPOINT))
+                    .json(&backup_req)
+                    .send()
+                    .await;
+
+                if let Ok(resp) = resp {
+                    let status = resp.status();
+                    if status == 201 {
+                        backup_success.fetch_add(1, Ordering::SeqCst);
+                        println!("  User {}: ✓ Backup created successfully", user_id);
+                    } else if status == 409 {
+                        backup_conflict.fetch_add(1, Ordering::SeqCst);
+                        if let Ok(body) = resp.json::<CreateBackupResponse>().await {
+                            println!("  User {}: Backup conflict: {}", user_id, body.message);
+                        } else {
+                            println!("  User {}: Backup conflict (expected)", user_id);
+                        }
+                    } else {
+                        println!("  User {}: Backup failed with status {}", user_id, status);
                     }
                 }
             }
@@ -732,7 +739,7 @@ async fn test_backup_restore_workflow_concurrent_shared_db() {
 
             // User 2: List backups
             if user_id == 2 {
-                tokio::time::sleep(Duration::from_millis(200)).await;
+                // tokio::time::sleep(Duration::from_millis(200)).await;
                 println!("  User {}: Listing backups...", user_id);
                 let list_req = ListBackupsRequest {
                     source: source_name.clone(),
