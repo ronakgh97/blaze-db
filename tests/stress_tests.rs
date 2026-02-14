@@ -217,7 +217,7 @@ async fn stress_test_concurrent_writes_different_databases() {
     // Create source
     let source_name = format!("stress_src_{}", timestamp);
     let source_req = CreateSourceRequest {
-        backup_interval_hours: None,
+        backup_interval_hours: Some(1),
         source_name: source_name.clone(),
     };
     client
@@ -366,7 +366,8 @@ async fn stress_test_mixed_read_write_workload() {
         .await
         .unwrap();
 
-    let num_databases = 50;
+    let num_databases = 75;
+    let num_vectors = 1024;
     let mut db_names = vec![];
 
     for i in 0..num_databases {
@@ -386,7 +387,7 @@ async fn stress_test_mixed_read_write_workload() {
             .unwrap();
 
         // Insert initial data
-        let vectors: Vec<VectorDataDto> = (0..1000)
+        let vectors: Vec<VectorDataDto> = (0..num_vectors)
             .map(|j| VectorDataDto {
                 embedding: generate_random_vectors(1, 1024)[0].clone(),
                 metadata: format!("vector_{}", j),
@@ -411,8 +412,10 @@ async fn stress_test_mixed_read_write_workload() {
     println!(" Setup complete with {} databases", num_databases);
     println!(" Starting mixed read/write stress test...");
 
-    let num_readers = 40;
-    let num_writers = 10;
+    let num_readers = 50;
+    let read_queries = 50;
+    let num_writers = 25;
+    let write_queries = 10;
     let total_workers = num_readers + num_writers;
 
     let barrier = Arc::new(Barrier::new(total_workers));
@@ -436,8 +439,7 @@ async fn stress_test_mixed_read_write_workload() {
             let mut successful = 0;
             let mut total_latency = Duration::ZERO;
 
-            // Each reader does 20 random queries
-            for _j in 0..20 {
+            for _j in 0..read_queries {
                 use fastrand::usize;
                 let db_idx = usize(0..db_names.len());
                 let query_start = Instant::now();
@@ -485,8 +487,7 @@ async fn stress_test_mixed_read_write_workload() {
             let mut successful = 0;
             let mut total_latency = Duration::ZERO;
 
-            // Each writer does 5 inserts
-            for j in 0..5 {
+            for j in 0..write_queries {
                 use fastrand::usize;
                 let db_idx = usize(0..db_names.len());
                 let write_start = Instant::now();
@@ -534,8 +535,11 @@ async fn stress_test_mixed_read_write_workload() {
 
     println!("\n MIXED READ/WRITE WORKLOAD RESULTS:");
     println!("  Total workers: {}", total_workers);
-    println!("  Readers: {} (20 queries each)", num_readers);
-    println!("  Writers: {} (5 inserts each)", num_writers);
+    println!("  Readers: {} ({} queries each)", num_readers, read_queries);
+    println!(
+        "  Writers: {} ({} inserts each)",
+        num_writers, write_queries
+    );
     println!("  Total time: {:?}", total_elapsed);
     println!("  Successful reads: {}/{}", reads_ok, num_readers * 20);
     println!("  Successful writes: {}/{}", writes_ok, num_writers * 5);
