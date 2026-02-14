@@ -24,9 +24,14 @@ pub async fn init_run_server() -> Result<()> {
     let timestamp = chrono::Utc::now().to_rfc3339();
 
     if !server_file.source_exists("default_src")? {
-        server_file
+        let mut source = server_file
             .add_source(src_id, "default_src".to_string(), timestamp)
             .await?;
+
+        // Set backup interval to 0, which uses default backup interval from config (currently 24hrs)
+        source.backup_interval_hours = 0;
+        server_file.update_source(source.clone())?;
+
         println!(" Created default source");
     }
 

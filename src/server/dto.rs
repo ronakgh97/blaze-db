@@ -16,8 +16,8 @@ pub struct CreateDatabaseRequest {
     pub source: String,
     pub metrics: Option<Metrics>, // COSINE, EUCLIDEAN, DOT_PRODUCT, etc. Default to COSINE if not provided
     pub dimensions: usize,
-    /// Backup interval in hours (None = inherit from source, 0 = disabled)
-    pub backup_interval_hours: Option<u32>,
+    // None or Some(0) = use default backup interval from source/global config, Some(-1) = disabled, Some(x) = custom interval in hours
+    pub backup_interval_hours: Option<i32>,
 }
 
 /// Response DTO for database creation
@@ -34,8 +34,8 @@ pub struct CreateDatabaseResponse {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CreateSourceRequest {
     pub source_name: String,
-    /// Backup interval in hours for all databases in this source (0 = disabled, None = use global default)
-    pub backup_interval_hours: Option<u32>,
+    // None or Some(0) = use default backup interval from global config, Some(-1) = disabled, Some(x) = custom interval in hours
+    pub backup_interval_hours: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

@@ -19,6 +19,18 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     let source = &request.source;
     let source_path = get_source_path()?;
 
+    if let Some(backup_interval) = request.backup_interval_hours {
+        if backup_interval < -1 {
+            return Err(ErrorTypes::InvalidField(format!(
+                "backup_interval_hours must be -1 (disabled), 0 (default), or a positive integer. Got {}",
+                backup_interval
+            ))
+                .into());
+        }
+    }
+
+    let backup_interval_hours = request.backup_interval_hours.unwrap_or(0); // 0 means use default from config
+
     let metrics = request.metrics.unwrap_or(Metrics::Cosine);
 
     if name.contains('/') || name.contains('\\') || name.contains('.') {
@@ -58,7 +70,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
         created_at: timestamp.clone(),
         last_queried_at: timestamp.clone(),
         metric_type: metrics.clone(),
-        backup_interval_hours: request.backup_interval_hours,
+        backup_interval_hours,
         will_backup_at: None,
         last_backup_at: None,
     };

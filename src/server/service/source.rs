@@ -8,6 +8,18 @@ pub async fn create_new_source(request: CreateSourceRequest) -> Result<CreateSou
     let timestamp = chrono::Utc::now().to_rfc3339();
     let source_name = request.source_name;
 
+    if let Some(backup_interval) = request.backup_interval_hours {
+        if backup_interval < -1 {
+            return Err(ErrorTypes::InvalidField(format!(
+                "backup_interval_hours must be -1 (disabled), 0 (default), or a positive integer. Got {}",
+                backup_interval
+            ))
+            .into());
+        }
+    }
+
+    let backup_interval_hours = request.backup_interval_hours.unwrap_or(0); // 0 means use default from config
+
     // TODO: LOCK CONTENTION - Write lock held during directory creation (async I/O)
     // Similar issue as create_new_database - blocks all other operations
     // The add_source() method creates directory on disk while holding this lock
@@ -28,7 +40,7 @@ pub async fn create_new_source(request: CreateSourceRequest) -> Result<CreateSou
         .await?;
 
     // Set backup interval if provided
-    source.backup_interval_hours = request.backup_interval_hours;
+    source.backup_interval_hours = backup_interval_hours;
     server_file.update_source(source.clone())?;
 
     Ok(CreateSourceResponse {
