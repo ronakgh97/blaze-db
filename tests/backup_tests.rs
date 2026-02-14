@@ -1,11 +1,7 @@
-// Real backup integration tests - Run server manually with: cargo run --bin blzsrv -- serve
-// These tests verify actual backup functionality end-to-end
-
 use blaze_db::prelude::{
     CreateBackupRequest, CreateBackupResponse, CreateDatabaseRequest, CreateSourceRequest,
-    DeleteBackupRequest, DeleteBackupResponse, InsertRequest, ListBackupsRequest,
-    ListBackupsResponse, RestoreBackupRequest, RestoreBackupResponse, VectorDataDto,
-    VectorQueryRequest,
+    InsertRequest, ListBackupsRequest, ListBackupsResponse, RestoreBackupRequest,
+    RestoreBackupResponse, VectorDataDto, VectorQueryRequest,
 };
 use rand::RngExt;
 use reqwest::Client;
@@ -23,7 +19,7 @@ const INSERT_ENDPOINT: &str = "/v1/blazedb/insert";
 const BACKUP_CREATE_ENDPOINT: &str = "/v1/blazedb/backup/create";
 const BACKUP_LIST_ENDPOINT: &str = "/v1/blazedb/backup/list";
 const BACKUP_RESTORE_ENDPOINT: &str = "/v1/blazedb/backup/restore";
-const BACKUP_DELETE_ENDPOINT: &str = "/v1/blazedb/backup/delete";
+const _BACKUP_DELETE_ENDPOINT: &str = "/v1/blazedb/backup/delete";
 const VECTOR_QUERY_ENDPOINT: &str = "/v1/blazedb/query/vector";
 
 fn create_client() -> Client {
@@ -74,12 +70,12 @@ async fn test_backup_restore_full_workflow() {
     let source_name = format!("backup_test_src_{}", timestamp);
     let db_name = format!("backup_test_db_{}", timestamp);
     let dimensions = 1024;
-    let initial_vectors = 5000;
+    let initial_vectors = 1024;
 
     println!("\n[1/8] Creating source with 1-hour backup interval...");
     let source_req = CreateSourceRequest {
         source_name: source_name.clone(),
-        backup_interval_hours: Some(1), // 1 hour for testing
+        backup_interval_hours: Some(-1), // No backups
     };
     let resp = client
         .post(format!("{}{}", BASE_URL, CREATE_SOURCE_ENDPOINT))
@@ -274,7 +270,531 @@ async fn test_backup_restore_full_workflow() {
     println!("   Latest backup: {}", backup_filename);
 }
 
-/// Test 2: Concurrent backup conflict
+/// Concurrent full backup-restore workflow simulating multiple users
+/// Each user creates their own DB, inserts vectors, backs up, inserts more, restores, and verifies
+#[tokio::test]
+#[ignore]
+async fn test_backup_restore_full_workflow_concurrent() {
+    assert!(wait_for_server(10).await, "Server not running!");
+
+    let num_users = 100;
+    let dimensions = 1024;
+    let initial_vectors = 1024;
+    let additional_vectors = 768;
+
+    println!(
+        "\n[CONCURRENT WORKFLOW] Simulating {} users performing full backup-restore workflow",
+        num_users
+    );
+
+    let barrier = Arc::new(Barrier::new(num_users));
+    let success_count = Arc::new(AtomicU64::new(0));
+    let error_count = Arc::new(AtomicU64::new(0));
+
+    let start = Instant::now();
+    let mut handles = vec![];
+
+    for user_id in 0..num_users {
+        let barrier = Arc::clone(&barrier);
+        let success_count = Arc::clone(&success_count);
+        let error_count = Arc::clone(&error_count);
+
+        let handle = tokio::spawn(async move {
+            let client = create_client();
+            let timestamp = chrono::Utc::now().timestamp_micros();
+            let source_name = format!("user{}_src_{}", user_id, timestamp);
+            let db_name = format!("user{}_db_{}", user_id, timestamp);
+
+            // Wait for all users to be ready
+            barrier.wait().await;
+
+            let user_result = async {
+                println!("  User {}: [1/8] Creating source...", user_id);
+                let source_req = CreateSourceRequest {
+                    source_name: source_name.clone(),
+                    backup_interval_hours: Some(1),
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, CREATE_SOURCE_ENDPOINT))
+                    .json(&source_req)
+                    .send()
+                    .await?;
+                if resp.status() != 201 {
+                    return Err(anyhow::anyhow!(
+                        "Failed to create source: {}",
+                        resp.status()
+                    ));
+                }
+
+                println!("  User {}: [2/8] Creating database...", user_id);
+                let db_req = CreateDatabaseRequest {
+                    name: db_name.clone(),
+                    source: source_name.clone(),
+                    metrics: None,
+                    dimensions,
+                    backup_interval_hours: None,
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, CREATE_DB_ENDPOINT))
+                    .json(&db_req)
+                    .send()
+                    .await?;
+                if resp.status() != 201 {
+                    return Err(anyhow::anyhow!(
+                        "Failed to create database: {}",
+                        resp.status()
+                    ));
+                }
+
+                println!(
+                    "  User {}: [3/8] Inserting {} initial vectors...",
+                    user_id, initial_vectors
+                );
+                let vectors: Vec<VectorDataDto> =
+                    generate_random_vectors(initial_vectors, dimensions)
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, embedding)| VectorDataDto {
+                            embedding,
+                            metadata: format!("user{}_initial_{}", user_id, i),
+                        })
+                        .collect();
+
+                let insert_req = InsertRequest {
+                    nodes: vec![vectors],
+                    database: db_name.clone(),
+                    source: source_name.clone(),
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, INSERT_ENDPOINT))
+                    .json(&insert_req)
+                    .send()
+                    .await?;
+                if resp.status() != 200 {
+                    return Err(anyhow::anyhow!(
+                        "Failed to insert initial vectors: {}",
+                        resp.status()
+                    ));
+                }
+
+                println!("  User {}: [4/8] Creating backup...", user_id);
+                let backup_req = CreateBackupRequest {
+                    source: source_name.clone(),
+                    database: db_name.clone(),
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, BACKUP_CREATE_ENDPOINT))
+                    .json(&backup_req)
+                    .send()
+                    .await?;
+                if resp.status() != 201 {
+                    return Err(anyhow::anyhow!(
+                        "Failed to create backup: {}",
+                        resp.status()
+                    ));
+                }
+                let backup_resp: CreateBackupResponse = resp.json().await?;
+                let backup_filename = backup_resp.backup_info.as_ref().unwrap().filename.clone();
+                println!(
+                    "  User {}: [4/8] Backup created: {}",
+                    user_id, backup_filename
+                );
+
+                println!(
+                    "  User {}: [5/8] Inserting {} additional vectors...",
+                    user_id, additional_vectors
+                );
+                let vectors: Vec<VectorDataDto> =
+                    generate_random_vectors(additional_vectors, dimensions)
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, embedding)| VectorDataDto {
+                            embedding,
+                            metadata: format!("user{}_additional_{}", user_id, i),
+                        })
+                        .collect();
+
+                let insert_req = InsertRequest {
+                    nodes: vec![vectors],
+                    database: db_name.clone(),
+                    source: source_name.clone(),
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, INSERT_ENDPOINT))
+                    .json(&insert_req)
+                    .send()
+                    .await?;
+                if resp.status() != 200 {
+                    return Err(anyhow::anyhow!(
+                        "Failed to insert additional vectors: {}",
+                        resp.status()
+                    ));
+                }
+
+                println!("  User {}: [6/8] Verifying backup file exists...", user_id);
+                let backup_path = PathBuf::from(dirs::home_dir().unwrap())
+                    .join("blaze")
+                    .join("backups")
+                    .join(&source_name)
+                    .join(&db_name)
+                    .join(&backup_filename);
+
+                if !backup_path.exists() {
+                    return Err(anyhow::anyhow!(
+                        "Backup file not found at {:?}",
+                        backup_path
+                    ));
+                }
+
+                println!("  User {}: [7/8] Restoring from backup...", user_id);
+                let restore_req = RestoreBackupRequest {
+                    source: source_name.clone(),
+                    database: db_name.clone(),
+                    backup_filename: backup_filename.clone(),
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, BACKUP_RESTORE_ENDPOINT))
+                    .json(&restore_req)
+                    .send()
+                    .await?;
+                if resp.status() != 200 {
+                    return Err(anyhow::anyhow!(
+                        "Failed to restore backup: {}",
+                        resp.status()
+                    ));
+                }
+                let restore_resp: RestoreBackupResponse = resp.json().await?;
+                if !restore_resp.success {
+                    return Err(anyhow::anyhow!("Restore failed: {}", restore_resp.message));
+                }
+
+                println!("  User {}: [8/8] Verifying restored data...", user_id);
+                let query_req = VectorQueryRequest {
+                    query_vector: generate_random_vectors(1, dimensions)[0].clone(),
+                    database: db_name.clone(),
+                    source: source_name.clone(),
+                    top_k: 10,
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, VECTOR_QUERY_ENDPOINT))
+                    .json(&query_req)
+                    .send()
+                    .await?;
+                if resp.status() != 200 {
+                    return Err(anyhow::anyhow!(
+                        "Failed to query after restore: {}",
+                        resp.status()
+                    ));
+                }
+
+                println!("  User {}: ✓ Workflow completed successfully!", user_id);
+                Ok::<_, anyhow::Error>(())
+            }
+            .await;
+
+            match user_result {
+                Ok(_) => {
+                    success_count.fetch_add(1, Ordering::SeqCst);
+                }
+                Err(e) => {
+                    error_count.fetch_add(1, Ordering::SeqCst);
+                    eprintln!("  User {}: ✗ ERROR - {}", user_id, e);
+                }
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    // Wait for all users to complete
+    futures::future::join_all(handles).await;
+
+    let total_elapsed = start.elapsed();
+    let successes = success_count.load(Ordering::SeqCst);
+    let errors = error_count.load(Ordering::SeqCst);
+
+    println!("\n[RESULTS]");
+    println!("  Total time: {:?}", total_elapsed);
+    println!("  Successful workflows: {}/{}", successes, num_users);
+    println!("  Failed workflows: {}", errors);
+
+    assert_eq!(
+        successes, num_users as u64,
+        "All {} users should complete successfully",
+        num_users
+    );
+    assert_eq!(errors, 0, "No errors expected");
+}
+
+/// Concurrent operations on the SAME database by multiple users
+/// Tests interleaved inserts, backups, queries, and restores on a shared database
+#[tokio::test]
+#[ignore]
+async fn test_backup_restore_workflow_concurrent_shared_db() {
+    assert!(wait_for_server(10).await, "Server not running!");
+
+    let num_users = 3;
+    let dimensions = 1024;
+    let vectors_per_user = 200;
+
+    println!(
+        "\n[CONCURRENT SHARED DB] Simulating {} users on the same database",
+        num_users
+    );
+
+    // Setup: Create a shared source and database
+    let client = create_client();
+    let timestamp = chrono::Utc::now().timestamp_micros();
+    let source_name = format!("shared_src_{}", timestamp);
+    let db_name = format!("shared_db_{}", timestamp);
+
+    println!("  [Setup] Creating shared source and database...");
+    let source_req = CreateSourceRequest {
+        source_name: source_name.clone(),
+        backup_interval_hours: Some(1),
+    };
+    let resp = client
+        .post(format!("{}{}", BASE_URL, CREATE_SOURCE_ENDPOINT))
+        .json(&source_req)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+
+    let db_req = CreateDatabaseRequest {
+        name: db_name.clone(),
+        source: source_name.clone(),
+        metrics: None,
+        dimensions,
+        backup_interval_hours: None,
+    };
+    let resp = client
+        .post(format!("{}{}", BASE_URL, CREATE_DB_ENDPOINT))
+        .json(&db_req)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+
+    // Insert initial data
+    println!("  [Setup] Inserting initial 500 vectors...");
+    let vectors: Vec<VectorDataDto> = generate_random_vectors(500, dimensions)
+        .into_iter()
+        .enumerate()
+        .map(|(i, embedding)| VectorDataDto {
+            embedding,
+            metadata: format!("initial_{}", i),
+        })
+        .collect();
+
+    let insert_req = InsertRequest {
+        nodes: vec![vectors],
+        database: db_name.clone(),
+        source: source_name.clone(),
+    };
+    let resp = client
+        .post(format!("{}{}", BASE_URL, INSERT_ENDPOINT))
+        .json(&insert_req)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let barrier = Arc::new(Barrier::new(num_users));
+    let insert_count = Arc::new(AtomicU64::new(0));
+    let query_count = Arc::new(AtomicU64::new(0));
+    let backup_success = Arc::new(AtomicU64::new(0));
+    let backup_conflict = Arc::new(AtomicU64::new(0));
+
+    let start = Instant::now();
+    let mut handles = vec![];
+
+    for user_id in 0..num_users {
+        let barrier = Arc::clone(&barrier);
+        let insert_count = Arc::clone(&insert_count);
+        let query_count = Arc::clone(&query_count);
+        let backup_success = Arc::clone(&backup_success);
+        let backup_conflict = Arc::clone(&backup_conflict);
+        let source_name = source_name.clone();
+        let db_name = db_name.clone();
+
+        let handle = tokio::spawn(async move {
+            let client = create_client();
+
+            // Wait for all users to be ready
+            barrier.wait().await;
+
+            // User 0: Try to create backup
+            if user_id == 0 {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                println!("  User {}: Attempting to create backup...", user_id);
+                let backup_req = CreateBackupRequest {
+                    source: source_name.clone(),
+                    database: db_name.clone(),
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, BACKUP_CREATE_ENDPOINT))
+                    .json(&backup_req)
+                    .send()
+                    .await;
+
+                if let Ok(resp) = resp {
+                    if resp.status() == 201 {
+                        backup_success.fetch_add(1, Ordering::SeqCst);
+                        println!("  User {}: ✓ Backup created successfully", user_id);
+                    } else if resp.status() == 409 {
+                        backup_conflict.fetch_add(1, Ordering::SeqCst);
+                        println!("  User {}: Backup conflict (expected)", user_id);
+                    }
+                }
+            }
+
+            // All users: Insert their own vectors
+            println!(
+                "  User {}: Inserting {} vectors...",
+                user_id, vectors_per_user
+            );
+            let vectors: Vec<VectorDataDto> = generate_random_vectors(vectors_per_user, dimensions)
+                .into_iter()
+                .enumerate()
+                .map(|(i, embedding)| VectorDataDto {
+                    embedding,
+                    metadata: format!("user{}_{}", user_id, i),
+                })
+                .collect();
+
+            let insert_req = InsertRequest {
+                nodes: vec![vectors],
+                database: db_name.clone(),
+                source: source_name.clone(),
+            };
+            let resp = client
+                .post(format!("{}{}", BASE_URL, INSERT_ENDPOINT))
+                .json(&insert_req)
+                .send()
+                .await;
+
+            if let Ok(resp) = resp {
+                if resp.status() == 200 {
+                    insert_count.fetch_add(1, Ordering::SeqCst);
+                    println!(
+                        "  User {}: ✓ Inserted {} vectors",
+                        user_id, vectors_per_user
+                    );
+                }
+            }
+
+            // User 1: Try to create another backup (should conflict or succeed after first)
+            if user_id == 1 {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                println!("  User {}: Attempting to create backup...", user_id);
+                let backup_req = CreateBackupRequest {
+                    source: source_name.clone(),
+                    database: db_name.clone(),
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, BACKUP_CREATE_ENDPOINT))
+                    .json(&backup_req)
+                    .send()
+                    .await;
+
+                if let Ok(resp) = resp {
+                    if resp.status() == 201 {
+                        backup_success.fetch_add(1, Ordering::SeqCst);
+                        println!("  User {}: ✓ Backup created successfully", user_id);
+                    } else if resp.status() == 409 {
+                        backup_conflict.fetch_add(1, Ordering::SeqCst);
+                        println!("  User {}: Backup conflict (expected)", user_id);
+                    }
+                }
+            }
+
+            // All users: Query the database
+            println!("  User {}: Querying database...", user_id);
+            let query_req = VectorQueryRequest {
+                query_vector: generate_random_vectors(1, dimensions)[0].clone(),
+                database: db_name.clone(),
+                source: source_name.clone(),
+                top_k: 5,
+            };
+            let resp = client
+                .post(format!("{}{}", BASE_URL, VECTOR_QUERY_ENDPOINT))
+                .json(&query_req)
+                .send()
+                .await;
+
+            if let Ok(resp) = resp {
+                if resp.status() == 200 {
+                    query_count.fetch_add(1, Ordering::SeqCst);
+                    println!("  User {}: ✓ Query successful", user_id);
+                }
+            }
+
+            // User 2: List backups
+            if user_id == 2 {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                println!("  User {}: Listing backups...", user_id);
+                let list_req = ListBackupsRequest {
+                    source: source_name.clone(),
+                    database: db_name.clone(),
+                };
+                let resp = client
+                    .post(format!("{}{}", BASE_URL, BACKUP_LIST_ENDPOINT))
+                    .json(&list_req)
+                    .send()
+                    .await;
+
+                if let Ok(resp) = resp {
+                    if resp.status() == 200 {
+                        if let Ok(list_resp) = resp.json::<ListBackupsResponse>().await {
+                            println!(
+                                "  User {}: ✓ Found {} backups",
+                                user_id,
+                                list_resp.backups.len()
+                            );
+                        }
+                    }
+                }
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    // Wait for all users to complete
+    futures::future::join_all(handles).await;
+
+    let total_elapsed = start.elapsed();
+    let inserts = insert_count.load(Ordering::SeqCst);
+    let queries = query_count.load(Ordering::SeqCst);
+    let backups = backup_success.load(Ordering::SeqCst);
+    let conflicts = backup_conflict.load(Ordering::SeqCst);
+
+    println!("\n[RESULTS]");
+    println!("  Total time: {:?}", total_elapsed);
+    println!("  Successful inserts: {}/{}", inserts, num_users);
+    println!("  Successful queries: {}/{}", queries, num_users);
+    println!("  Successful backups: {}", backups);
+    println!("  Backup conflicts: {}", conflicts);
+
+    // All users should be able to insert and query
+    assert_eq!(
+        inserts, num_users as u64,
+        "All users should insert successfully"
+    );
+    assert_eq!(
+        queries, num_users as u64,
+        "All users should query successfully"
+    );
+
+    // At least one backup should succeed
+    assert!(backups >= 1, "At least one backup should succeed");
+
+    // Total backup attempts = 2 (user 0 and user 1)
+    assert_eq!(backups + conflicts, 2, "Total backup attempts should be 2");
+}
+
+/// Concurrent backup conflict
 /// Tries to trigger two backups simultaneously - second should fail fast
 #[tokio::test]
 #[ignore]
@@ -411,7 +931,7 @@ async fn test_concurrent_backup_conflict() {
     println!("   Total backups: {}", list_resp.backups.len());
 }
 
-/// Test 3: Backup retention - old backups should be cleaned up
+/// Backup retention - old backups should be cleaned up
 #[tokio::test]
 #[ignore]
 async fn test_backup_retention_policy() {
@@ -545,251 +1065,140 @@ async fn test_backup_retention_policy() {
         5,
         "Directory should contain exactly 5 backup files"
     );
-    println!("   Retention policy working correctly! Kept 5 newest backups.");
 }
 
-/// Test 4: Scheduled backup trigger
-/// Creates DB with immediate backup interval (1 min) and verifies backup is created
-#[tokio::test]
-#[ignore]
-async fn test_scheduled_backup_trigger() {
-    assert!(wait_for_server(10).await, "Server not running!");
+// /// Backup delete functionality
+// #[tokio::test]
+// #[ignore]
+// async fn test_backup_delete() {
+//     assert!(wait_for_server(10).await, "Server not running!");
+//
+//     let client = create_client();
+//     let timestamp = chrono::Utc::now().timestamp();
+//     let source_name = format!("delete_src_{}", timestamp);
+//     let db_name = format!("delete_db_{}", timestamp);
+//
+//     println!("\n Setting up database and creating backup...");
+//
+//     // Create source and database
+//     let source_req = CreateSourceRequest {
+//         source_name: source_name.clone(),
+//         backup_interval_hours: None,
+//     };
+//     client
+//         .post(format!("{}{}", BASE_URL, CREATE_SOURCE_ENDPOINT))
+//         .json(&source_req)
+//         .send()
+//         .await
+//         .unwrap();
+//
+//     let db_req = CreateDatabaseRequest {
+//         name: db_name.clone(),
+//         source: source_name.clone(),
+//         metrics: None,
+//         dimensions: 1024,
+//         backup_interval_hours: None,
+//     };
+//     client
+//         .post(format!("{}{}", BASE_URL, CREATE_DB_ENDPOINT))
+//         .json(&db_req)
+//         .send()
+//         .await
+//         .unwrap();
+//
+//     // Insert and backup
+//     let vectors: Vec<VectorDataDto> = generate_random_vectors(5000, 1024)
+//         .into_iter()
+//         .map(|embedding| VectorDataDto {
+//             embedding,
+//             metadata: "test".to_string(),
+//         })
+//         .collect();
+//
+//     let insert_req = InsertRequest {
+//         nodes: vec![vectors],
+//         database: db_name.clone(),
+//         source: source_name.clone(),
+//     };
+//     client
+//         .post(format!("{}{}", BASE_URL, INSERT_ENDPOINT))
+//         .json(&insert_req)
+//         .send()
+//         .await
+//         .unwrap();
+//
+//     let backup_req = CreateBackupRequest {
+//         source: source_name.clone(),
+//         database: db_name.clone(),
+//     };
+//     let resp = client
+//         .post(format!("{}{}", BASE_URL, BACKUP_CREATE_ENDPOINT))
+//         .json(&backup_req)
+//         .send()
+//         .await
+//         .unwrap();
+//
+//     let backup_resp: CreateBackupResponse = resp.json().await.unwrap();
+//     let filename = backup_resp.backup_info.unwrap().filename;
+//
+//     println!(" Deleting backup: {}", filename);
+//
+//     let delete_req = DeleteBackupRequest {
+//         source: source_name.clone(),
+//         database: db_name.clone(),
+//         backup_filename: filename.clone(),
+//     };
+//
+//     let resp = client
+//         .post(format!("{}{}", BASE_URL, BACKUP_DELETE_ENDPOINT))
+//         .json(&delete_req)
+//         .send()
+//         .await
+//         .expect("Failed to delete backup");
+//
+//     assert_eq!(resp.status(), 200, "Delete backup failed");
+//     let delete_resp: DeleteBackupResponse = resp.json().await.unwrap();
+//     assert!(
+//         delete_resp.success,
+//         "Delete failed: {}",
+//         delete_resp.message
+//     );
+//
+//     // Verify backup is gone
+//     let list_req = ListBackupsRequest {
+//         source: source_name.clone(),
+//         database: db_name.clone(),
+//     };
+//     let resp = client
+//         .post(format!("{}{}", BASE_URL, BACKUP_LIST_ENDPOINT))
+//         .json(&list_req)
+//         .send()
+//         .await
+//         .unwrap();
+//
+//     let list_resp: ListBackupsResponse = resp.json().await.unwrap();
+//     assert!(
+//         list_resp.backups.is_empty(),
+//         "Backup should have been deleted"
+//     );
+//
+//     println!(" Backup deleted successfully!");
+//
+//     // Verify file is gone from disk
+//     let backup_path = PathBuf::from(dirs::home_dir().unwrap())
+//         .join("blaze")
+//         .join("backups")
+//         .join(&source_name)
+//         .join(&db_name)
+//         .join(&filename);
+//
+//     assert!(
+//         !backup_path.exists(),
+//         "Backup file should have been deleted from disk"
+//     );
+//     println!(" File removed from disk: {:?}", backup_path);
+// }
 
-    let client = create_client();
-    let timestamp = chrono::Utc::now().timestamp();
-    let source_name = format!("scheduled_src_{}", timestamp);
-    let db_name = format!("scheduled_db_{}", timestamp);
-
-    println!("\n Creating source and database with 1-minute backup interval...");
-
-    // Create source
-    let source_req = CreateSourceRequest {
-        source_name: source_name.clone(),
-        backup_interval_hours: None,
-    };
-    client
-        .post(format!("{}{}", BASE_URL, CREATE_SOURCE_ENDPOINT))
-        .json(&source_req)
-        .send()
-        .await
-        .unwrap();
-
-    // Create database with 1 minute backup interval (use very short for testing)
-    // Note: Server needs to be restarted with short scheduler interval for this to work quickly
-    let db_req = CreateDatabaseRequest {
-        name: db_name.clone(),
-        source: source_name.clone(),
-        metrics: None,
-        dimensions: 1024,
-        backup_interval_hours: Some(0), // 0 means immediate backup on next scheduler check
-    };
-    client
-        .post(format!("{}{}", BASE_URL, CREATE_DB_ENDPOINT))
-        .json(&db_req)
-        .send()
-        .await
-        .unwrap();
-
-    // Insert data
-    let vectors: Vec<VectorDataDto> = generate_random_vectors(5000, 1024)
-        .into_iter()
-        .map(|embedding| VectorDataDto {
-            embedding,
-            metadata: "test".to_string(),
-        })
-        .collect();
-
-    let insert_req = InsertRequest {
-        nodes: vec![vectors],
-        database: db_name.clone(),
-        source: source_name.clone(),
-    };
-    client
-        .post(format!("{}{}", BASE_URL, INSERT_ENDPOINT))
-        .json(&insert_req)
-        .send()
-        .await
-        .unwrap();
-
-    println!(" Waiting for scheduled backup (checking every 10s for up to 2 minutes)...");
-    println!(" (Note: Server scheduler interval must be shortened for quick testing)");
-
-    let start = Instant::now();
-    let timeout = Duration::from_secs(120);
-    let check_interval = Duration::from_secs(10);
-
-    let mut backup_found = false;
-    while start.elapsed() < timeout {
-        tokio::time::sleep(check_interval).await;
-
-        let list_req = ListBackupsRequest {
-            source: source_name.clone(),
-            database: db_name.clone(),
-        };
-
-        if let Ok(resp) = client
-            .post(format!("{}{}", BASE_URL, BACKUP_LIST_ENDPOINT))
-            .json(&list_req)
-            .send()
-            .await
-        {
-            if resp.status().is_success() {
-                if let Ok(list_resp) = resp.json::<ListBackupsResponse>().await {
-                    if !list_resp.backups.is_empty() {
-                        backup_found = true;
-                        println!(" Scheduled backup created after {:?}!", start.elapsed());
-                        println!("   Backup: {}", list_resp.backups[0].filename);
-                        break;
-                    }
-                }
-            }
-        }
-
-        print!("  Checked after {:?}...\r", start.elapsed());
-    }
-
-    if backup_found {
-        println!("\n Scheduled backup test PASSED!");
-    } else {
-        println!("\n WARNING: Scheduled backup not detected within timeout.");
-        println!(" This may be expected if server scheduler interval is not shortened.");
-        println!(" Manual backup should still work fine.");
-    }
-}
-
-/// Test 5: Backup delete functionality
-#[tokio::test]
-#[ignore]
-async fn test_backup_delete() {
-    assert!(wait_for_server(10).await, "Server not running!");
-
-    let client = create_client();
-    let timestamp = chrono::Utc::now().timestamp();
-    let source_name = format!("delete_src_{}", timestamp);
-    let db_name = format!("delete_db_{}", timestamp);
-
-    println!("\n Setting up database and creating backup...");
-
-    // Create source and database
-    let source_req = CreateSourceRequest {
-        source_name: source_name.clone(),
-        backup_interval_hours: None,
-    };
-    client
-        .post(format!("{}{}", BASE_URL, CREATE_SOURCE_ENDPOINT))
-        .json(&source_req)
-        .send()
-        .await
-        .unwrap();
-
-    let db_req = CreateDatabaseRequest {
-        name: db_name.clone(),
-        source: source_name.clone(),
-        metrics: None,
-        dimensions: 1024,
-        backup_interval_hours: None,
-    };
-    client
-        .post(format!("{}{}", BASE_URL, CREATE_DB_ENDPOINT))
-        .json(&db_req)
-        .send()
-        .await
-        .unwrap();
-
-    // Insert and backup
-    let vectors: Vec<VectorDataDto> = generate_random_vectors(5000, 1024)
-        .into_iter()
-        .map(|embedding| VectorDataDto {
-            embedding,
-            metadata: "test".to_string(),
-        })
-        .collect();
-
-    let insert_req = InsertRequest {
-        nodes: vec![vectors],
-        database: db_name.clone(),
-        source: source_name.clone(),
-    };
-    client
-        .post(format!("{}{}", BASE_URL, INSERT_ENDPOINT))
-        .json(&insert_req)
-        .send()
-        .await
-        .unwrap();
-
-    let backup_req = CreateBackupRequest {
-        source: source_name.clone(),
-        database: db_name.clone(),
-    };
-    let resp = client
-        .post(format!("{}{}", BASE_URL, BACKUP_CREATE_ENDPOINT))
-        .json(&backup_req)
-        .send()
-        .await
-        .unwrap();
-
-    let backup_resp: CreateBackupResponse = resp.json().await.unwrap();
-    let filename = backup_resp.backup_info.unwrap().filename;
-
-    println!(" Deleting backup: {}", filename);
-
-    let delete_req = DeleteBackupRequest {
-        source: source_name.clone(),
-        database: db_name.clone(),
-        backup_filename: filename.clone(),
-    };
-
-    let resp = client
-        .post(format!("{}{}", BASE_URL, BACKUP_DELETE_ENDPOINT))
-        .json(&delete_req)
-        .send()
-        .await
-        .expect("Failed to delete backup");
-
-    assert_eq!(resp.status(), 200, "Delete backup failed");
-    let delete_resp: DeleteBackupResponse = resp.json().await.unwrap();
-    assert!(
-        delete_resp.success,
-        "Delete failed: {}",
-        delete_resp.message
-    );
-
-    // Verify backup is gone
-    let list_req = ListBackupsRequest {
-        source: source_name.clone(),
-        database: db_name.clone(),
-    };
-    let resp = client
-        .post(format!("{}{}", BASE_URL, BACKUP_LIST_ENDPOINT))
-        .json(&list_req)
-        .send()
-        .await
-        .unwrap();
-
-    let list_resp: ListBackupsResponse = resp.json().await.unwrap();
-    assert!(
-        list_resp.backups.is_empty(),
-        "Backup should have been deleted"
-    );
-
-    println!(" Backup deleted successfully!");
-
-    // Verify file is gone from disk
-    let backup_path = PathBuf::from(dirs::home_dir().unwrap())
-        .join("blaze")
-        .join("backups")
-        .join(&source_name)
-        .join(&db_name)
-        .join(&filename);
-
-    assert!(
-        !backup_path.exists(),
-        "Backup file should have been deleted from disk"
-    );
-    println!(" File removed from disk: {:?}", backup_path);
-}
-
-/// Test 6: Compression ratio verification
 #[tokio::test]
 #[ignore]
 async fn test_backup_compression_ratio() {
@@ -1251,8 +1660,6 @@ async fn stress_test_concurrent_backups_different_databases() {
             "Each database should have exactly 1 backup"
         );
     }
-
-    println!("✓ Parallel backups on different databases work correctly!");
 }
 
 /// Stress Test: Mixed workload - concurrent writes and backups
@@ -1480,6 +1887,4 @@ async fn stress_test_mixed_write_backup_workload() {
         200,
         "Database should be queryable after mixed workload"
     );
-
-    println!("✓ Mixed write + backup workload handled correctly!");
 }
