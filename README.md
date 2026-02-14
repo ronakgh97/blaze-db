@@ -19,6 +19,7 @@ embeddings using HNSW Indexing.
 - Uses semantic similarity search with multiple distance metrics (Cosine, Euclidean, Dot Product).
 - Performance benchmarking suite (<1ms per search on War and Peace dataset, <5ms per search on Amazon Product Dataset).
 - Safe Index cache-locks for concurrent access, with cache validation and eviction policies.
+- Backup and restore functionality for databases and sources. (Few caveats, need improvement, but ready for happy path)
 
 ## Quick Links
 
@@ -368,6 +369,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; fini
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues or submit pull requests. 🤧🏳️
+Codebase is getting huge and super hard to maintain it myself
 
 ### My Code, My Rules 😼
 
@@ -375,11 +377,11 @@ Contributions are welcome! Please feel free to open issues or submit pull reques
   testing code, I do use AI for that. 🤧)
 - **DO NOT REMOVE THE COMMENTED OUT CODES**, Those are ritual sacrifices to the coding gods 🛐, it ward off evil bugs.
   🪦👹
-- **DO NOT REFACTOR SERVER AND CORE MODULES**, Unless there is a major I/O improvement, those codes are sacred. 🙏📜
+- **DO NOT REFACTOR SERVER AND CORE MODULES**, Unless there is a less I/O operations, those codes are sacred. 🙏📜
 - **DO NOT BRING YOUR 'BEST PRACTICES' BS HERE**, Im very opinionated about coding styles and still learning, so don't
   waste your time. 🛑🧠
 - **DO NOT UNDER ANY CIRCUMSTANCES, ADD ANOTHER LOCKS/THREAD SPAWNS/ASYNC AWAIT UNLESS ABSOLUTELY NECESSARY**,
-  Those are the reasons why this code is thread-safe AND why the code is slow, and I dont know HOW!!!!. 🛑🔒
+  Those are the reasons why this code is thread-safe AND why the code is slow, and I even dont know HOW!!!!. 🛑🔒
 
 ### Support the Project 😌
 
