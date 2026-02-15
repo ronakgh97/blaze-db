@@ -66,7 +66,7 @@ fn bench_hnsw_construction_varying_dimensions(c: &mut Criterion) {
     let dimensions = [512, 768, 1024, 1536];
     let vector_count = 1_000;
 
-    let mut group = c.benchmark_group("construction_benches");
+    let mut group = c.benchmark_group("construction_varying_dims");
     group.sample_size(10);
 
     for dim in dimensions {
@@ -96,7 +96,7 @@ fn bench_hnsw_construction_varying_m(c: &mut Criterion) {
 
     let vectors = generate_deterministic_vectors(vector_count, dimensions);
 
-    let mut group = c.benchmark_group("construction_benches");
+    let mut group = c.benchmark_group("construction_varying_m");
     group.sample_size(10);
 
     for m in m_values {
@@ -123,7 +123,7 @@ fn bench_hnsw_construction_varying_ef(c: &mut Criterion) {
 
     let vectors = generate_deterministic_vectors(vector_count, dimensions);
 
-    let mut group = c.benchmark_group("construction_benches");
+    let mut group = c.benchmark_group("construction_varying_ef");
     group.sample_size(10);
 
     for ef in ef_values {
@@ -187,7 +187,7 @@ fn bench_hnsw_search_varying_k(c: &mut Criterion) {
     let hnsw = build_hnsw_index(index_size, dimensions);
     let query = generate_query_vector(dimensions);
 
-    let mut group = c.benchmark_group("search_benches");
+    let mut group = c.benchmark_group("search_varying_k");
     group.sample_size(50);
 
     for k in k_values {
@@ -205,7 +205,7 @@ fn bench_hnsw_search_varying_dimensions(c: &mut Criterion) {
     let index_size = 10_000;
     let k = 10;
 
-    let mut group = c.benchmark_group("search_benches");
+    let mut group = c.benchmark_group("search_varying_dims");
     group.sample_size(30);
 
     for dim in dimensions {
@@ -230,7 +230,7 @@ fn bench_hnsw_search_with_metadata(c: &mut Criterion) {
     let hnsw = build_hnsw_index(index_size, dimensions);
     let query = generate_query_vector(dimensions);
 
-    let mut group = c.benchmark_group("search_benches");
+    let mut group = c.benchmark_group("search_with_metadata");
     group.sample_size(50);
 
     group.bench_function("search_plain", |bench| {
@@ -279,7 +279,7 @@ fn bench_hnsw_batch_queries(c: &mut Criterion) {
 
     let hnsw = build_hnsw_index(index_size, dimensions);
 
-    let mut group = c.benchmark_group("realworld_benches");
+    let mut group = c.benchmark_group("batch_queries");
     group.sample_size(20);
 
     for batch_size in batch_sizes {
@@ -345,7 +345,7 @@ fn bench_hnsw_single_insert_at_scale(c: &mut Criterion) {
     let index_sizes = [100, 500, 1_000, 5_000];
     let dimensions = 1024;
 
-    let mut group = c.benchmark_group("incremental_benches");
+    let mut group = c.benchmark_group("single_insert_at_scale");
     group.sample_size(30);
 
     for size in index_sizes {

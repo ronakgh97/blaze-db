@@ -1,9 +1,10 @@
 use crate::core::{SERVER_FILE, UserConfig};
+use crate::prelude::{Source, VectorBase};
 use colored::Colorize;
 
 pub async fn print_ascii() -> anyhow::Result<()> {
     let ascii_art = r#"
-$$\       $$\                                           $$\ $$\       
+$$\       $$\                                           $$\ $$\
 $$ |      $$ |                                          $$ |$$ |      
 $$$$$$$\  $$ | $$$$$$\  $$$$$$$$\  $$$$$$\         $$$$$$$ |$$$$$$$\  
 $$  __$$\ $$ | \____$$\ \____$$  |$$  __$$\       $$  __$$ |$$  __$$\ 
@@ -11,7 +12,7 @@ $$ |  $$ |$$ | $$$$$$$ |  $$$$ _/ $$$$$$$$ |      $$ /  $$ |$$ |  $$ |
 $$ |  $$ |$$ |$$  __$$ | $$  _/   $$   ____|      $$ |  $$ |$$ |  $$ |
 $$$$$$$  |$$ |\$$$$$$$ |$$$$$$$$\ \$$$$$$$\       \$$$$$$$ |$$$$$$$  |
 \_______/ \__| \_______|\________| \_______|       \_______|\_______/                                                                                                                                            
- "#;
+"#;
 
     println!("{}\n", ascii_art.to_string().yellow());
 
@@ -36,16 +37,33 @@ $$$$$$$  |$$ |\$$$$$$$ |$$$$$$$$\ \$$$$$$$\       \$$$$$$$ |$$$$$$$  |
 
             // List sources
             if let Ok(sources) = server_file.get_all_sources() {
+                let sources: Vec<Source> = sources.into_iter().take(5).collect();
+
                 for src in sources {
                     println!("   • Source: {}", src.source_name.green());
-                    let vector_bases = &src.vector_bases;
+                    let vector_bases: Vec<VectorBase> =
+                        src.vector_bases.clone().into_iter().take(5).collect();
                     if !vector_bases.is_empty() {
                         for vb in vector_bases {
                             println!("      - Database: {}", vb.vb_name.cyan());
                         }
+                        let remaining_bases = src.vector_bases.clone().len().saturating_sub(5);
+                        if remaining_bases > 0 {
+                            println!(
+                                "      ... and {} more databases",
+                                remaining_bases.to_string().yellow()
+                            );
+                        }
                     } else {
                         println!("      - No databases found");
                     }
+                }
+                let remaining_sources = total_sources.saturating_sub(5);
+                if remaining_sources > 0 {
+                    println!(
+                        "   ... and {} more sources",
+                        remaining_sources.to_string().yellow()
+                    );
                 }
             }
             println!();

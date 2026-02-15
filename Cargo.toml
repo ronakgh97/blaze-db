@@ -7,26 +7,32 @@ autobins = false
 [lib]
 name = "blaze_db"
 path = "src/lib.rs"
+bench = false
 
 [[bin]]
 name = "blzdb"
 path = "src/bin/client.rs"
+bench = false
 
 [[bin]]
 name = "blzsrv"
 path = "src/bin/server.rs"
+bench = false
 
 [[bin]]
 name = "nsw"
 path = "sandbox/nsw.rs"
+bench = false
 
 [[bin]]
 name = "hnsw"
 path = "sandbox/hnsw.rs"
+bench = false
 
 [[bin]]
 name = "fst-emd"
 path = "sandbox/fastembedd.rs"
+bench = false
 
 [[bench]]
 name = "benchmark"
@@ -98,6 +104,7 @@ zstd = "0.13.3"
 tar = "0.4.44"
 tempfile = "3.25.0"
 futures = "0.3.31"
+fastrand = "2.3.0"
 # fs2 = "0.4.3"
 # walkdir = "2.5.0"
 # rkyv = { version = "0.8.15" , features = ["std", "bytecheck"] }
@@ -105,4 +112,3 @@ futures = "0.3.31"
 
 [dev-dependencies]
 criterion = "0.8.2"
-fastrand = "2.3.0"
