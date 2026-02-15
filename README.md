@@ -8,7 +8,7 @@ embeddings using HNSW Indexing.
 ## Current State
 
 - Two binaries: `blaze-server` and `blaze-client`, for server and client operations respectively.
-- Uses Ollama API for generating vector embeddings or Bring your own model embeddings using API Server.
+- Uses Ollama API for generating vector embeddings or Bring your own model embeddings using API.
 - Batch/Chunks processing for embedding generation (Only used in CLI Wrapper).
 - Stores/Index embeddings on disk in binary/JSON format.
 - Use memory-mapped files for fast loading and concurrent reads, rayon for parallel processing (where possible).
@@ -39,14 +39,16 @@ embeddings using HNSW Indexing.
 # Initialize dotfiles
 blzsrv init
 
-blzsrv serve
-
-[14:15:46][INFO] Starting the Server...
-[14:15:46][INFO] Source: default_src is valid
-[14:15:46][INFO] Source: test_src is valid
-[14:15:46][INFO] Starting server with 2 valid source(s)
-[14:15:46][INFO] Server is running on http://0.0.0.0:8080
-[14:15:46][INFO] Using Sources: ["default_src", "test_src"]
+blzsrv serve         
+[14:11:48][INFO] Starting the Server...
+[14:11:48][INFO] "Provider (Model: text-embedding-qwen3-embedding-0.6b, Url: http://local..., Key: loca...)"
+[14:11:48][INFO] Source: default_src is valid
+[14:11:48][INFO] Starting server with 1 valid source(s)
+[14:11:48][INFO] Server is running on http://0.0.0.0:8080
+[14:11:48][INFO] Using Sources: ["default_src"]
+[14:11:48][INFO] Backup scheduler enabled: false
+[14:11:48][INFO] Index cache capacity: 128
+[14:11:48][INFO] Server started
 ```
 
 - Download the Index
@@ -67,6 +69,7 @@ docker run -d \
   -env-file .env \
   -v blazedb-config:/home/blazedb/.config/blaze \
   -v blazedb-sources:/home/blazedb/blaze \
+  -v blazedb-backups:/home/blazedb/backups \
   ronakgh97/blazedb:latest
 ```
 
@@ -260,7 +263,6 @@ Top 10 nearest neighbors:
 cargo nextest run --test query_test --release --no-capture --run-ignored only
    Compiling blaze-db v0.1.0 (C:\codes\blaze-db)
     Finished `release` profile [optimized] target(s) in 22.88s
-────────────
  Nextest run ID 6e42b62d-a8d3-45b4-beb6-fe239aea1be6 with nextest profile: default
     Starting 1 test across 1 binary
      Running [ 00:00:00] 0/1: 0 running, 0 passed, 0 skipped
@@ -271,9 +273,6 @@ Total time without cache: 2.8621101s (Client: 1.7749911s, Server: 1.087119000000
 Total time with cache: 0.0400475s (Client: 0.0378031s, Server: 0.0022443999999999997s)
 Improvement factor (Server side): 484.37x
 test test_cache_and_bench ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.82s
-
 ```
 
 - Almost around 480x faster (I/O) with cache hits on repeated queries on same index. 😭🔥
@@ -287,7 +286,6 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 cargo nextest run stress_test_concurrent_writes_different_databases --release --run-ignored only --no-capture
    Compiling blaze-db v0.1.0 (C:\codes\blaze-db)
     Finished `release` profile [optimized] target(s) in 25.59s
-------------
  Nextest run ID dd45f926-c746-491b-a9d3-cd57d943f8ad with nextest profile: default
     Starting 1 test across 17 binaries (83 tests skipped)
      Running [ 00:00:00] 0/1: 0 running, 0 passed, 0 skipped
@@ -296,9 +294,6 @@ cargo nextest run stress_test_concurrent_writes_different_databases --release --
 running 1 test
 Source created, creating 50 databases...
 Databases created, starting concurrent writes...
-test stress_test_concurrent_writes_different_databases has been running for over 60 seconds
-        SLOW [> 60.000s] (-----) blaze-db::stress_tests stress_test_concurrent_writes_different_databases
-
  CONCURRENT WRITES TEST RESULTS:
   Databases written: 50
   Vectors per database: 4096
@@ -311,8 +306,6 @@ test stress_test_concurrent_writes_different_databases has been running for over
   Speedup: 31.82x
 Concurrent writes to different databases work in parallel!
 test stress_test_concurrent_writes_different_databases ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 75.01s
 ```
 
 - Concurrent writes to different databases work in parallel, with significant speedup over sequential writes! 😎🔥
@@ -369,9 +362,9 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; fini
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues or submit pull requests. 🤧🏳️
-Codebase is getting huge and super hard to maintain it myself
+Codebase is getting huge and hard to maintain it myself
 
-### My Code, My Rules 😼
+### Rules 😼
 
 - **DO NOT USE UNREVIEWED AI CODE**, I can smell the SLOP from miles away, so get away from my trash. 🚫🤖 (Except boring
   testing code, I do use AI for that. 🤧)
@@ -382,9 +375,3 @@ Codebase is getting huge and super hard to maintain it myself
   waste your time. 🛑🧠
 - **DO NOT UNDER ANY CIRCUMSTANCES, ADD ANOTHER LOCKS/THREAD SPAWNS/ASYNC AWAIT UNLESS ABSOLUTELY NECESSARY**,
   Those are the reasons why this code is thread-safe AND why the code is slow, and I even dont know HOW!!!!. 🛑🔒
-
-### Support the Project 😌
-
-Indexing high-dimensional datasets and Hosting require decent hardware.
-If you'd like to support the hosting costs (VPS/GPU instances for hosting), you can contribute
-here : [Support VPS Costs](https://razorpay.me/@ronak8747)
