@@ -68,9 +68,13 @@ impl EmbeddingStore {
             let mmap = unsafe { Mmap::map(&file) }
                 .with_context(|| format!("Failed to memory map file: {:?}", path_clone))?;
 
+            // TODO: Use streaming here for larger indexes
+            let config = wincode::config::Configuration::default()
+                .with_preallocation_size_limit::<{ 16 * 1024 * 1024 }>();
+
             // Deserialize from the memory-mapped bytes
             // This creates a zero copy of the data, so it's safe to return across thread boundaries
-            let store = wincode::deserialize(&mmap[..])
+            let store = wincode::config::deserialize(&mmap[..], config)
                 .with_context(|| format!("Failed to deserialize: {:?}", path_clone))?;
 
             // mmap is automatically unmapped here when it goes out of scope
@@ -149,8 +153,12 @@ impl EmbeddingStore {
             p
         };
 
+        // TODO: Use streaming here for larger indexes
+        let config = wincode::config::Configuration::default()
+            .with_preallocation_size_limit::<{ 16 * 1024 * 1024 }>();
+
         // Serialize to bytes and calculate checksum
-        let initial_bytes = wincode::serialize(&*self)?;
+        let initial_bytes = wincode::config::serialize(&*self, config)?;
         let mut hasher = sha2::Sha256::new();
         hasher.update(&initial_bytes);
         let checksum = format!("{:x}", hasher.finalize());
@@ -178,7 +186,7 @@ impl EmbeddingStore {
         Ok(())
     }
 
-    /// Write the EmbeddingStore to disk as a JSON file and store the hash checksum (for human readability and debugging)
+    /// Write the EmbeddingStore to disk as a JSON file and store the hash checksum (for readability and debugging)
     #[allow(unused)]
     pub async fn write_to_disk_json(&mut self, file_path: PathBuf) -> Result<()> {
         // Add extension if not present
