@@ -37,12 +37,12 @@ pub enum ServerCommands {
 
     /// Run benchmarks
     Bench {
-        /// Test HNSW index performance (TODO: Add more benchmark options later)
-        #[arg(short, long)]
-        index: bool,
-
-        /// Test Concurrency model performance (TODO: Add more benchmark options later)
-        #[arg(short, long)]
-        concurrency: bool,
+        // /// Test HNSW index performance (TODO: Add more benchmark options later)
+        // #[arg(short, long)]
+        // index: bool,
+        //
+        // /// Test Concurrency model performance (TODO: Add more benchmark options later)
+        // #[arg(short, long)]
+        // concurrency: bool,
     },
 }

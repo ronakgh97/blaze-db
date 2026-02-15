@@ -101,9 +101,13 @@ impl Default for BackupConfig {
             default_interval_hours: 48,
             max_backups_per_database: 5,
             compression_level: 18,
-            backup_base_dir: dirs::home_dir()
-                .map(|h| h.join("blaze").join("backups"))
-                .unwrap_or_else(|| PathBuf::from("/tmp/blaze_backups")),
+            backup_base_dir: if let Ok(blaze_home) = std::env::var("BLAZE_HOME") {
+                PathBuf::from(blaze_home).join("blaze").join("backups")
+            } else {
+                dirs::home_dir()
+                    .map(|h| h.join("blaze").join("backups"))
+                    .unwrap_or_else(|| PathBuf::from("/tmp/blaze_backups"))
+            },
         }
     }
 }

@@ -77,8 +77,13 @@ impl UserConfig {
     }
 
     /// Get default config path
+    /// Checks BLAZE_HOME environment variable first, then falls back to dirs::home_dir()
     pub fn get_default_path() -> Result<PathBuf> {
-        let home = dirs::home_dir().with_context(|| "No home directory?")?;
+        let home = if let Ok(blaze_home) = std::env::var("BLAZE_HOME") {
+            PathBuf::from(blaze_home)
+        } else {
+            dirs::home_dir().with_context(|| "No home directory?")?
+        };
         Ok(home.join(".config").join("blaze").join("whoami.toml"))
     }
 }
@@ -152,8 +157,13 @@ impl Catalog {
     }
 
     /// Get default server file path
+    /// Checks BLAZE_HOME environment variable first, then falls back to dirs::home_dir()
     pub fn get_default_server_file_path() -> Result<PathBuf> {
-        let home = dirs::home_dir().with_context(|| "No home directory?")?;
+        let home = if let Ok(blaze_home) = std::env::var("BLAZE_HOME") {
+            PathBuf::from(blaze_home)
+        } else {
+            dirs::home_dir().with_context(|| "No home directory?")?
+        };
         Ok(home.join(".config").join("blaze").join("SERVER_DATA.json"))
     }
 
@@ -477,16 +487,24 @@ impl SyncReport {
 }
 
 /// Get the base path where all sources are stored
+/// Checks BLAZE_HOME environment variable first, then falls back to dirs::home_dir()
 pub fn get_source_path() -> Result<PathBuf> {
-    let home_dir =
-        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+    let home_dir = if let Ok(blaze_home) = std::env::var("BLAZE_HOME") {
+        PathBuf::from(blaze_home)
+    } else {
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?
+    };
     Ok(home_dir.join("blaze").join("sources"))
 }
 
 /// Get the default directory for database backups
+/// Checks BLAZE_HOME environment variable first, then falls back to dirs::home_dir()
 pub fn get_default_backups_dir() -> Result<PathBuf> {
-    let backup_dir =
-        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let backup_dir = if let Ok(blaze_home) = std::env::var("BLAZE_HOME") {
+        PathBuf::from(blaze_home)
+    } else {
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?
+    };
     Ok(backup_dir.join("blaze").join("backups"))
 }
 

@@ -1,4 +1,5 @@
 mod ascii;
+mod bench;
 mod create;
 mod embed;
 mod init;
@@ -9,6 +10,7 @@ mod register;
 mod serve;
 
 pub use ascii::print_ascii;
+pub use bench::bench_run;
 pub use create::create_run;
 pub use embed::embed_run;
 pub use init::init_run_client;
