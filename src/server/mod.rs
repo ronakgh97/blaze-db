@@ -3,7 +3,6 @@ mod dto;
 mod service;
 
 pub use controller::start_server;
-#[allow(unused)]
 pub use dto::{
     BackupInfoDto, CreateBackupRequest, CreateBackupResponse, CreateDatabaseRequest,
     CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse, DeleteBackupRequest,
