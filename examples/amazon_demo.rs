@@ -7,8 +7,8 @@ use std::path::PathBuf;
 #[allow(unused)]
 const BATCH_SIZE: usize = 4096;
 
-#[allow(unused)]
-const NODES_TO_INDEX: usize = 50_000;
+// Adjust this as you need
+const NODES_TO_INDEX: usize = 350_000;
 
 // TODO: Implement Resume logic and batch-wise indexing
 #[tokio::main]
@@ -177,10 +177,16 @@ async fn bench_search() -> Result<()> {
         .search_with_metadata(&query_embedding.embedding[0], top_k);
     let duration = start_time.elapsed();
 
+    let start_brute = std::time::Instant::now();
+    let brute_results = embedding_store
+        .hnsw_store
+        .brute_force_search_with_metadata(&query_embedding.embedding[0], top_k);
+    let brute_duration = start_brute.elapsed();
+
     println!("\nQuery: {}", query.to_string().blue());
     println!("Search completed in: {:?}", duration);
     println!("Top {} search results for query: '{}'", top_k, query);
-    for (i, (node_id, score, metadata)) in search_results.iter().enumerate() {
+    for (i, (node_id, score, metadata)) in search_results.iter().take(5).enumerate() {
         println!(
             "{}. ID: {}, Score: {:.4}\nTitle: {}",
             i + 1,
@@ -190,7 +196,27 @@ async fn bench_search() -> Result<()> {
         );
     }
 
+    println!();
+    println!("Brute search results (for comparison)");
+    println!("Brute search completed in: {:?}", brute_duration);
+    for (i, (node_id, score, metadata)) in brute_results.iter().take(5).enumerate() {
+        println!(
+            "{}. ID: {}, Score: {:.4}\nTitle: {}",
+            i + 1,
+            node_id.to_string().cyan(),
+            score.to_string().red(),
+            metadata.to_string().dimmed().green()
+        );
+    }
+
+    println!(
+        "\nSpeedup: {:.2}x",
+        brute_duration.as_secs_f64() / duration.as_secs_f64()
+    );
+
     assert!(duration.as_millis() <= 5); // Ensure search is under 5ms
+
+    assert!(duration.as_millis() < brute_duration.as_millis(), "WTF???"); // Ensure HNSW search is faster than brute-force
 
     Ok(())
 }

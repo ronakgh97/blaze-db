@@ -40,20 +40,7 @@ impl EmbeddingStore {
         unimplemented!("get_info method not implemented yet");
     }
 
-    /// Load from a single binary file using memory-mapped I/O for better performance.
-    ///
-    /// ### Thread Safe
-    /// This function is fully thread-safe:
-    /// - The mmap is created and destroyed within a `spawn_blocking` task
-    /// - Deserialization creates an owned copy of the data before returning
-    /// - No references to the mmap escape the blocking task
-    /// - Multiple concurrent calls are safe as each has its own mmap instance
-    ///
-    /// ### Safety
-    /// The unsafe `Mmap::map()` call is safe because:
-    /// - We only read from the mmap (no writes)
-    /// - The file is not modified during the mapping
-    /// - The mmap lifetime is scoped to the blocking task
+    /// Load from a single binary file using memory-mapped I/O for better performance (Thread-safe with blocking task)
     pub async fn load_index_file(path: &PathBuf) -> Result<Self> {
         let path_clone = path.to_path_buf();
 
@@ -70,7 +57,7 @@ impl EmbeddingStore {
 
             // TODO: Use streaming here for larger indexes
             let config = wincode::config::Configuration::default()
-                .with_preallocation_size_limit::<{ 16 * 1024 * 1024 }>();
+                .with_preallocation_size_limit::<{ 64 * 1024 * 1024 }>();
 
             // Deserialize from the memory-mapped bytes
             // This creates a zero copy of the data, so it's safe to return across thread boundaries
@@ -155,7 +142,7 @@ impl EmbeddingStore {
 
         // TODO: Use streaming here for larger indexes
         let config = wincode::config::Configuration::default()
-            .with_preallocation_size_limit::<{ 16 * 1024 * 1024 }>();
+            .with_preallocation_size_limit::<{ 64 * 1024 * 1024 }>();
 
         // Serialize to bytes and calculate checksum
         let initial_bytes = wincode::config::serialize(&*self, config)?;
@@ -308,7 +295,6 @@ pub async fn read_embeddings_metadata(path: &PathBuf) -> Result<EmbeddingMetadat
 /// Thread-safe DataStore with in-memory HashMap and persistent JSON storage
 /// Uses Arc<RwLock<T>> for concurrent access and memmap2 for fast reads
 #[derive(Clone)]
-#[allow(dead_code)] // Will be used for configs (server_file.toml, etc.)
 pub struct DataStore<K, V>
 where
     K: Eq + Hash + Clone + Serialize + for<'de> Deserialize<'de>,
@@ -319,8 +305,6 @@ where
     /// File path for persistence
     path: PathBuf,
 }
-
-#[allow(dead_code)] // Will be used for configs in the future
 impl<K, V> DataStore<K, V>
 where
     K: Eq + Hash + Clone + Serialize + for<'de> Deserialize<'de>,
@@ -362,6 +346,7 @@ where
         Ok(old_value)
     }
 
+    #[inline]
     /// Get a value by key
     pub fn get(&self, key: &K) -> Result<Option<V>> {
         let data = self
@@ -372,6 +357,7 @@ where
         Ok(data.get(key).cloned())
     }
 
+    #[inline]
     /// Delete a key-value pair
     pub fn delete(&self, key: &K) -> Result<Option<V>> {
         let mut data = self
@@ -389,6 +375,7 @@ where
         Ok(removed)
     }
 
+    #[inline]
     /// Check if a key exists
     pub fn contains_key(&self, key: &K) -> Result<bool> {
         let data = self
@@ -399,6 +386,7 @@ where
         Ok(data.contains_key(key))
     }
 
+    #[inline]
     /// Get all keys
     pub fn keys(&self) -> Result<Vec<K>> {
         let data = self
@@ -409,6 +397,7 @@ where
         Ok(data.keys().cloned().collect())
     }
 
+    #[inline]
     /// Get all values
     pub fn values(&self) -> Result<Vec<V>> {
         let data = self
@@ -419,6 +408,7 @@ where
         Ok(data.values().cloned().collect())
     }
 
+    #[inline]
     /// Get all key-value pairs
     pub fn entries(&self) -> Result<Vec<(K, V)>> {
         let data = self
@@ -429,6 +419,7 @@ where
         Ok(data.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
     }
 
+    #[inline]
     /// Get the number of entries
     pub fn len(&self) -> Result<usize> {
         let data = self
@@ -439,6 +430,7 @@ where
         Ok(data.len())
     }
 
+    #[inline]
     /// Check if the store is empty
     pub fn is_empty(&self) -> Result<bool> {
         let data = self
@@ -449,6 +441,7 @@ where
         Ok(data.is_empty())
     }
 
+    #[inline]
     /// Clear all data
     pub fn clear(&self) -> Result<()> {
         let mut data = self
@@ -523,6 +516,7 @@ where
         }
     }
 
+    #[inline]
     /// Get a snapshot of all data (useful for batch operations)
     pub fn snapshot(&self) -> Result<HashMap<K, V>> {
         let data = self

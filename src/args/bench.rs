@@ -15,15 +15,15 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Barrier;
 
-const BASE_NUM_DATABASES_WRITE: usize = 25;
-const BASE_VECTORS_PER_DB: usize = 1024;
+const BASE_NUM_DATABASES_WRITE: usize = 100;
+const BASE_VECTORS_PER_DB: usize = 768;
 const DIMENSIONS: usize = 1024;
-const BASE_NUM_CONCURRENT_THUNDERING: usize = 25;
+const BASE_NUM_CONCURRENT_THUNDERING: usize = 75;
 const BASE_NUM_DATABASES_MIXED: usize = 25;
 const BASE_NUM_VECTORS_MIXED: usize = 1024;
 const BASE_NUM_READERS: usize = 50;
 const BASE_READ_QUERIES_PER_READER: usize = 50;
-const BASE_NUM_WRITERS: usize = 10;
+const BASE_NUM_WRITERS: usize = 25;
 const BASE_WRITE_QUERIES_PER_WRITER: usize = 10;
 const BASE_VECTOR_PER_WRITE_QUERY: usize = 512;
 
@@ -43,7 +43,7 @@ pub async fn bench_run() -> Result<()> {
     spinner.set_style(
         ProgressStyle::default_spinner()
             .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.yellow} {msg}  {elapsed_precise:.dim}")?,
+            .template("{spinner} {msg} ({elapsed:.dim})")?,
     );
     spinner.enable_steady_tick(Duration::from_millis(100));
     spinner.set_message(format!("{}", "Setting up benchmark environment".yellow()));
@@ -116,17 +116,23 @@ async fn run_benchmarks(base_url: &str, multi: &MultiProgress) -> Result<Benchma
     spinner.set_style(
         ProgressStyle::default_spinner()
             .tick_strings(&[
-                "∙∙∙∙",
-                "■∙∙∙",
-                "∙■∙∙",
-                "∙∙■∙",
-                "∙∙∙■",
-                "∙∙■∙",
-                "∙■∙∙",
-                "■∙∙∙",
-                "∙∙∙∙",
+                "∙∙∙∙∙",
+                "■∙∙∙∙",
+                "◻■∙∙∙",
+                "∙◻■∙∙",
+                "∙∙◻■∙",
+                "∙∙∙◻■",
+                "∙∙∙∙◻",
+                "∙∙∙∙∙",
+                "∙∙∙∙■",
+                "∙∙∙■◻",
+                "∙∙■◻∙",
+                "∙■◻∙∙",
+                "■◻∙∙∙",
+                "◻∙∙∙∙",
+                "∙∙∙∙∙",
             ])
-            .template(" {spinner:.cyan} {msg}")?,
+            .template("{spinner:.cyan} {msg}")?,
     );
     spinner.enable_steady_tick(Duration::from_millis(80));
 
@@ -144,47 +150,47 @@ async fn run_benchmarks(base_url: &str, multi: &MultiProgress) -> Result<Benchma
 }
 
 async fn spawn_server(temp_dir: &PathBuf, port: u16) -> Result<Child> {
-    // Get the path to the blzsrv binary
+    // Get the path to the blzdb binary
     let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
-    let blzsrv_path = current_exe
+    let blzdb_path = current_exe
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?
-        .join("blzsrv.exe"); // On Windows it's .exe
+        .join("blzdb.exe"); // On Windows it's .exe
 
     // If not found, try without .exe (Unix)
-    let blzsrv_path = if blzsrv_path.exists() {
-        blzsrv_path
+    let blzdb_path = if blzdb_path.exists() {
+        blzdb_path
     } else {
         current_exe
             .parent()
             .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?
-            .join("blzsrv")
+            .join("blzdb")
     };
 
-    if !blzsrv_path.exists() {
+    if !blzdb_path.exists() {
         anyhow::bail!(
-            "blzsrv binary not found at {}. Make sure to build with: cargo build --bin blzsrv",
-            blzsrv_path.display()
+            "blzdb binary not found at {}. Make sure to build with: cargo build --bin blzdb",
+            blzdb_path.display()
         );
     }
 
     // Spawn init first
-    let init_output = Command::new(&blzsrv_path)
+    let init_output = Command::new(&blzdb_path)
         .arg("init")
         .env("BLAZE_HOME", temp_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
         .await
-        .context("Failed to spawn blzsrv init")?;
+        .context("Failed to spawn blzdb init")?;
 
     if !init_output.status.success() {
         let stderr = String::from_utf8_lossy(&init_output.stderr);
-        anyhow::bail!("blzsrv init failed: {}", stderr);
+        anyhow::bail!("blzdb init failed: {}", stderr);
     }
 
     // Spawn serve
-    let mut child = Command::new(&blzsrv_path)
+    let mut child = Command::new(&blzdb_path)
         .arg("serve")
         .arg("--port")
         .arg(port.to_string())
@@ -192,7 +198,7 @@ async fn spawn_server(temp_dir: &PathBuf, port: u16) -> Result<Child> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .context("Failed to spawn blzsrv serve")?;
+        .context("Failed to spawn blzdb serve")?;
 
     // Log server output in background
     if let Some(stdout) = child.stdout.take() {
@@ -449,7 +455,7 @@ async fn run_thundering_herd_test(base_url: &str, stats: &mut BenchmarkStats) ->
         .await?;
 
     // Insert initial data (5000 vectors for thundering herd test)
-    let vectors: Vec<VectorDataDto> = (0..5000)
+    let vectors: Vec<VectorDataDto> = (0..4096)
         .map(|i| VectorDataDto {
             embedding: generate_random_vector(DIMENSIONS),
             metadata: format!("vector_{}", i),
