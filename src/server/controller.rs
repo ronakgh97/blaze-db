@@ -103,7 +103,7 @@ pub async fn start_server(
 
     let addr = format!("0.0.0.0:{}", port);
     info!("Server is running on http://{}", addr);
-    info!("Using Sources: {:?}", source);
+    info!("Using {} Sources", source.len());
     info!("Backup scheduler enabled: {}", run_backup_scheduler);
 
     info!("Index cache capacity: {}", 128);
@@ -138,13 +138,13 @@ async fn setup_shutdown_signal() {
 
         let mut sigterm = match signal(SignalKind::terminate()) {
             Ok(s) => s,
-            Err(e) => {
+            Err(_) => {
                 return;
             }
         };
         let mut sigint = match signal(SignalKind::interrupt()) {
             Ok(s) => s,
-            Err(e) => {
+            Err(_) => {
                 return;
             }
         };

@@ -142,19 +142,13 @@ pub async fn insert_run(
         );
     }
 
-    // Copy-on-Write (CoW) Replication Strategy:
+    // Copy-on-Write (CoW)
     // Write to HNSW_INDEX_TEMP.bin
     // Atomic rename: TEMP → HNSW_INDEX.bin (crash-safe!)
     // Copy .bin → HNSW_INDEX.replica (exact snapshot for backups!)
-    //
-    // Benefits:
-    // - .replica is EXACT copy of .bin (no version drift)
-    // - Can backup .replica with ZERO locks (it's frozen)
-    // - Simpler than rotation (no threshold logic needed)
-    //
-    // Cons: (TODO)
-    // - Double disk I/O during writes (write temp, then copy to replica) - but this is acceptable for data safety and simplicity
-    // - Should be performed asynchronously to avoid blocking the main thread, especially for large indexes or use background jobs
+    // TODO
+    //  Double disk I/O during writes (write temp, then copy to replica) - but this is acceptable for data safety and simplicity
+    //  Should be performed asynchronously to avoid blocking the main thread
 
     let temp_filename = database_path.join("HNSW_INDEX_TEMP.bin");
     let current_filename = database_path.join("HNSW_INDEX.bin");

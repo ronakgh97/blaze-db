@@ -168,6 +168,7 @@ impl VectorBase {
         }
     }
 
+    #[inline]
     /// Calculate when the next backup should occur based on interval
     pub fn schedule_next_backup(&mut self, interval_hours: u32) {
         if interval_hours == 0 {
@@ -178,6 +179,7 @@ impl VectorBase {
         self.will_backup_at = Some(next_backup.to_rfc3339());
     }
 
+    #[inline]
     /// Check if backup is due (will_backup_at <= now)
     pub fn is_backup_due(&self) -> bool {
         match &self.will_backup_at {
@@ -189,11 +191,13 @@ impl VectorBase {
         }
     }
 
+    #[inline]
     /// Update the last accessed timestamp
     pub fn touch(&mut self) {
         self.last_queried_at = chrono::Utc::now().to_rfc3339();
     }
 
+    #[inline]
     /// Update the node count
     pub fn set_node_count(&mut self, count: u32) {
         self.node_count = count;

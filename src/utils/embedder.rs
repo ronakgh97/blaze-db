@@ -20,16 +20,20 @@ impl VectorData {
             dimensions: 0,
         }
     }
+
+    #[inline]
     /// Get a specific vector by index
     pub fn get_vector(&self, index: usize) -> Option<&[f32]> {
         self.embedding.get(index).map(|v| v.as_slice())
     }
 
+    #[inline]
     /// Get text chunk by index
     pub fn get_chunk(&self, index: usize) -> Option<&str> {
         self.chunk.get(index).map(|s| s.as_str())
     }
 
+    #[inline]
     /// Calculate the raw data size in MB (vectors + metadata strings only)
     /// This represents the actual memory footprint of the data, not the serialized file size.
     pub fn data_size_mb(&self) -> f64 {
@@ -119,6 +123,7 @@ impl Provider {
         }
     }
 
+    #[inline]
     pub fn pretty_display(&self) -> String {
         format!(
             "Provider (Model: {}, Url: {}..., Key: {}...)",

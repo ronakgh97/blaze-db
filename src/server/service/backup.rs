@@ -147,6 +147,7 @@ impl BackupService {
         self.scheduler_handle = Some(handle);
     }
 
+    #[inline]
     /// Stop the background scheduler
     pub async fn stop_scheduler(&mut self) {
         if let Some(handle) = self.scheduler_handle.take() {
@@ -248,6 +249,7 @@ impl BackupService {
         Ok(())
     }
 
+    #[inline]
     /// Trigger a manual backup via API
     /// Holds backup lock for entire duration to prevent concurrent backups of same database
     pub async fn trigger_backup(&self, source: &str, database: &str) -> Result<BackupInfo> {
@@ -276,6 +278,7 @@ impl BackupService {
         result
     }
 
+    #[inline]
     /// Check if a write operation is currently in progress for this database
     async fn is_write_in_progress(source: &str, database: &str) -> bool {
         let db_key = format!("{}:{}", source, database);
@@ -412,6 +415,7 @@ impl BackupService {
         Ok(backup_info)
     }
 
+    #[inline]
     /// Get effective backup interval for a database
     async fn get_effective_interval_hours(
         config: &BackupConfig,
