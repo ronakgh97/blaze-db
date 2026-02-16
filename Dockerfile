@@ -17,7 +17,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
-RUN cargo build --release --bin blzsrv
+RUN cargo build --release --bin blzdb
 
 FROM debian:bookworm-slim
 
@@ -26,16 +26,13 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
 # Copy the compiled binary from builder
-COPY --from=builder /app/target/release/blzsrv /app/blzsrv
+COPY --from=builder /app/target/release/blzdb /app/blzdb
 
-# Copy entrypoint script
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
-# Make entrypoint script executable
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Create config and source directories upfront
@@ -52,7 +49,7 @@ ENV HOME=/home/blazedb
 #ENV EMBEDDING_API_KEY=local
 
 # Health check - verify the binary exists
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD test -f /app/blzsrv || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD test -f /app/blzdb || exit 1
 
 # Set the entrypoint to the initialization script
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

@@ -10,12 +10,12 @@ path = "src/lib.rs"
 bench = false
 
 [[bin]]
-name = "blzdb"
+name = "blzcli"
 path = "src/bin/client.rs"
 bench = false
 
 [[bin]]
-name = "blzsrv"
+name = "blzdb"
 path = "src/bin/server.rs"
 bench = false
 
@@ -75,7 +75,7 @@ incremental = true
 
 [dependencies]
 tokio = { version = "1.49.0", features = ["full"] }
-memmap2 = "0.9.9"
+memmap2 = "0.9.10"
 rayon = "1.11.0"
 reqwest = { version = "0.13.2", features = ["json", "blocking"] }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -103,7 +103,7 @@ regex = "1.12.2"
 zstd = "0.13.3"
 tar = "0.4.44"
 tempfile = "3.25.0"
-futures = "0.3.31"
+futures = "0.3.32"
 fastrand = "2.3.0"
 # fs2 = "0.4.3"
 # walkdir = "2.5.0"
