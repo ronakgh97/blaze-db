@@ -1,8 +1,7 @@
 mod utils;
 
 use crate::utils::cosine_similarity;
-#[allow(unused)]
-use crate::utils::{generate_random_vector, load_sample_hnsw_index};
+use crate::utils::generate_random_vectors;
 #[allow(unused)]
 use blaze_db::prelude::{EmbeddingStore, Provider};
 #[allow(unused)]
@@ -24,9 +23,9 @@ struct NSW {
 }
 
 impl NSW {
-    pub fn new(max_neighbours: usize, max_nodes: usize) -> Self {
+    pub fn new(max_neighbours: usize, max_allocation: usize) -> Self {
         Self {
-            nodes: Vec::with_capacity(max_nodes), // Pre-allocate for efficiency
+            nodes: Vec::with_capacity(max_allocation), // Pre-allocate for efficiency
             max_neighbours,
         }
     }
@@ -100,7 +99,6 @@ impl NSW {
 
     // Search API - Parallel Greedy Search
     // Starts from multiple random entry points and performs greedy search in parallel
-    #[inline]
     pub fn parallel_greedy_search(
         vector: &Vec<f32>,
         top_k: i32,
@@ -171,7 +169,6 @@ impl NSW {
     /// Search API - Brute-force Search
     /// Perform parallel brute-force search over all nodes
     /// Use a lot of cpu and memory, but accurate and slow
-    #[inline]
     fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<Node> {
         let mut results: Vec<(Node, f32)> = Vec::new();
         results.reserve(nodes.len()); // Pre-allocate
@@ -225,20 +222,15 @@ impl Node {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut nsw = NSW::new(5555, 16);
+    let mut nsw = NSW::new(4096, 512);
 
     // Generate 20K random vectors
     let num_vectors = 10_000 * 2;
 
-    for i in 0..num_vectors {
-        let vector = generate_random_vector(1024);
+    let vectors = generate_random_vectors(num_vectors, 1024);
 
-        // if (i + 1) % 10000 == 0 {
-        //     println!("Generated {} vectors", (i + 1).to_string().cyan());
-        // }
-
-        // Create a node with none neighbors for simplicity
-        let node = Node::new(i, vector, "whatever".to_string(), vec![]);
+    for (i, vector) in vectors.into_iter().enumerate() {
+        let node = Node::new(i, vector, "what a cute vector".to_string(), vec![]);
         nsw.add_node_index_later(node);
     }
 
@@ -278,7 +270,7 @@ async fn main() -> anyhow::Result<()> {
     // let query_embedding = provider.fetch_embedding(sample_query).await?;
 
     // let query_vector = query_embedding.embedding[0].clone();
-    let query_vector = generate_random_vector(1024);
+    let query_vector = generate_random_vectors(1, 1024)[0].clone();
     // println!("\nQuery: {}", sample_query.to_string().yellow());
     println!("Querying vector: {:?}...", &query_vector[..3]);
     let top_k = 5;

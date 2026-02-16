@@ -1,20 +1,21 @@
 #[allow(unused)]
 use blaze_db::prelude::{EmbeddingStore, VectorData};
 use rand::RngExt;
-use std::path::PathBuf;
 use wide::f32x8;
 
-/// Generates a random vector of given dimension with values in range [-2.0, 2.0]
+/// Generates a random vector of given dimension with values in range [-1.0, 1.0]
 /// Still bad for cosine similarity, but okay for demo purposes
 #[inline]
-pub fn generate_random_vector(dimension: usize) -> Vec<f32> {
+/// Helper to generate random vectors for testing
+pub fn generate_random_vectors(num_vectors: usize, dimensions: usize) -> Vec<Vec<f32>> {
     let mut rng = rand::rng();
-
-    let mut vector = vec![0.0f32; dimension];
-    for i in 0..dimension {
-        vector[i] = rng.random_range(-2.0..2.0);
-    }
-    vector
+    (0..num_vectors)
+        .map(|_| {
+            (0..dimensions)
+                .map(|_| rng.random_range(-1.0..1.0))
+                .collect()
+        })
+        .collect()
 }
 
 /// Cosine similarity using 8-wide f32 vectors
@@ -67,17 +68,4 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     } else {
         dot_sum / denominator
     }
-}
-
-/// Loads an explicit sample HNSW index from disk for testing/demo purposes
-#[inline]
-#[allow(unused)]
-pub async fn load_sample_hnsw_index() -> EmbeddingStore {
-    let path_to_sample_index: PathBuf = PathBuf::from("./embeddings/index_batch_5.bin");
-
-    let hnsw_index = EmbeddingStore::load_index_file(&path_to_sample_index)
-        .await
-        .expect("Failed to load embeddings");
-
-    hnsw_index
 }
