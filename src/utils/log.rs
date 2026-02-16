@@ -1,9 +1,12 @@
 use colored::{ColoredString, Colorize};
 
+#[inline]
 pub fn log(level: &str, msg: ColoredString) {
     let now = chrono::Local::now();
 
     let level = match level {
+        "TRACE" => "TRACE".dimmed(),
+        "DEBUG" => "DEBUG".blue().bold(),
         "INFO" => "INFO".bright_green().bold(),
         "WARN" => "WARN".yellow().bold(),
         "ERROR" => "ERROR".red().bold(),
@@ -11,6 +14,26 @@ pub fn log(level: &str, msg: ColoredString) {
     };
 
     println!("[{}][{}] {}", now.format("%H:%M:%S"), level, msg);
+}
+
+#[macro_export]
+macro_rules! trace {
+    ($($arg:tt)*) => {
+        {
+            use colored::Colorize;
+            $crate::utils::log::log("TRACE", format!($($arg)*).dimmed())
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! debug {
+    ($($arg:tt)*) => {
+        {
+            use colored::Colorize;
+            $crate::utils::log::log("DEBUG", format!($($arg)*).blue())
+        }
+    };
 }
 
 #[macro_export]
