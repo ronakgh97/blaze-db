@@ -12,17 +12,17 @@ pub mod prelude {
     };
     pub use crate::client_args::{ClientArgs, ClientCommands};
     pub use crate::core::{
-        Catalog, HNSW, Metrics, Node, NodeId, SERVER_FILE, Source, SyncReport, UserConfig,
+        Catalog, HNSW, Metrics, Node, NodeIndex, SERVER_FILE, Source, SyncReport, UserConfig,
         VectorBase, check_source_valid, cosine_similarity, dot_product, euclidean_similarity,
         get_source_path, list_sources, save_config,
     };
     pub use crate::server::{
         BackupInfoDto, CreateBackupRequest, CreateBackupResponse, CreateDatabaseRequest,
         CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse, DeleteBackupRequest,
-        DeleteBackupResponse, EmbedRequest, EmbedResponse, InsertRequest, InsertResponse,
-        ListBackupsRequest, ListBackupsResponse, ListResponse, QueryRequest, QueryResponse,
-        RestoreBackupRequest, RestoreBackupResponse, VectorDataDto, VectorQueryRequest,
-        VectorQueryResponse, list_databases_from_disk, start_server,
+        DeleteBackupResponse, EmbedData, EmbedRequest, EmbedResponse, InsertRequest,
+        InsertResponse, ListBackupsRequest, ListBackupsResponse, ListResponse, QueryRequest,
+        QueryResponse, RestoreBackupRequest, RestoreBackupResponse, VectorDataDto,
+        VectorQueryRequest, VectorQueryResponse, list_databases_from_disk, start_server,
     };
     pub use crate::server_args::{ServerArgs, ServerCommands};
     pub use crate::utils::{EmbeddingStore, Ingestor, Provider, VectorData, log};

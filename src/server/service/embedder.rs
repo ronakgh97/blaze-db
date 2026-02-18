@@ -10,7 +10,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
+use uuid::Uuid;
 //TODO: SERIOUSLY REFACTOR TOMORROW Both insert_run and embed_run have a lot of duplicated code, need to refactor later
 
 /// Insert pre-computed embeddings into the specified database
@@ -130,10 +130,15 @@ pub async fn insert_run(
         let embedded_count = vector_data.len();
 
         for (_index, vec_data) in vector_data.iter().enumerate() {
+            let id = vec_data.id.clone();
             let vector = &vec_data.embedding;
             let metadata = &vec_data.metadata;
             let random_level = hnsw.get_random_level();
-            hnsw.insert(&vector, metadata.clone(), random_level);
+            hnsw.insert(id, &vector, metadata.clone(), random_level)
+                .map_err(|e| {
+                    error!("Error inserting vector into HNSW index: {}", e);
+                    ErrorTypes::InvalidField(format!("Failed to insert vector into index: {}", e))
+                })?;
         }
         total_embedded += embedded_count;
         info!(
@@ -144,8 +149,8 @@ pub async fn insert_run(
 
     // Copy-on-Write (CoW)
     // Write to HNSW_INDEX_TEMP.bin
-    // Atomic rename: TEMP → HNSW_INDEX.bin (crash-safe!)
-    // Copy .bin → HNSW_INDEX.replica (exact snapshot for backups!)
+    // Atomic rename: TEMP → HNSW_INDEX.bin
+    // Copy .bin → HNSW_INDEX.replica
     // TODO
     //  Double disk I/O during writes (write temp, then copy to replica) - but this is acceptable for data safety and simplicity
     //  Should be performed asynchronously to avoid blocking the main thread
@@ -302,16 +307,30 @@ pub async fn embed_run(
     for (index, chunks) in batch_content.iter().enumerate() {
         let batch_index = index;
 
+        let ids_vec = chunks.iter().map(|c| c.id.clone()).collect::<Vec<String>>();
+        let chunks_to_vec: Vec<String> = chunks.iter().map(|c| c.embed_data.clone()).collect();
+
+        let chunks_to_embed = chunks_to_vec.as_slice();
+
         // Fetch embeddings for the current chunk, and update HNSW index
-        match provider.fetch_embeddings(chunks).await {
+        match provider.fetch_embeddings(chunks_to_embed).await {
             Ok(embeddings) => {
                 let embedded_count = embeddings.embedding.len();
 
                 // Insert embeddings into HNSW index
                 for (i, vector) in embeddings.embedding.iter().enumerate() {
-                    let metadata = chunks.get(i).cloned().unwrap_or("[EMPTY]".to_string());
+                    let id = ids_vec
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+                    let metadata = chunks_to_embed
+                        .get(i)
+                        .cloned()
+                        .unwrap_or("EMPTY".to_string());
+
                     let random_level = hnsw.get_random_level();
-                    hnsw.insert(&vector, metadata, random_level);
+                    hnsw.insert(id, &vector, metadata, random_level)?;
                 }
 
                 total_embedded += embedded_count;
@@ -327,11 +346,6 @@ pub async fn embed_run(
         }
     }
 
-    // Copy-on-Write (CoW) Replication Strategy (same as insert_run):
-    //  Write to HNSW_INDEX_TEMP.bin
-    //  Atomic rename: TEMP → HNSW_INDEX.bin (crash-safe!)
-    //  Copy .bin → HNSW_INDEX.replica (exact snapshot for backups!)
-
     let temp_filename = database_path.join("HNSW_INDEX_TEMP.bin");
     let current_filename = database_path.join("HNSW_INDEX.bin");
     let replica_filename = database_path.join("HNSW_INDEX.replica");
@@ -345,7 +359,7 @@ pub async fn embed_run(
         .await
         .with_context(|| "Failed to write index to temp file")?;
 
-    // Atomic rename (crash-safe!)
+    // Atomic rename
     tokio::fs::rename(&temp_filename, &current_filename)
         .await
         .with_context(|| "Failed to rename temp index to current")?;

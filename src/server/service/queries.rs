@@ -1,5 +1,5 @@
 #[allow(unused)]
-use crate::core::{HNSW, Metrics, NodeId, SERVER_FILE};
+use crate::core::{HNSW, Metrics, NodeIndex, SERVER_FILE};
 #[allow(unused)]
 use crate::prelude::Provider;
 use crate::server::controller::{ErrorTypes, INDEX_CACHE, LOADING_LOCKS};
@@ -86,7 +86,7 @@ pub async fn query_vector(
 
                 let start_time = std::time::Instant::now();
 
-                let result: Vec<(NodeId, f32, &str)> = if dimensions * node_count
+                let result: Vec<(String, f32, String)> = if dimensions * node_count
                     <= BRUTE_SEARCH_THRESHOLD
                 {
                     info!(
@@ -99,7 +99,12 @@ pub async fn query_vector(
                         request.top_k,
                     )
                 } else {
-                    HNSW::search_with_metadata(&hnsw_index.hnsw_store, vector_query, request.top_k)
+                    HNSW::search_with_metadata(
+                        &hnsw_index.hnsw_store,
+                        vector_query,
+                        request.top_k,
+                        None,
+                    )
                 };
 
                 let duration_sec = start_time.elapsed().as_secs_f64();
@@ -113,9 +118,11 @@ pub async fn query_vector(
                     .into_iter()
                     .map(|r| VectorQueryResult {
                         vectordata: VectorDataDto {
-                            embedding: HNSW::get_vector_by_id(&hnsw_index.hnsw_store, r.0)
+                            id: r.0.clone(),
+                            embedding: HNSW::get_node_by_id(&hnsw_index.hnsw_store, &*r.0)
                                 .unwrap()
-                                .clone(), // Just pray here for the unwrap, since the ID should exist in the store
+                                .vector
+                                .clone(), // Just pray here for to unwrap, since the ID should exist in the store
                             metadata: r.2.to_string(),
                         },
                         score: r.1,
@@ -204,8 +211,12 @@ pub async fn query_vector(
                 );
 
                 let start_time = std::time::Instant::now();
-                let result: Vec<(NodeId, f32, &str)> =
-                    HNSW::search_with_metadata(&hnsw_index.hnsw_store, vector_query, request.top_k);
+                let result: Vec<(String, f32, String)> = HNSW::search_with_metadata(
+                    &hnsw_index.hnsw_store,
+                    vector_query,
+                    request.top_k,
+                    None,
+                );
                 let duration_sec = start_time.elapsed().as_secs_f64();
                 info!(
                     "Search complete in {}s, found {} results",
@@ -217,9 +228,11 @@ pub async fn query_vector(
                     .into_iter()
                     .map(|r| VectorQueryResult {
                         vectordata: VectorDataDto {
-                            embedding: HNSW::get_vector_by_id(&hnsw_index.hnsw_store, r.0)
+                            id: r.0.clone(),
+                            embedding: HNSW::get_node_by_id(&hnsw_index.hnsw_store, &*r.0)
                                 .unwrap()
-                                .clone(), // Just pray here for the unwrap, since the ID should exist in the store
+                                .vector
+                                .clone(), // Just pray here for to unwrap, since the ID should exist in the store
                             metadata: r.2.to_string(),
                         },
                         score: r.1,
@@ -297,8 +310,8 @@ pub async fn query_vector(
     );
 
     let start_time = std::time::Instant::now();
-    let result: Vec<(NodeId, f32, &str)> =
-        HNSW::search_with_metadata(&hnsw_index.hnsw_store, vector_query, request.top_k);
+    let result: Vec<(String, f32, String)> =
+        HNSW::search_with_metadata(&hnsw_index.hnsw_store, vector_query, request.top_k, None);
     let duration_sec = start_time.elapsed().as_secs_f64();
     info!(
         "Search complete in {}s, found {} results",
@@ -311,9 +324,11 @@ pub async fn query_vector(
         .into_iter()
         .map(|r| VectorQueryResult {
             vectordata: VectorDataDto {
-                embedding: HNSW::get_vector_by_id(&hnsw_index.hnsw_store, r.0)
+                id: r.0.clone(),
+                embedding: HNSW::get_node_by_id(&hnsw_index.hnsw_store, &*r.0)
                     .unwrap()
-                    .clone(), // Just pray here for the unwrap, since the ID should exist in the store
+                    .vector
+                    .clone(), // Just pray here for to unwrap, since the ID should exist in the store
                 metadata: r.2.to_string(),
             },
             score: r.1,
@@ -411,10 +426,11 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 );
 
                 let start_time = std::time::Instant::now();
-                let result: Vec<(NodeId, f32, &str)> = HNSW::search_with_metadata(
+                let result: Vec<(String, f32, String)> = HNSW::search_with_metadata(
                     &hnsw_index.hnsw_store,
                     &query_vector,
                     request.top_k,
+                    None,
                 );
                 let duration_sec = start_time.elapsed().as_secs_f64();
                 info!(
@@ -426,6 +442,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 let result_map = result
                     .into_iter()
                     .map(|r| QueryResult {
+                        id: r.0,
                         chunk: r.2.to_string(),
                         score: r.1,
                     })
@@ -514,10 +531,11 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 );
 
                 let start_time = std::time::Instant::now();
-                let result: Vec<(NodeId, f32, &str)> = HNSW::search_with_metadata(
+                let result: Vec<(String, f32, String)> = HNSW::search_with_metadata(
                     &hnsw_index.hnsw_store,
                     &query_vector,
                     request.top_k,
+                    None,
                 );
                 let duration_sec = start_time.elapsed().as_secs_f64();
                 info!(
@@ -529,6 +547,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 let result_map = result
                     .into_iter()
                     .map(|r| QueryResult {
+                        id: r.0,
                         chunk: r.2.to_string(),
                         score: r.1,
                     })
@@ -613,8 +632,8 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     );
 
     let start_time = std::time::Instant::now();
-    let result: Vec<(NodeId, f32, &str)> =
-        HNSW::search_with_metadata(&hnsw_index.hnsw_store, &query_vector, request.top_k);
+    let result: Vec<(String, f32, String)> =
+        HNSW::search_with_metadata(&hnsw_index.hnsw_store, &query_vector, request.top_k, None);
     let duration_sec = start_time.elapsed().as_secs_f64();
     info!(
         "Search complete in {}s , found {} results",
@@ -626,6 +645,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     let result_map = result
         .into_iter()
         .map(|r| QueryResult {
+            id: r.0,
             chunk: r.2.to_string(),
             score: r.1,
         })

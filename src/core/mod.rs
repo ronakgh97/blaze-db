@@ -8,5 +8,5 @@ pub use config::{
     get_default_backups_dir, get_source_path, list_sources, save_config,
 };
 pub use data::{Source, VectorBase};
-pub use hnsw::{HNSW, Node, NodeId};
+pub use hnsw::{HNSW, Node, NodeIndex};
 pub use search::{Metrics, cosine_similarity, dot_product, euclidean_similarity};

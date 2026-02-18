@@ -55,10 +55,17 @@ pub struct ListResponse {
 /// Request DTO for embedding data
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EmbedRequest {
-    pub batch_content: Vec<Vec<String>>,
+    pub batch_content: Vec<Vec<EmbedData>>,
     pub database: String,
     pub source: String,
     pub batch: usize,
+}
+
+/// DTO for individual data to be embedded with id
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EmbedData {
+    pub id: String,
+    pub embed_data: String,
 }
 
 /// Response DTO for embedding data
@@ -86,6 +93,7 @@ pub struct QueryResponse {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct QueryResult {
+    pub id: String,
     pub chunk: String,
     pub score: f32,
 }
@@ -106,6 +114,7 @@ pub struct InsertResponse {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct VectorDataDto {
+    pub id: String,
     pub embedding: Vec<f32>,
     pub metadata: String,
 }

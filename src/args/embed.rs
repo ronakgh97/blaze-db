@@ -1,8 +1,9 @@
 use crate::core::UserConfig;
 use crate::prelude::Ingestor;
-use crate::server::{EmbedRequest, EmbedResponse};
+use crate::server::{EmbedData, EmbedRequest, EmbedResponse};
 use anyhow::Result;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 pub async fn embed_run(
     file_path: PathBuf,
@@ -19,6 +20,19 @@ pub async fn embed_run(
     let ingest = Ingestor::new(&file_path, batch);
 
     let content = ingest.read_chunks(150, 50)?;
+
+    let content: Vec<Vec<EmbedData>> = content
+        .into_iter()
+        .map(|batch| {
+            batch
+                .into_iter()
+                .map(|item| EmbedData {
+                    id: Uuid::new_v4().to_string(),
+                    embed_data: item,
+                })
+                .collect()
+        })
+        .collect();
 
     let total_chunks: usize = content.iter().map(|b| b.len()).sum();
 
