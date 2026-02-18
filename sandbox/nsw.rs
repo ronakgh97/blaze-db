@@ -1,7 +1,7 @@
 mod utils;
 
-use crate::utils::cosine_similarity;
 use crate::utils::generate_random_vectors;
+use blaze_db::core::cosine_similarity;
 #[allow(unused)]
 use blaze_db::prelude::{EmbeddingStore, Provider};
 #[allow(unused)]

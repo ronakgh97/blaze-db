@@ -1,7 +1,7 @@
 #[allow(unused)]
 use blaze_db::prelude::{EmbeddingStore, VectorData};
 use rand::RngExt;
-use wide::f32x8;
+use std::path::PathBuf;
 
 /// Generates a random vector of given dimension with values in range [-1.0, 1.0]
 /// Still bad for cosine similarity, but okay for demo purposes
@@ -18,54 +18,20 @@ pub fn generate_random_vectors(num_vectors: usize, dimensions: usize) -> Vec<Vec
         .collect()
 }
 
-/// Cosine similarity using 8-wide f32 vectors
-/// Higher the value, more similar the vectors are
-/// Cos theta decrease as angle increases from 0 to pi, so does vector similarity as they diverge
-/// Returns value in [-1, 1]
-#[inline]
-pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(
-        a.len(),
-        b.len(),
-        "What?! Vectors must be the same length, Imma panic!"
-    );
+#[allow(unused)]
+pub async fn load_index_from_example() -> anyhow::Result<EmbeddingStore> {
+    let index_path = PathBuf::from("/examples/amazon_index/amazon_index.bin");
+    let index = EmbeddingStore::load_index_file(&index_path).await;
 
-    let chunks = a.len() / 8;
-    let mut dot = f32x8::ZERO;
-    let mut norm_a = f32x8::ZERO;
-    let mut norm_b = f32x8::ZERO;
-
-    // Process 8 elements at a time with SIMD
-    for i in 0..chunks {
-        let offset = i * 8;
-        let va = f32x8::from(&a[offset..offset + 8]);
-        let vb = f32x8::from(&b[offset..offset + 8]);
-        dot += va * vb;
-        norm_a += va * va;
-        norm_b += vb * vb;
-    }
-
-    // Reduce SIMD vectors to scalars
-    let arr_dot = dot.to_array();
-    let arr_na = norm_a.to_array();
-    let arr_nb = norm_b.to_array();
-
-    let mut dot_sum: f32 = arr_dot.iter().sum();
-    let mut na_sum: f32 = arr_na.iter().sum();
-    let mut nb_sum: f32 = arr_nb.iter().sum();
-
-    // Handle remaining elements (tail)
-    let remainder_start = chunks * 8;
-    for i in remainder_start..a.len() {
-        dot_sum += a[i] * b[i];
-        na_sum += a[i] * a[i];
-        nb_sum += b[i] * b[i];
-    }
-
-    let denominator = (na_sum * nb_sum).sqrt();
-    if denominator < f32::EPSILON {
-        0.0
-    } else {
-        dot_sum / denominator
+    match index {
+        Ok(index) => Ok(index),
+        Err(e) => {
+            eprintln!(
+                "Failed to load index from {}.\n Error: {}",
+                index_path.display(),
+                e
+            );
+            anyhow::bail!("Failed to load index");
+        }
     }
 }
