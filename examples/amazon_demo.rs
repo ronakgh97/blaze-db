@@ -3,6 +3,7 @@ use blaze_db::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 #[allow(unused)]
 const BATCH_SIZE: usize = 4096;
@@ -46,8 +47,9 @@ async fn main() -> Result<()> {
         .take(nodes_to_index as usize)
         .zip(vector_data.chunk.iter())
     {
+        let random_id = Uuid::new_v4().to_string();
         let random_level = hnsw.get_random_level();
-        hnsw.insert(embedding, metadata.to_string(), random_level);
+        hnsw.insert(random_id, embedding, metadata.to_string(), random_level)?;
         progress_bar.inc(1);
     }
 
@@ -172,9 +174,10 @@ async fn bench_search() -> Result<()> {
 
     let top_k = 100;
     let start_time = std::time::Instant::now();
-    let search_results = embedding_store
-        .hnsw_store
-        .search_with_metadata(&query_embedding.embedding[0], top_k);
+    let search_results =
+        embedding_store
+            .hnsw_store
+            .search_with_metadata(&query_embedding.embedding[0], top_k, None);
     let duration = start_time.elapsed();
 
     let start_brute = std::time::Instant::now();

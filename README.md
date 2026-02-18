@@ -19,6 +19,7 @@ embeddings using HNSW Indexing.
 - Crash safe write operations with temporary files and atomic renaming. (COW style 🐄)
 - Backup and restore functionality for databases and sources. (Few caveats, need improvement, but ready for happy path)
 - Bench ARG `blzdb bench` to CLI for quick benchmarking on Concurrent Write/Reads workload with Isolated environment.
+- Lazy deletion with tombstone nodes and background reindexing job for low disk space usage. (Needs improvement, but works for now)
 
 ## Quick Links
 
@@ -326,11 +327,11 @@ test stress_test_concurrent_writes_different_databases ... ok
 - So many Locks and IO everywhere, need a serious fix, no jokes. `Someone help me pls. 😭`
 - Server logs are mess, current using my custom macros, need proper monitoring solution. `HELP`
 - Cloud deployment options. `What is cloud thingy?`
-- Missing Database ops endpoints are missing!!!
-- Configurable distance metrics and search parameters. `PARTIALLY DONE`
-- Tombstone deletion and Background reindexing for better performance. `IN PROGRESS`
+- Missing Database ops endpoints are missing!!! `IN PROGRESS`
+- Configurable distance metrics and search parameters. `PARTIALLY DONE, HNSW/search config is still hardcoded, but API supports it.`
+- Tombstone deletion and Background reindexing for better performance. `DONE, but so many room for improvement`
 - Add embedded Embeddings model, no more API shit `NEED_HELP`
-- Add Backup Mechanism, Background Jobs? API Endpoint? or something else
+- Add Backup Mechanism, Background Jobs? API Endpoint? or something else `DONE, but have rare edge case, but still`
 
 ## References
 

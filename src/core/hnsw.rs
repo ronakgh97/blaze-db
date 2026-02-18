@@ -70,14 +70,14 @@ impl HNSW {
         metrics: &Option<Metrics>,
     ) -> Self {
         HNSW {
-            nodes: Vec::with_capacity(100_000),
+            nodes: Vec::with_capacity(128_000),
             entry_point: None,
             max_layers,
             max_neighbors,
             ef_construction,
             distribution_bias,        // Currently unused
             metrics: metrics.clone(), // Currently unused, default to cosine
-            id_mapper: HashMap::with_capacity(100_000),
+            id_mapper: HashMap::with_capacity(128_000),
         }
     }
 
@@ -145,14 +145,12 @@ impl HNSW {
         // Register the external -> internal mapping
         self.id_mapper.insert(vector_id, node_id);
 
-        // If this is the first node, set it as entry point
         if self.entry_point.is_none() {
             self.nodes.push(node);
             self.entry_point = Some(node_id);
             return Ok(node_id);
         }
 
-        // Store the new node's vector for distance calculations
         let new_vector = node.vector.clone();
         self.nodes.push(node);
 
@@ -178,14 +176,12 @@ impl HNSW {
                 .take(self.max_neighbors)
                 .collect();
 
-            // Connect new node to its neighbors (bidirectional)
+            // Connect new node to its neighbors (bidirectional!!)
             for &neighbor_id in &selected {
                 // Only connect if neighbor exists at this layer
                 if layer <= self.nodes[neighbor_id].max_level {
-                    // Add neighbor to new node's list
                     self.nodes[node_id].neighbors[layer].push(neighbor_id);
 
-                    // Add new node to neighbor's list
                     self.nodes[neighbor_id].neighbors[layer].push(node_id);
 
                     // Prune neighbor's connections if it has too many
@@ -201,7 +197,6 @@ impl HNSW {
             }
         }
 
-        // Update entry point if new node has higher level
         if max_level > entry_level {
             self.entry_point = Some(node_id);
         }
@@ -256,7 +251,7 @@ impl HNSW {
     ) -> Vec<NodeIndex> {
         let mut visited = HashSet::with_capacity(self.nodes.len());
         // Working set (to explore)
-        let mut candidates = Vec::with_capacity(10000); // Preallocate
+        let mut candidates = Vec::with_capacity(12800);
         // Best found so far
         let mut results = Vec::with_capacity(candidates.capacity());
 
@@ -271,7 +266,7 @@ impl HNSW {
             if !results.is_empty() {
                 results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap()); // Higher similarity first
                 if results.len() >= ef && current_sim < results[ef - 1].1 {
-                    continue; // Skip this candidate
+                    continue;
                 }
             }
 
@@ -305,7 +300,7 @@ impl HNSW {
                 }
             }
 
-            // TODO: Use binary heap here 
+            // TODO: Use binary heap here
             // Sort candidates by similarity (highest first) for next iteration
             candidates.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap()); // Lowest for pop()
         }
@@ -406,7 +401,7 @@ impl HNSW {
             }
 
             // Not enough active results, expand search
-            // TODO: This factor must be a configurable
+            // TODO: This factor should be a configurable
             current_ef = (current_ef as f32 * 1.5) as usize;
             current_ef = current_ef.min(max_ef);
         }
@@ -595,7 +590,6 @@ impl HNSW {
             return Ok(()); // We are good, no need to reindex
         }
 
-        // Create mapping from old IDs to new IDs
         let mut old_to_new: HashMap<NodeIndex, NodeIndex> = HashMap::new();
         let mut new_nodes: Vec<Node> = Vec::with_capacity(self.active_count());
 
@@ -609,7 +603,6 @@ impl HNSW {
                 let new_id = new_nodes.len();
                 old_to_new.insert(old_id, new_id);
 
-                // Update external ID mapping
                 new_id_mapper.insert(node.node_id.clone(), new_id);
 
                 // Create new node without neighbors (rebuild them later)
@@ -675,14 +668,17 @@ impl HNSW {
     }
 }
 
-/// Unique identifier for a node in the HNSW graph.
+/// Internal identifier for a node in the HNSW graph. (Changes during reindexing, not exposed to outside)
 pub type NodeIndex = usize;
+
+/// Unique identifier for a node. (Stable across reindexing)
+pub type NodeID = String;
 
 #[derive(Serialize, Deserialize, Debug, Clone, SchemaWrite, SchemaRead)]
 /// Represents a node in the HNSW graph.
 pub struct Node {
     /// External identifier - stable across reindexing
-    pub node_id: String,
+    pub node_id: NodeID,
     /// Metadata associated with the node
     pub metadata: String, // String for now, I guess? TODO: make generic or JSON VALUE?
     /// Vector representation of the node, any dimensionality
