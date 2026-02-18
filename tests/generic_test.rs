@@ -4,6 +4,7 @@ use blaze_db::prelude::{
     VectorQueryResponse,
 };
 use rand::RngExt;
+use uuid::Uuid;
 
 #[ignore]
 #[tokio::test]
@@ -59,6 +60,7 @@ async fn a_very_generic_simple_test() -> Result<()> {
     let nodes: Vec<VectorDataDto> = generate_random_vectors(nodes_num, dimensions, 333333)
         .into_iter()
         .map(|embedding| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: "test_metadata".to_string(),
         })
@@ -126,6 +128,7 @@ async fn a_very_generic_simple_test() -> Result<()> {
     let nodes: Vec<VectorDataDto> = generate_random_vectors(nodes_num, dimensions, 232323)
         .into_iter()
         .map(|embedding| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: "test_metadata".to_string(),
         })

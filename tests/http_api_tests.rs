@@ -4,12 +4,12 @@
 
 use blaze_db::prelude::{
     CreateDatabaseRequest, CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse,
-    EmbedRequest, EmbedResponse, InsertRequest, InsertResponse, ListResponse, QueryRequest,
-    VectorDataDto,
+    EmbedData, EmbedRequest, EmbedResponse, InsertRequest, InsertResponse, ListResponse,
+    QueryRequest, VectorDataDto,
 };
 use reqwest::Client;
 use std::time::Duration;
-
+use uuid::Uuid;
 // These tests are required you to delete or backup, the local blaze storage
 
 // Test server configuration
@@ -398,6 +398,7 @@ async fn test_insert_empty_database() {
     let client = create_client();
     let request = InsertRequest {
         nodes: vec![vec![VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding: vec![1.0, 2.0, 3.0],
             metadata: "test".to_string(),
         }]],
@@ -424,6 +425,7 @@ async fn test_insert_empty_embedding() {
     let client = create_client();
     let request = InsertRequest {
         nodes: vec![vec![VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding: vec![], // Invalid: empty
             metadata: "test".to_string(),
         }]],
@@ -477,7 +479,10 @@ async fn test_embed_empty_database() {
 
     let client = create_client();
     let request = EmbedRequest {
-        batch_content: vec![vec!["chunk1".to_string()]],
+        batch_content: vec![vec![EmbedData {
+            id: Uuid::new_v4().to_string(),
+            embed_data: "test data".to_string(),
+        }]],
         database: "".to_string(), // Invalid: empty
         source: "test_src".to_string(),
         batch: 10,
@@ -502,7 +507,10 @@ async fn test_embed_empty_batch_in_content() {
     let client = create_client();
     let request = EmbedRequest {
         batch_content: vec![
-            vec!["chunk1".to_string()],
+            vec![EmbedData {
+                id: Uuid::new_v4().to_string(),
+                embed_data: "test data".to_string(),
+            }],
             vec![], // Invalid: empty batch
         ],
         database: "test_db".to_string(),
@@ -651,6 +659,7 @@ async fn test_large_payload() {
     // Create large batch of vectors
     let large_vectors: Vec<VectorDataDto> = (0..100)
         .map(|i| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding: vec![i as f32; 1024],
             metadata: format!("vector_{}", i),
         })

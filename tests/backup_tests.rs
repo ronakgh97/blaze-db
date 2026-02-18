@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::Barrier;
+use uuid::Uuid;
 
 const BASE_URL: &str = "http://localhost:8080";
 const HEALTH_ENDPOINT: &str = "/v1/blazedb/health";
@@ -107,6 +108,7 @@ async fn test_backup_restore_full_workflow() {
         .into_iter()
         .enumerate()
         .map(|(i, embedding)| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: format!("initial_vector_{}", i),
         })
@@ -162,6 +164,7 @@ async fn test_backup_restore_full_workflow() {
         .into_iter()
         .enumerate()
         .map(|(i, embedding)| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: format!("additional_vector_{}", i),
         })
@@ -355,6 +358,7 @@ async fn test_backup_restore_full_workflow_concurrent() {
                         .into_iter()
                         .enumerate()
                         .map(|(i, embedding)| VectorDataDto {
+                            id: Uuid::new_v4().to_string(),
                             embedding,
                             metadata: format!("user{}_initial_{}", user_id, i),
                         })
@@ -409,6 +413,7 @@ async fn test_backup_restore_full_workflow_concurrent() {
                         .into_iter()
                         .enumerate()
                         .map(|(i, embedding)| VectorDataDto {
+                            id: Uuid::new_v4().to_string(),
                             embedding,
                             metadata: format!("user{}_additional_{}", user_id, i),
                         })
@@ -582,6 +587,7 @@ async fn test_backup_restore_workflow_concurrent_shared_db() {
         .into_iter()
         .enumerate()
         .map(|(i, embedding)| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: format!("initial_{}", i),
         })
@@ -633,6 +639,7 @@ async fn test_backup_restore_workflow_concurrent_shared_db() {
                 .into_iter()
                 .enumerate()
                 .map(|(i, embedding)| VectorDataDto {
+                    id: Uuid::new_v4().to_string(),
                     embedding,
                     metadata: format!("user{}_{}", user_id, i),
                 })
@@ -845,6 +852,7 @@ async fn test_concurrent_backup_conflict() {
     let vectors: Vec<VectorDataDto> = generate_random_vectors(5000, 1024)
         .into_iter()
         .map(|embedding| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: "test".to_string(),
         })
@@ -981,6 +989,7 @@ async fn test_backup_retention_policy() {
     let vectors: Vec<VectorDataDto> = generate_random_vectors(5000, 1024)
         .into_iter()
         .map(|embedding| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: "test".to_string(),
         })
@@ -1248,6 +1257,7 @@ async fn test_backup_compression_ratio() {
     let vectors: Vec<VectorDataDto> = generate_random_vectors(10000, 1024)
         .into_iter()
         .map(|embedding| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: "compression_test".to_string(),
         })
@@ -1379,6 +1389,7 @@ async fn stress_test_concurrent_backups_same_database() {
     let vectors: Vec<VectorDataDto> = generate_random_vectors(5000, 1024)
         .into_iter()
         .map(|embedding| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: "stress_test".to_string(),
         })
@@ -1553,6 +1564,7 @@ async fn stress_test_concurrent_backups_different_databases() {
         let vectors: Vec<VectorDataDto> = generate_random_vectors(1000, 1024)
             .into_iter()
             .map(|embedding| VectorDataDto {
+                id: Uuid::new_v4().to_string(),
                 embedding,
                 metadata: format!("db_{}_vector", i),
             })
@@ -1714,6 +1726,7 @@ async fn stress_test_mixed_write_backup_workload() {
     let vectors: Vec<VectorDataDto> = generate_random_vectors(1000, 1024)
         .into_iter()
         .map(|embedding| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding,
             metadata: "initial".to_string(),
         })
@@ -1765,6 +1778,7 @@ async fn stress_test_mixed_write_backup_workload() {
                 let vectors: Vec<VectorDataDto> = generate_random_vectors(100, 1024)
                     .into_iter()
                     .map(|embedding| VectorDataDto {
+                        id: Uuid::new_v4().to_string(),
                         embedding,
                         metadata: format!("writer_{}_batch_{}", i, j),
                     })

@@ -3,6 +3,7 @@ use blaze_db::prelude::{EmbeddingStore, HNSW, Ingestor};
 use std::fs::File;
 use std::io::Write;
 use tempfile::tempdir;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn test_ingest_to_storage_pipeline() {
@@ -26,8 +27,11 @@ async fn test_ingest_to_storage_pipeline() {
     let vector1 = vec![1.0, 2.0, 3.0];
     let vector2 = vec![4.0, 5.0, 6.0];
 
-    hnsw.insert(&*vector1, "null".to_string(), 0);
-    hnsw.insert(&*vector2, "null".to_string(), 0);
+    let random_id1 = Uuid::new_v4().to_string();
+    let random_id2 = Uuid::new_v4().to_string();
+
+    let _ = hnsw.insert(random_id1, &*vector1, "null".to_string(), 0);
+    let _ = hnsw.insert(random_id2, &*vector2, "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -70,14 +74,26 @@ async fn test_multiple_batch_processing() {
     // Create cumulative HNSW index for first batch (8 vectors)
     let mut hnsw1 = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     for i in 0..8 {
-        hnsw1.insert(&*vec![i as f32, (i + 1) as f32], "null".to_string(), 0);
+        let random_id = Uuid::new_v4().to_string();
+        let _ = hnsw1.insert(
+            random_id,
+            &*vec![i as f32, (i + 1) as f32],
+            "null".to_string(),
+            0,
+        );
     }
     let mut store1 = EmbeddingStore::new(hnsw1.clone());
 
     // Create cumulative HNSW index for second batch (8 + 2 = 10 vectors)
     let mut hnsw2 = hnsw1.clone();
     for i in 8..10 {
-        hnsw2.insert(&*vec![i as f32, (i + 1) as f32], "null".to_string(), 0);
+        let random_id = Uuid::new_v4().to_string();
+        let _ = hnsw2.insert(
+            random_id,
+            &*vec![i as f32, (i + 1) as f32],
+            "null".to_string(),
+            0,
+        );
     }
     let mut store2 = EmbeddingStore::new(hnsw2);
 
@@ -129,9 +145,12 @@ async fn test_unicode_text_processing() {
 
     // Create HNSW index with test vectors
     let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
-    hnsw.insert(&*vec![1.0, 2.0], "null".to_string(), 0);
-    hnsw.insert(&*vec![3.0, 4.0], "null".to_string(), 0);
-    hnsw.insert(&*vec![5.0, 6.0], "null".to_string(), 0);
+    let random_id1 = Uuid::new_v4().to_string();
+    let random_id2 = Uuid::new_v4().to_string();
+    let random_id3 = Uuid::new_v4().to_string();
+    let _ = hnsw.insert(random_id1, &*vec![1.0, 2.0], "null".to_string(), 0);
+    let _ = hnsw.insert(random_id2, &*vec![3.0, 4.0], "null".to_string(), 0);
+    let _ = hnsw.insert(random_id3, &*vec![5.0, 6.0], "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -166,7 +185,8 @@ async fn test_large_embedding_dimensions() {
     let embedding_vector = (0..1536).map(|i| i as f32 * 0.01).collect::<Vec<f32>>();
 
     let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
-    hnsw.insert(&*embedding_vector, "null".to_string(), 0);
+    let random_id = Uuid::new_v4().to_string();
+    let _ = hnsw.insert(random_id, &*embedding_vector, "null".to_string(), 0);
 
     assert_eq!(hnsw.nodes.len(), 1);
     assert_eq!(hnsw.nodes[0].vector.len(), 1536);

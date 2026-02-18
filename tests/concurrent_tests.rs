@@ -29,7 +29,8 @@ async fn test_concurrent_writes_different_databases() {
                 let vector: Vec<f32> = (0..1024).map(|x| (x + i) as f32 / 1000.0).collect();
                 let metadata = format!("db_{}_vector_{}", db_idx, i);
                 let level = hnsw.get_random_level();
-                hnsw.insert(&*vector, metadata, level);
+                let random_id = uuid::Uuid::new_v4().to_string();
+                let _ = hnsw.insert(random_id, &*vector, metadata, level);
             }
 
             // Save to disk
@@ -119,7 +120,8 @@ async fn test_concurrent_writes_same_database() {
                     .collect();
                 let metadata = format!("writer_{}_vector_{}", writer_idx, i);
                 let level = hnsw.get_random_level();
-                hnsw.insert(&*vector, metadata, level);
+                let random_id = uuid::Uuid::new_v4().to_string();
+                let _ = hnsw.insert(random_id, &*vector, metadata, level);
             }
 
             // Save to disk
@@ -185,7 +187,8 @@ async fn test_concurrent_reads_with_write() {
         let vector: Vec<f32> = (0..1024).map(|x| (x + i) as f32 / 1000.0).collect();
         let metadata = format!("initial_vector_{}", i);
         let level = hnsw.get_random_level();
-        hnsw.insert(&*vector, metadata, level);
+        let random_id = uuid::Uuid::new_v4().to_string();
+        let _ = hnsw.insert(random_id, &*vector, metadata, level);
     }
 
     let index_path = db_path.join("HNSW_INDEX_1");
@@ -244,20 +247,20 @@ async fn test_concurrent_reads_with_write() {
         // Small delay to let readers start
         tokio::time::sleep(Duration::from_millis(5)).await;
 
-        // Try to acquire write lock (should wait for readers to finish)
         let _write_guard = db_lock_writer.write().await;
         let write_start = Instant::now();
 
-        // Load and modify index
         let index_file = db_path_writer.join("HNSW_INDEX_1.bin");
         let mut store = EmbeddingStore::load_index_file(&index_file).await.unwrap();
 
-        // Add new vectors
         for i in 100..120 {
             let vector: Vec<f32> = (0..1024).map(|x| (x + i) as f32 / 1000.0).collect();
             let metadata = format!("new_vector_{}", i);
             let level = store.hnsw_store.get_random_level();
-            store.hnsw_store.insert(&*vector, metadata, level);
+            let random_id = uuid::Uuid::new_v4().to_string();
+            let _ = store
+                .hnsw_store
+                .insert(random_id, &*vector, metadata, level);
         }
 
         // Save
@@ -348,7 +351,8 @@ async fn test_cumulative_writes() {
                 .collect();
             let metadata = format!("batch_{}_vector_{}", batch_idx, i);
             let level = hnsw.get_random_level();
-            hnsw.insert(&*vector, metadata, level);
+            let random_id = uuid::Uuid::new_v4().to_string();
+            let _ = hnsw.insert(random_id, &*vector, metadata, level);
         }
 
         // Save with incremented index

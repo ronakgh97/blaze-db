@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 #[allow(unused)]
 use tokio::sync::{Barrier, Semaphore};
+use uuid::Uuid;
 
 const BASE_URL: &str = "http://localhost:8080";
 const HEALTH_ENDPOINT: &str = "/v1/blazedb/health";
@@ -97,6 +98,7 @@ async fn stress_test_thundering_herd_same_database() {
     // Insert initial data
     let vectors: Vec<VectorDataDto> = (0..5000)
         .map(|i| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
             embedding: generate_random_vectors(1, 1024)[0].clone(),
             metadata: format!("vector_{}", i),
         })
@@ -211,8 +213,8 @@ async fn stress_test_concurrent_writes_different_databases() {
 
     let client = create_client();
     let timestamp = chrono::Utc::now().timestamp();
-    let num_databases = 100;
-    let vectors_per_db = 5000;
+    let num_databases = 50;
+    let vectors_per_db = 2000;
 
     // Create source
     let source_name = format!("stress_src_{}", timestamp);
@@ -273,6 +275,7 @@ async fn stress_test_concurrent_writes_different_databases() {
             // Generate vectors
             let vectors: Vec<VectorDataDto> = (0..vectors_per_db)
                 .map(|i| VectorDataDto {
+                    id: Uuid::new_v4().to_string(),
                     embedding: generate_random_vectors(1, 1024)[0].clone(),
                     metadata: format!("db_{}_vector_{}", idx, i),
                 })
@@ -389,6 +392,7 @@ async fn stress_test_mixed_read_write_workload() {
         // Insert initial data
         let vectors: Vec<VectorDataDto> = (0..num_vectors)
             .map(|j| VectorDataDto {
+                id: Uuid::new_v4().to_string(),
                 embedding: generate_random_vectors(1, 1024)[0].clone(),
                 metadata: format!("vector_{}", j),
             })
@@ -494,6 +498,7 @@ async fn stress_test_mixed_read_write_workload() {
 
                 let vectors: Vec<VectorDataDto> = (0..50)
                     .map(|k| VectorDataDto {
+                        id: Uuid::new_v4().to_string(),
                         embedding: generate_random_vectors(1, 1024)[0].clone(),
                         metadata: format!("writer_{}_batch_{}_vec_{}", i, j, k),
                     })

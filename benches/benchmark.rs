@@ -3,6 +3,7 @@ use blaze_db::core::hnsw::HNSW;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rand::RngExt;
 use std::hint::black_box;
+use uuid::Uuid;
 
 #[allow(unused)]
 /// Generate random vectors for benchmarking
@@ -51,7 +52,8 @@ fn bench_hnsw_construction_varying_vectors(c: &mut Criterion) {
                 let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
                 for (i, vec) in vectors.iter().enumerate() {
                     let level = hnsw.get_random_level();
-                    hnsw.insert(black_box(vec), format!("chunk_{}", i), level);
+                    let random_id = Uuid::new_v4().to_string();
+                    let _ = hnsw.insert(random_id, black_box(vec), format!("chunk_{}", i), level);
                 }
                 hnsw
             })
@@ -77,8 +79,9 @@ fn bench_hnsw_construction_varying_dimensions(c: &mut Criterion) {
             bench.iter(|| {
                 let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
                 for (i, vec) in vectors.iter().enumerate() {
+                    let random_id = Uuid::new_v4().to_string();
                     let level = hnsw.get_random_level();
-                    hnsw.insert(black_box(vec), format!("chunk_{}", i), level);
+                    let _ = hnsw.insert(random_id, black_box(vec), format!("chunk_{}", i), level);
                 }
                 hnsw
             })
@@ -104,8 +107,9 @@ fn bench_hnsw_construction_varying_m(c: &mut Criterion) {
             bench.iter(|| {
                 let mut hnsw = HNSW::new(m, 200, 5, 1.0 / (m as f32).ln(), &Some(Metrics::Cosine));
                 for (i, vec) in vectors.iter().enumerate() {
+                    let random_id = Uuid::new_v4().to_string();
                     let level = hnsw.get_random_level();
-                    hnsw.insert(black_box(vec), format!("chunk_{}", i), level);
+                    let _ = hnsw.insert(random_id, black_box(vec), format!("chunk_{}", i), level);
                 }
                 hnsw
             })
@@ -132,7 +136,8 @@ fn bench_hnsw_construction_varying_ef(c: &mut Criterion) {
                 let mut hnsw = HNSW::new(16, ef, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
                 for (i, vec) in vectors.iter().enumerate() {
                     let level = hnsw.get_random_level();
-                    hnsw.insert(black_box(vec), format!("chunk_{}", i), level);
+                    let random_id = Uuid::new_v4().to_string();
+                    let _ = hnsw.insert(random_id, black_box(vec), format!("chunk_{}", i), level);
                 }
                 hnsw
             })
@@ -150,7 +155,8 @@ fn build_hnsw_index(num_vectors: usize, dimensions: usize) -> HNSW {
 
     for (i, vec) in vectors.iter().enumerate() {
         let level = hnsw.get_random_level();
-        hnsw.insert(&vec, format!("chunk_{}", i), level);
+        let random_id = Uuid::new_v4().to_string();
+        let _ = hnsw.insert(random_id, &vec, format!("chunk_{}", i), level);
     }
 
     hnsw
@@ -171,7 +177,7 @@ fn bench_hnsw_search_varying_index_size(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(size as u64));
         group.bench_with_input(BenchmarkId::new("index_size", size), &size, |bench, _| {
-            bench.iter(|| hnsw.search(black_box(&query), black_box(k)))
+            bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
         });
     }
 
@@ -192,7 +198,7 @@ fn bench_hnsw_search_varying_k(c: &mut Criterion) {
 
     for k in k_values {
         group.bench_with_input(BenchmarkId::new("k", k), &k, |bench, &k| {
-            bench.iter(|| hnsw.search(black_box(&query), black_box(k)))
+            bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
         });
     }
 
@@ -214,7 +220,7 @@ fn bench_hnsw_search_varying_dimensions(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements((index_size * dim) as u64));
         group.bench_with_input(BenchmarkId::new("dims", dim), &dim, |bench, _| {
-            bench.iter(|| hnsw.search(black_box(&query), black_box(k)))
+            bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
         });
     }
 
@@ -234,11 +240,11 @@ fn bench_hnsw_search_with_metadata(c: &mut Criterion) {
     group.sample_size(50);
 
     group.bench_function("search_plain", |bench| {
-        bench.iter(|| hnsw.search(black_box(&query), black_box(k)))
+        bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
     });
 
     group.bench_function("search_with_metadata", |bench| {
-        bench.iter(|| hnsw.search_with_metadata(black_box(&query), black_box(k)))
+        bench.iter(|| hnsw.search_with_metadata(black_box(&query), black_box(k), None))
     });
 
     group.finish();
@@ -263,7 +269,7 @@ fn bench_hnsw_common_embedding_dimensions(c: &mut Criterion) {
         let query = generate_query_vector(dim);
 
         group.bench_with_input(BenchmarkId::new("search", name), &dim, |bench, _| {
-            bench.iter(|| hnsw.search(black_box(&query), black_box(k)))
+            bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
         });
     }
 
@@ -298,7 +304,7 @@ fn bench_hnsw_batch_queries(c: &mut Criterion) {
             |bench, _| {
                 bench.iter(|| {
                     for query in &queries {
-                        black_box(hnsw.search(black_box(query), black_box(k)));
+                        black_box(hnsw.search(black_box(query), black_box(k), None));
                     }
                 })
             },
@@ -329,7 +335,13 @@ fn bench_hnsw_incremental_insert(c: &mut Criterion) {
                     let mut hnsw = build_hnsw_index(size, dimensions);
                     for (i, vec) in new_vectors.iter().enumerate() {
                         let level = hnsw.get_random_level();
-                        hnsw.insert(black_box(vec), format!("new_chunk_{}", i), black_box(level));
+                        let random_id = Uuid::new_v4().to_string();
+                        let _ = hnsw.insert(
+                            random_id,
+                            black_box(vec),
+                            format!("new_chunk_{}", i),
+                            black_box(level),
+                        );
                     }
                     hnsw
                 })
@@ -359,7 +371,13 @@ fn bench_hnsw_single_insert_at_scale(c: &mut Criterion) {
                     || build_hnsw_index(size, dimensions),
                     |mut hnsw| {
                         let level = hnsw.get_random_level();
-                        hnsw.insert(black_box(&new_vector), "new_chunk".to_string(), level);
+                        let random_id = Uuid::new_v4().to_string();
+                        let _ = hnsw.insert(
+                            random_id,
+                            black_box(&new_vector),
+                            "new_chunk".to_string(),
+                            level,
+                        );
                         hnsw
                     },
                     criterion::BatchSize::LargeInput,
