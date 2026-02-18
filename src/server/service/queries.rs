@@ -15,6 +15,7 @@ use std::sync::Arc;
 // This is the threshold for when we consider the database "small enough" to skip the HNSW search and do a brute-force search instead.
 // This is a very rough heuristic and should be tuned based on benchmarking with real data and hardware.
 // For now, lets just do (N * D) where N is the number of vectors and D is the dimension
+// Anyway, this is still bad, cuz CPU and RAM are factors, maybe later, we can implement a usage-pattern-based smart search strategy.
 const BRUTE_SEARCH_THRESHOLD: usize = 25_000_000;
 
 pub async fn query_vector(
@@ -210,6 +211,8 @@ pub async fn query_vector(
                     request.top_k
                 );
 
+                // Don't do brute-force search, since we are loading the index
+                // We need to be fast here, no matter the accuracy on first run ;)
                 let start_time = std::time::Instant::now();
                 let result: Vec<(String, f32, String)> = HNSW::search_with_metadata(
                     &hnsw_index.hnsw_store,
@@ -309,6 +312,7 @@ pub async fn query_vector(
         request.top_k
     );
 
+    // Same here
     let start_time = std::time::Instant::now();
     let result: Vec<(String, f32, String)> =
         HNSW::search_with_metadata(&hnsw_index.hnsw_store, vector_query, request.top_k, None);
@@ -394,20 +398,21 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
             info!("Cache HIT for database '{}'", request.database);
 
             // Validate cache by comparing checksums
-            let checksum_on_disk = match read_embeddings_metadata(&db_path).await {
-                Ok(meta) => meta.checksum,
-                Err(e) => {
-                    error!(
-                        "Failed to read embeddings metadata for cache validation: {}",
-                        e
-                    );
-                    return Err(ErrorTypes::IndexNotFound(format!(
-                        "Failed to validate cache, index not found, Error: {}",
-                        e
-                    ))
-                    .into());
-                }
-            };
+            let (checksum_on_disk, dimension, vector_count) =
+                match read_embeddings_metadata(&db_path).await {
+                    Ok(meta) => (meta.checksum, meta.dimensions, meta.total_vectors),
+                    Err(e) => {
+                        error!(
+                            "Failed to read embeddings metadata for cache validation: {}",
+                            e
+                        );
+                        return Err(ErrorTypes::IndexNotFound(format!(
+                            "Failed to validate cache, index not found, Error: {}",
+                            e
+                        ))
+                        .into());
+                    }
+                };
 
             if cached.0.checksum == checksum_on_disk {
                 info!("Cache is valid for database '{}'", request.database);
@@ -426,12 +431,29 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 );
 
                 let start_time = std::time::Instant::now();
-                let result: Vec<(String, f32, String)> = HNSW::search_with_metadata(
-                    &hnsw_index.hnsw_store,
-                    &query_vector,
-                    request.top_k,
-                    None,
-                );
+
+                // Perform Brute-force search if, apply, this is fine, since its already in loaded
+                let result: Vec<(String, f32, String)> = if dimension * vector_count
+                    <= BRUTE_SEARCH_THRESHOLD
+                {
+                    info!(
+                        "Database is small ({} vectors with {} dimensions), performing brute-force search",
+                        vector_count, dimension
+                    );
+                    HNSW::brute_force_search_with_metadata(
+                        &hnsw_index.hnsw_store,
+                        query_vector,
+                        request.top_k,
+                    )
+                } else {
+                    HNSW::search_with_metadata(
+                        &hnsw_index.hnsw_store,
+                        query_vector,
+                        request.top_k,
+                        None,
+                    )
+                };
+
                 let duration_sec = start_time.elapsed().as_secs_f64();
                 info!(
                     "Search complete in {}s , found {} results",
@@ -530,6 +552,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                     request.top_k
                 );
 
+                // Same apply here for brute-force search, since we are loading the index, we want to be fast on first run, no matter the accuracy
                 let start_time = std::time::Instant::now();
                 let result: Vec<(String, f32, String)> = HNSW::search_with_metadata(
                     &hnsw_index.hnsw_store,
