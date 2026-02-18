@@ -83,7 +83,7 @@ serde_json = "1.0.149"
 anyhow = "1.0.101"
 colored = "3.1.1"
 wincode = { version = "0.4.4", features = ["derive", "std"] }
-clap = { version = "4.5.58", features = ["derive"] }
+clap = { version = "4.5.59", features = ["derive"] }
 axum = "0.8.8"
 uuid = { version = "1.21.0", features = ["v4"] }
 dirs = "6.0.0"
@@ -98,7 +98,7 @@ sysinfo = "0.38.2"
 lazy_static = "1.5.0"
 lru = "0.16.3"
 dotenv = "0.15.0"
-cliclack = "0.3.8"
+cliclack = "0.3.9"
 regex = "1.12.2"
 zstd = "0.13.3"
 tar = "0.4.44"

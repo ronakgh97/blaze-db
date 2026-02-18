@@ -41,7 +41,7 @@ RUN mkdir -p /home/blazedb/.config/blaze /home/blazedb/blaze/sources /home/blaze
 EXPOSE 8080
 
 # Set environment variables
-ENV RUST_LOG=info
+ENV RUST_LOG=debug
 ENV HOME=/home/blazedb
 #ENV PORT=8080
 #ENV EMBEDDING_MODEL=text-embedding-qwen3-embedding-0.6b
