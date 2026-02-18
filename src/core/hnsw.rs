@@ -1,12 +1,15 @@
 use crate::core::{Metrics, cosine_similarity, dot_product, euclidean_similarity};
+use anyhow::Result;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
 #[allow(unused)]
 use rayon::prelude::IntoParallelRefIterator;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use wincode::{SchemaRead, SchemaWrite};
+
+const DEFAULT_EF_MULTIPLIER: usize = 3;
 
 /// # Hierarchical Navigable Small World (HNSW)
 ///
@@ -20,7 +23,7 @@ use wincode::{SchemaRead, SchemaWrite};
 /// **Insert**: Search from top layer down, connect at each layer bidirectionally
 /// **Search**: Greedy descent through upper layers, beam search at bottom layer
 /// **Pruning**: Keep only M closest neighbors per node per layer
-/// **Tombstones (TODO)**: Mark deleted nodes and skip during search, periodic cleanup
+/// **Tombstones**: Mark deleted nodes and skip during search, periodic cleanup
 
 #[derive(Serialize, Deserialize, Debug, Clone, SchemaWrite, SchemaRead)]
 pub struct HNSW {
@@ -28,7 +31,7 @@ pub struct HNSW {
     pub nodes: Vec<Node>,
     /// First node at the top layer, used as entry point for searches
     /// Can be a random node in top layer, just use the first inserted node for now TODO: think?
-    pub entry_point: Option<NodeId>,
+    pub entry_point: Option<NodeIndex>,
     /// Total number of layers in the graph
     pub max_layers: usize,
     /// Degree of each node (max number of neighbors) per layer
@@ -42,6 +45,8 @@ pub struct HNSW {
     /// Similarity metric to use for distance calculations (default: Cosine)
     // TODO: Take Option type here
     pub metrics: Option<Metrics>,
+    /// Mapping from external ID (set by params) to internal ID (array index)
+    id_mapper: HashMap<String, NodeIndex>,
 }
 
 impl Default for HNSW {
@@ -65,13 +70,14 @@ impl HNSW {
         metrics: &Option<Metrics>,
     ) -> Self {
         HNSW {
-            nodes: Vec::with_capacity(10_000), // Preallocate for efficiency
+            nodes: Vec::with_capacity(100_000),
             entry_point: None,
             max_layers,
             max_neighbors,
             ef_construction,
-            distribution_bias, // Currently unused
-            metrics: metrics.clone(),
+            distribution_bias,        // Currently unused
+            metrics: metrics.clone(), // Currently unused, default to cosine
+            id_mapper: HashMap::with_capacity(100_000),
         }
     }
 
@@ -95,28 +101,58 @@ impl HNSW {
     /// 1. If first node, just add it as entry point
     /// 2. Otherwise, search from top layer down to find nearest neighbors
     /// 3. Connect the new node to its neighbors at each layer
-    pub fn insert(&mut self, vector: &[f32], metadata: String, max_level: usize) -> NodeId {
-        let node_id = self.nodes.len(); // TODO: Maybe use a better ID system later
+    ///
+    /// # Arguments
+    /// * `external_id` - User-provided external ID (must be unique)
+    /// * `vector` - The vector to insert
+    /// * `metadata` - Metadata associated with the node
+    /// * `max_level` - The maximum level for this node
+    ///
+    /// # Returns
+    /// * `Ok(NodeId)` - The internal ID of the inserted node
+    /// * `Err` - If the external_id already exists
+    pub fn insert(
+        &mut self,
+        vector_id: String,
+        vector: &[f32],
+        metadata: String,
+        max_level: usize,
+    ) -> Result<NodeIndex> {
+        // Check for duplicate external_id
+        if self.id_mapper.contains_key(&vector_id) {
+            return Err(anyhow::anyhow!(
+                "External ID '{}' already exists",
+                vector_id
+            ));
+        }
+
+        let node_id = self.nodes.len();
 
         // Create the node with empty neighbor lists
+        // Note: Internal ID is the array index, not stored in the node
         let node = Node {
-            id: node_id,
+            node_id: vector_id.clone(),
             metadata,
             vector: vector.to_vec(),
             neighbors: vec![
                 Vec::with_capacity(self.max_neighbors * self.max_layers);
                 max_level + 1
-            ], // Preallocate neighbor, neighbors * max_possible_level = total neighbors
+            ],
             max_level,
+            tombstone: false,
         };
+
+        // Register the external -> internal mapping
+        self.id_mapper.insert(vector_id, node_id);
 
         // If this is the first node, set it as entry point
         if self.entry_point.is_none() {
             self.nodes.push(node);
             self.entry_point = Some(node_id);
-            return node_id;
+            return Ok(node_id);
         }
 
+        // Store the new node's vector for distance calculations
         let new_vector = node.vector.clone();
         self.nodes.push(node);
 
@@ -137,16 +173,19 @@ impl HNSW {
                 self.search_layer_knn(&new_vector, current_nearest, self.ef_construction, layer);
 
             // But only connect to max_neighbors of them
-            let selected: Vec<NodeId> = candidates
+            let selected: Vec<NodeIndex> = candidates
                 .into_par_iter()
                 .take(self.max_neighbors)
                 .collect();
 
             // Connect new node to its neighbors (bidirectional)
             for &neighbor_id in &selected {
-                self.nodes[node_id].neighbors[layer].push(neighbor_id);
-
+                // Only connect if neighbor exists at this layer
                 if layer <= self.nodes[neighbor_id].max_level {
+                    // Add neighbor to new node's list
+                    self.nodes[node_id].neighbors[layer].push(neighbor_id);
+
+                    // Add new node to neighbor's list
                     self.nodes[neighbor_id].neighbors[layer].push(node_id);
 
                     // Prune neighbor's connections if it has too many
@@ -167,12 +206,12 @@ impl HNSW {
             self.entry_point = Some(node_id);
         }
 
-        node_id
+        Ok(node_id)
     }
 
     /// Greedy search: find single closest node at a layer
     /// Used for navigating upper layers quickly
-    fn search_layer_greedy(&self, query: &[f32], entry: NodeId, layer: usize) -> NodeId {
+    fn search_layer_greedy(&self, query: &[f32], entry: NodeIndex, layer: usize) -> NodeIndex {
         let mut current = entry;
         let mut current_sim =
             self.similarity(query, &self.nodes[current].vector, self.metrics.as_ref());
@@ -184,6 +223,10 @@ impl HNSW {
             // Check all neighbors at this layer
             if layer <= self.nodes[current].max_level {
                 for &neighbor_id in &self.nodes[current].neighbors[layer] {
+                    // Skip tombstoned nodes during search
+                    if self.nodes[neighbor_id].tombstone {
+                        continue;
+                    }
                     let neighbor_sim = self.similarity(
                         query,
                         &self.nodes[neighbor_id].vector,
@@ -207,10 +250,10 @@ impl HNSW {
     fn search_layer_knn(
         &self,
         query: &[f32],
-        entry: NodeId,
+        entry: NodeIndex,
         ef: usize,
         layer: usize,
-    ) -> Vec<NodeId> {
+    ) -> Vec<NodeIndex> {
         let mut visited = HashSet::with_capacity(self.nodes.len());
         // Working set (to explore)
         let mut candidates = Vec::with_capacity(10000); // Preallocate
@@ -235,6 +278,11 @@ impl HNSW {
             // Explore neighbors
             if layer <= self.nodes[current_id].max_level {
                 for &neighbor_id in &self.nodes[current_id].neighbors[layer] {
+                    // Skip tombstoned nodes during search
+                    if self.nodes[neighbor_id].tombstone {
+                        continue;
+                    }
+
                     if visited.insert(neighbor_id) {
                         let sim = self.similarity(
                             query,
@@ -257,6 +305,7 @@ impl HNSW {
                 }
             }
 
+            // TODO: Use binary heap here 
             // Sort candidates by similarity (highest first) for next iteration
             candidates.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap()); // Lowest for pop()
         }
@@ -268,16 +317,17 @@ impl HNSW {
     }
 
     /// Remove connections to keep only the M closest neighbors
-    fn prune_connections(&mut self, node_id: NodeId, layer: usize) {
+    fn prune_connections(&mut self, node_id: NodeIndex, layer: usize) {
         // Store the old neighbor list to identify which edges to remove
-        let old_neighbors: HashSet<NodeId> = self.nodes[node_id].neighbors[layer]
+        let old_neighbors: HashSet<NodeIndex> = self.nodes[node_id].neighbors[layer]
             .iter()
             .copied()
             .collect();
 
-        // Calculate similarities to all neighbors
-        let mut neighbor_sims: Vec<(NodeId, f32)> = self.nodes[node_id].neighbors[layer]
+        // Calculate similarities to all neighbors, filtering out tombstoned nodes
+        let mut neighbor_sims: Vec<(NodeIndex, f32)> = self.nodes[node_id].neighbors[layer]
             .par_iter()
+            .filter(|&&n| !self.nodes[n].tombstone) // Skip tombstoned neighbors
             .map(|&n| {
                 let sim = self.similarity(
                     &self.nodes[node_id].vector,
@@ -292,11 +342,12 @@ impl HNSW {
         neighbor_sims.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         neighbor_sims.truncate(self.max_neighbors);
 
-        let new_neighbors: Vec<NodeId> = neighbor_sims.into_par_iter().map(|(id, _)| id).collect();
-        let new_neighbors_set: HashSet<NodeId> = new_neighbors.iter().copied().collect();
+        let new_neighbors: Vec<NodeIndex> =
+            neighbor_sims.into_par_iter().map(|(id, _)| id).collect();
+        let new_neighbors_set: HashSet<NodeIndex> = new_neighbors.iter().copied().collect();
 
         // Find nodes that were removed (old - new)
-        let removed_neighbors: Vec<NodeId> = old_neighbors
+        let removed_neighbors: Vec<NodeIndex> = old_neighbors
             .difference(&new_neighbors_set)
             .copied()
             .collect();
@@ -323,13 +374,47 @@ impl HNSW {
     }
 
     /// Public search API: find K nearest neighbors to a query
-    /// Returns results as (NodeId, similarity) tuples sorted by similarity (highest first)
-    pub fn search(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32)> {
+    /// Returns results as (external_id, similarity) tuples sorted by similarity (highest first)
+    ///
+    /// # Arguments
+    /// * `query` - The query vector
+    /// * `k` - Number of nearest neighbors to return
+    /// * `ef_search` - Optional beam width for search. If None, uses k * DEFAULT_EF_MULTIPLIER
+    pub fn search(&self, query: &[f32], k: usize, ef_search: Option<usize>) -> Vec<(String, f32)> {
         if self.entry_point.is_none() {
             return Vec::new();
         }
 
-        let entry = self.entry_point.unwrap();
+        let ef = ef_search.unwrap_or(k * DEFAULT_EF_MULTIPLIER);
+        let mut current_ef = ef;
+        // TODO: Need to cap this otherwise...
+        let max_ef = self.nodes.len().max(ef);
+
+        loop {
+            let results = self.search_internal(query, k, current_ef);
+
+            // Filter out tombstoned nodes and convert to external IDs
+            let active_results: Vec<(String, f32)> = results
+                .into_par_iter()
+                .filter(|(id, _)| !self.nodes[*id].tombstone)
+                .map(|(id, sim)| (self.nodes[id].node_id.clone(), sim))
+                .collect();
+
+            // If we have enough results, or we've reached max ef, return
+            if active_results.len() >= k || current_ef >= max_ef {
+                return active_results.into_par_iter().take(k).collect();
+            }
+
+            // Not enough active results, expand search
+            // TODO: This factor must be a configurable
+            current_ef = (current_ef as f32 * 1.5) as usize;
+            current_ef = current_ef.min(max_ef);
+        }
+    }
+
+    /// Internal search method that performs the actual HNSW search
+    fn search_internal(&self, query: &[f32], k: usize, ef: usize) -> Vec<(NodeIndex, f32)> {
+        let entry = self.entry_point.expect("Entry point should exist");
         let entry_level = self.nodes[entry].max_level;
         let mut current = entry;
 
@@ -338,10 +423,11 @@ impl HNSW {
             current = self.search_layer_greedy(query, current, layer);
         }
 
-        let candidates = self.search_layer_knn(query, current, k * 2, 0);
+        // Search layer 0 thoroughly for K neighbors!!!
+        let candidates = self.search_layer_knn(query, current, ef, 0);
 
         // Return with similarities
-        let mut results: Vec<(NodeId, f32)> = candidates
+        let mut results: Vec<(NodeIndex, f32)> = candidates
             .into_par_iter()
             .map(|id| {
                 (
@@ -351,7 +437,7 @@ impl HNSW {
             })
             .collect();
 
-        results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap()); // Higher similarity first
+        results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         results.truncate(k);
 
         results
@@ -359,24 +445,38 @@ impl HNSW {
 
     #[inline]
     /// Search and return results with metadata
-    /// Returns results as (NodeId, similarity, metadata) tuples sorted by similarity (highest first)
-    pub fn search_with_metadata(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32, &str)> {
-        let results = self.search(query, k);
+    /// Returns results as (node_id, similarity, metadata) tuples sorted by similarity (highest first)
+    pub fn search_with_metadata(
+        &self,
+        query: &[f32],
+        k: usize,
+        ef_search: Option<usize>,
+    ) -> Vec<(String, f32, String)> {
+        let results = self.search(query, k, ef_search);
         results
-            .into_iter() // TODO:  parallel iterator not needed here?
-            .map(|(id, sim)| (id, sim, self.nodes[id].metadata.as_str()))
+            .into_iter()
+            .map(|(external_id, sim)| {
+                let metadata = self
+                    .id_mapper
+                    .get(&external_id)
+                    .and_then(|&id| self.nodes.get(id))
+                    .map(|node| node.metadata.clone())
+                    .unwrap_or_default();
+                (external_id, sim, metadata)
+            })
             .collect()
     }
 
     #[inline]
-    pub fn brute_force_search(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32)> {
-        let mut results: Vec<(NodeId, f32)> = self
+    /// Brute-force search for testing and validation. Returns all nodes sorted by similarity (highest first).
+    pub fn brute_force_search(&self, query: &[f32], k: usize) -> Vec<(String, f32)> {
+        let mut results: Vec<(String, f32)> = self
             .nodes
             .par_iter()
-            .enumerate()
-            .map(|(id, node)| {
+            .filter(|node| !node.tombstone) // Filter out tombstoned nodes
+            .map(|node| {
                 (
-                    id,
+                    node.node_id.clone(),
                     self.similarity(query, &node.vector, self.metrics.as_ref()),
                 )
             })
@@ -393,58 +493,218 @@ impl HNSW {
         &self,
         query: &[f32],
         k: usize,
-    ) -> Vec<(NodeId, f32, &str)> {
+    ) -> Vec<(String, f32, String)> {
         let results = self.brute_force_search(query, k);
         results
             .into_iter()
-            .map(|(id, sim)| (id, sim, self.nodes[id].metadata.as_str()))
+            .map(|(external_id, sim)| {
+                let metadata = self
+                    .get_node_by_id(&external_id)
+                    .map(|node| node.metadata.clone())
+                    .unwrap_or_default();
+                (external_id, sim, metadata)
+            })
             .collect()
     }
 
+    /// Delete a node by external ID
+    /// If the deleted node is the entry point, finds a new one
     #[inline]
-    /// Get metadata for a specific node
-    pub fn get_metadata_by_id(&self, node_id: NodeId) -> Option<&String> {
-        self.nodes.get(node_id).map(|node| &node.metadata)
+    pub fn delete_node_by_id(&mut self, external_id: &str) -> Result<()> {
+        let node_id = self
+            .id_mapper
+            .get(external_id)
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("External ID '{}' not found", external_id))?;
+
+        // Mark as tombstone
+        self.mark_tombstone(node_id)?;
+
+        // If this was the entry point, find a new one
+        if let Some(entry) = self.entry_point {
+            if entry == node_id {
+                self.set_new_entry_point();
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Get node by ID
+    #[inline]
+    pub fn get_node_by_id(&self, node_id: &str) -> Option<&Node> {
+        self.id_mapper
+            .get(node_id)
+            .and_then(|&id| self.nodes.get(id))
     }
 
     #[inline]
-    /// Get vector for a specific node
-    pub fn get_vector_by_id(&self, node_id: NodeId) -> Option<&Vec<f32>> {
-        self.nodes.get(node_id).map(|node| &node.vector)
+    /// Returns the count of active (non-tombstoned) nodes
+    pub fn active_count(&self) -> usize {
+        self.nodes.iter().filter(|node| !node.tombstone).count()
     }
 
-    //TODO: Deletion API - non-trivial in HNSW, requires careful handling of neighbors and layers
-    //TODO: Will use Tombstone markers for 'deleted nodes' and skip them during search, then periodically rebuild the graph to clean up 😌
+    #[inline]
+    /// Returns the count of tombstoned (deleted) nodes
+    pub fn tombstone_count(&self) -> usize {
+        self.nodes.iter().filter(|node| node.tombstone).count()
+    }
+
+    #[inline]
+    /// Returns the ratio of tombstoned nodes to total nodes
+    pub fn tombstone_ratio(&self) -> f32 {
+        if self.nodes.is_empty() {
+            0.0
+        } else {
+            self.tombstone_count() as f32 / self.nodes.len() as f32
+        }
+    }
+
+    #[inline]
+    /// Mark a node as a tombstone for lazy deletion. This allows us to keep the graph structure intact while ignoring "deleted" nodes during search or index.
+    fn mark_tombstone(&mut self, node_id: NodeIndex) -> Result<NodeIndex> {
+        if let Some(node) = self.nodes.get_mut(node_id) {
+            node.tombstone = true;
+            Ok(node_id)
+        } else {
+            Err(anyhow::anyhow!("Node ID {} does not exist", node_id))
+        }
+    }
+
+    /// Find and sets new entry point when the current one is deleted
+    /// Searches from max_layer down to find the highest-level active node
+    #[inline]
+    fn set_new_entry_point(&mut self) {
+        for layer in (0..self.max_layers).rev() {
+            for (id, node) in self.nodes.iter().enumerate() {
+                if node.max_level == layer && !node.tombstone {
+                    self.entry_point = Some(id);
+                    return;
+                }
+            }
+        }
+        // No active nodes found
+        self.entry_point = None;
+    }
+
+    /// Rebuilds the HNSW index by removing all tombstoned nodes
+    /// This creates a new compact index with only active nodes
+    /// Note: Node IDs will be remapped (compacted)
+    pub fn reindex(&mut self) -> Result<()> {
+        if self.tombstone_count() == 0 {
+            return Ok(()); // We are good, no need to reindex
+        }
+
+        // Create mapping from old IDs to new IDs
+        let mut old_to_new: HashMap<NodeIndex, NodeIndex> = HashMap::new();
+        let mut new_nodes: Vec<Node> = Vec::with_capacity(self.active_count());
+
+        // Create new mapping
+        let mut new_id_mapper: HashMap<String, NodeIndex> =
+            HashMap::with_capacity(self.active_count());
+
+        // First pass: copy active nodes and build ID mapping
+        for (old_id, node) in self.nodes.iter().enumerate() {
+            if !node.tombstone {
+                let new_id = new_nodes.len();
+                old_to_new.insert(old_id, new_id);
+
+                // Update external ID mapping
+                new_id_mapper.insert(node.node_id.clone(), new_id);
+
+                // Create new node without neighbors (rebuild them later)
+                let new_node = Node {
+                    node_id: node.node_id.clone(),
+                    metadata: node.metadata.clone(),
+                    vector: node.vector.clone(),
+                    neighbors: vec![Vec::new(); node.max_level + 1],
+                    max_level: node.max_level,
+                    tombstone: false,
+                };
+                new_nodes.push(new_node);
+            }
+        }
+
+        // Second pass: rebuild neighbor connections with new IDs
+        for (old_id, node) in self.nodes.iter().enumerate() {
+            if node.tombstone {
+                continue;
+            }
+
+            let new_id = *old_to_new.get(&old_id).unwrap();
+
+            for layer in 0..=node.max_level {
+                for &old_neighbor_id in &node.neighbors[layer] {
+                    // Skip if neighbor is tombstoned
+                    if self.nodes[old_neighbor_id].tombstone {
+                        continue;
+                    }
+
+                    // Map to new ID
+                    if let Some(&new_neighbor_id) = old_to_new.get(&old_neighbor_id) {
+                        new_nodes[new_id].neighbors[layer].push(new_neighbor_id);
+                    }
+                }
+            }
+        }
+
+        // Update entry point
+        if let Some(old_entry) = self.entry_point {
+            if !self.nodes[old_entry].tombstone {
+                self.entry_point = old_to_new.get(&old_entry).copied();
+            } else {
+                // Find new entry point (highest level active node)
+                self.entry_point = None;
+                for (new_id, node) in new_nodes.iter().enumerate() {
+                    if self.entry_point.is_none()
+                        || node.max_level > new_nodes[self.entry_point.unwrap()].max_level
+                    {
+                        self.entry_point = Some(new_id);
+                    }
+                }
+            }
+        }
+
+        // Replace nodes with new compact version
+        self.nodes = new_nodes;
+
+        // Update external ID mapping
+        self.id_mapper = new_id_mapper;
+
+        Ok(())
+    }
 }
 
 /// Unique identifier for a node in the HNSW graph.
-pub type NodeId = usize;
+pub type NodeIndex = usize;
 
 #[derive(Serialize, Deserialize, Debug, Clone, SchemaWrite, SchemaRead)]
 /// Represents a node in the HNSW graph.
 pub struct Node {
-    /// Unique identifier for the node
-    pub id: NodeId,
+    /// External identifier - stable across reindexing
+    pub node_id: String,
     /// Metadata associated with the node
     pub metadata: String, // String for now, I guess? TODO: make generic or JSON VALUE?
     /// Vector representation of the node, any dimensionality
     pub vector: Vec<f32>,
     /// Neighbors per layer, e.g neighbors[0] is the list of neighbors in layer 0
-    pub neighbors: Vec<Vec<NodeId>>,
+    pub neighbors: Vec<Vec<NodeIndex>>,
     /// The highest layer this node exists in
     pub max_level: usize,
+    /// Flag for lazy deletion
+    tombstone: bool,
 }
 
 impl Node {
     /// Creates a new Node with the given id, vector, metadata, and max_level.
-    #[allow(unused)]
-    pub fn new(id: NodeId, vector: Vec<f32>, metadata: String, max_level: usize) -> Self {
+    pub fn new(id: String, vector: Vec<f32>, metadata: String, max_level: usize) -> Self {
         Node {
-            id,
+            node_id: id,
             metadata,
             vector,
-            neighbors: vec![Vec::new(); max_level + 1],
+            neighbors: vec![Vec::new(); max_level + 1], // Preallocate neighbor lists
             max_level,
+            tombstone: false,
         }
     }
 }
