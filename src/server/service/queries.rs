@@ -12,6 +12,11 @@ use crate::{error, info, warn};
 use anyhow::Result;
 use std::sync::Arc;
 
+// This is the threshold for when we consider the database "small enough" to skip the HNSW search and do a brute-force search instead.
+// This is a very rough heuristic and should be tuned based on benchmarking with real data and hardware.
+// For now, lets just do (N * D) where N is the number of vectors and D is the dimension
+const BRUTE_SEARCH_THRESHOLD: usize = 25_000_000;
+
 pub async fn query_vector(
     request: VectorQueryRequest,
     _provider: &Provider,
@@ -38,7 +43,7 @@ pub async fn query_vector(
 
     let io_time_start = std::time::Instant::now();
 
-    // Fast path: Check cache with read lock (allows concurrent reads)
+    // Check cache with read lock (allows concurrent reads)
     let cache_key = format!("{}_{}", from_database, source);
 
     {
@@ -47,20 +52,21 @@ pub async fn query_vector(
             info!("Cache HIT for database '{}'", from_database);
 
             // Validate cache by comparing checksums
-            let checksum_on_disk = match read_embeddings_metadata(&db_path).await {
-                Ok(meta) => meta.checksum,
-                Err(e) => {
-                    error!(
-                        "Failed to read embeddings metadata for cache validation: {}",
-                        e
-                    );
-                    return Err(ErrorTypes::IndexNotFound(format!(
-                        "Failed to validate cache, index not found, Error: {}",
-                        e
-                    ))
-                    .into());
-                }
-            };
+            let (checksum_on_disk, dimensions, node_count) =
+                match read_embeddings_metadata(&db_path).await {
+                    Ok(meta) => (meta.checksum, meta.dimensions, meta.total_vectors),
+                    Err(e) => {
+                        error!(
+                            "Failed to read embeddings metadata for cache validation: {}",
+                            e
+                        );
+                        return Err(ErrorTypes::IndexNotFound(format!(
+                            "Failed to validate cache, index not found, Error: {}",
+                            e
+                        ))
+                        .into());
+                    }
+                };
 
             if cached.0.checksum == checksum_on_disk {
                 info!("Cache is valid for database '{}'", from_database);
@@ -79,8 +85,23 @@ pub async fn query_vector(
                 );
 
                 let start_time = std::time::Instant::now();
-                let result: Vec<(NodeId, f32, &str)> =
-                    HNSW::search_with_metadata(&hnsw_index.hnsw_store, vector_query, request.top_k);
+
+                let result: Vec<(NodeId, f32, &str)> = if dimensions * node_count
+                    <= BRUTE_SEARCH_THRESHOLD
+                {
+                    info!(
+                        "Database is small ({} vectors with {} dimensions), performing brute-force search",
+                        node_count, dimensions
+                    );
+                    HNSW::brute_force_search_with_metadata(
+                        &hnsw_index.hnsw_store,
+                        vector_query,
+                        request.top_k,
+                    )
+                } else {
+                    HNSW::search_with_metadata(&hnsw_index.hnsw_store, vector_query, request.top_k)
+                };
+
                 let duration_sec = start_time.elapsed().as_secs_f64();
                 info!(
                     "Search complete in {}s, found {} results",
@@ -343,7 +364,6 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     info!("Generating embedding for query: '{}'", query);
 
     // Generate embedding for query
-    // TODO: Maybe take vector for explicit
     let query_vector = &provider.fetch_embedding(query.as_str()).await?.embedding[0];
 
     // info!("Loading vector data from database '{}'", from_database);
@@ -440,7 +460,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
         }
     }
 
-    // Slow path: Cache miss or stale - need to load from disk
+    // Cache miss or stale - need to load from disk
     info!("Cache MISS for database '{}'", request.database);
 
     // Get per-database loading lock to prevent duplicate loads
