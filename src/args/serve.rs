@@ -8,6 +8,7 @@ use dotenv::dotenv;
 pub async fn serve_run(
     cli_port: Option<u16>,
     enable_backup: bool,
+    disable_env: bool,
     _source: Option<Vec<String>>,
 ) -> Result<Provider> {
     info!("Starting the Server...");
@@ -25,7 +26,22 @@ pub async fn serve_run(
         all_sources
     };
 
-    dotenv().ok();
+    let provider = if disable_env {
+        info!("Running in no-env mode");
+        Provider::init_mock(1024)
+    } else {
+        dotenv().ok();
+
+        let url = std::env::var("EMBEDDING_API_URL")
+            .expect("EMBEDDING_API_URL environment variable is required");
+        let model = std::env::var("EMBEDDING_MODEL")
+            .expect("EMBEDDING_MODEL environment variable is required");
+        let api_key = std::env::var("EMBEDDING_API_KEY")
+            .expect("EMBEDDING_API_KEY environment variable is required");
+
+        Provider::init(url, model, api_key)
+    };
+    info!("{:?}", Provider::pretty_display(&provider));
 
     let final_port = if let Some(p) = cli_port {
         p
@@ -36,17 +52,6 @@ pub async fn serve_run(
     } else {
         8080
     };
-
-    let url = std::env::var("EMBEDDING_API_URL")
-        .expect("EMBEDDING_API_URL environment variable is required");
-    let model =
-        std::env::var("EMBEDDING_MODEL").expect("EMBEDDING_MODEL environment variable is required");
-    let api_key = std::env::var("EMBEDDING_API_KEY")
-        .expect("EMBEDDING_API_KEY environment variable is required");
-
-    // Init provider at the start of the server
-    let provider = Provider::init(url, model, api_key);
-    info!("{:?}", Provider::pretty_display(&provider));
 
     // Validate all sources before starting server
     let mut valid_sources = Vec::new();

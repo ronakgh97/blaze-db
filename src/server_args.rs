@@ -30,6 +30,11 @@ pub enum ServerCommands {
         #[arg(short, long)]
         backup: bool,
 
+        /// Disable loading environment variables from .env file on server startup
+        /// (Good for benchmarking or dry run test)
+        #[arg(short, long)]
+        no_env: bool,
+
         /// Use specified source path or use all [sources] if not provided, during server startup
         #[arg(short, long)]
         source: Option<Vec<String>>, //TODO: Will use this later...

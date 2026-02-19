@@ -13,9 +13,10 @@ async fn main() -> Result<()> {
         Some(ServerCommands::Serve {
             port,
             backup,
+            no_env,
             source,
         }) => {
-            serve_run(port, backup, source).await?;
+            serve_run(port, backup, no_env, source).await?;
         }
         Some(ServerCommands::Bench { .. }) => {
             bench_run().await?;
