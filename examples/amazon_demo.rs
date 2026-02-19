@@ -169,7 +169,7 @@ async fn bench_search() -> Result<()> {
         "local",
     );
 
-    let query = "Valentine gift for girlfriend"; // My lonely ahh ass
+    let query = "Gaming RTX 4060 Laptop with 165Hz Display";
     let query_embedding = provider.fetch_embedding(query).await?;
 
     let top_k = 100;
@@ -189,7 +189,7 @@ async fn bench_search() -> Result<()> {
     println!("\nQuery: {}", query.to_string().blue());
     println!("Search completed in: {:?}", duration);
     println!("Top {} search results for query: '{}'", top_k, query);
-    for (i, (node_id, score, metadata)) in search_results.iter().take(5).enumerate() {
+    for (i, (node_id, score, metadata)) in search_results.iter().take(10).enumerate() {
         println!(
             "{}. ID: {}, Score: {:.4}\nTitle: {}",
             i + 1,
@@ -202,7 +202,7 @@ async fn bench_search() -> Result<()> {
     println!();
     println!("Brute search results (for comparison)");
     println!("Brute search completed in: {:?}", brute_duration);
-    for (i, (node_id, score, metadata)) in brute_results.iter().take(5).enumerate() {
+    for (i, (node_id, score, metadata)) in brute_results.iter().take(10).enumerate() {
         println!(
             "{}. ID: {}, Score: {:.4}\nTitle: {}",
             i + 1,

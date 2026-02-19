@@ -19,7 +19,8 @@ embeddings using HNSW Indexing.
 - Crash safe write operations with temporary files and atomic renaming. (COW style 🐄)
 - Backup and restore functionality for databases and sources. (Few caveats, need improvement, but ready for happy path)
 - Bench ARG `blzdb bench` to CLI for quick benchmarking on Concurrent Write/Reads workload with Isolated environment.
-- Lazy deletion with tombstone nodes and background reindexing job for low disk space usage. (Needs improvement, but works for now)
+- Lazy deletion with tombstone nodes and background reindexing job for low disk space usage. (Needs improvement, but
+  works for now)
 
 ## Quick Links
 
@@ -296,13 +297,12 @@ test stress_test_concurrent_writes_different_databases ... ok
 ### TODO:
 
 - HNSW (Hierarchical Navigable Small World) indexing for improved search performance. `DONE (basic implementation)`
-- Fix Chunking for better meaningful text segments. `DONE, but kinda broken for now.`
+- Fix Chunking for better meaningful text segments (Client-side btw). `DONE, but kinda broken for now.`
 - Write/insert functionality for adding new vectors to the database.
-  `PARTIALLY DONE (Raw vector insertion and query not implemented)`
+  `DONE, few checks lefts`
 - Find a way to manage multiple sources during server startup and runtime, load index into memory during it.
   `PARTIALLY DONE (Done using LRU, but there is no startup loading)`
 - Fixed and complete error response in API.`IN PROGRESS`
-- Refactor the configuration of data and source managing and more data-rich `server_file.toml`. `IN PROGRESS`
 - Use a basic In-memory (Hashmap) storage engine for thread-safe read and write operations for configs and server_files.
   `PARTIALLY DONE`.
 - Too many clones across the codebase, memory explosion everywhere. `FIXED`
@@ -317,21 +317,22 @@ test stress_test_concurrent_writes_different_databases ... ok
 - Use gRPC/Protobuf for client-server communication?`
 - Better API Error handling and logging. `IN PROGRESS`
 - API Validation, so that a stupid user/me doesnt corrupted the HNSW index. 😶 `PARTIALLY DONE`
-- Complete HTTP API server for remote database access. `Insert endpoint is missing.`
+- Complete HTTP API server for remote database access. `Few deletion and list are missinng.`
 - Better Database and Source Managing `IN PROGRESS`
-- Docker env and app config are conflicting `NEED HELP`
+- Docker env and app config are conflicting `DONE`
 - Query filtering and metadata support. `DONE`
-- Incremental updates without full reindex. (HNSW) `DONE (Need better indexing matters)`
-- Distributed storage and sharding support.
-- Move hardcoded Values to separate config files. `API PROVIDER CONFIG LEFT`
+- Incremental updates without full reindex. (HNSW) `DONE (Need better indexing)`
+- Move hardcoded Values to separate config files. `DONE`
 - So many Locks and IO everywhere, need a serious fix, no jokes. `Someone help me pls. 😭`
-- Server logs are mess, current using my custom macros, need proper monitoring solution. `HELP`
-- Cloud deployment options. `What is cloud thingy?`
+- Server logs are mess, current using my custom macros, need proper monitoring solution.
+  `ENV LOG DONE, MONITORING NEED HELP`
 - Missing Database ops endpoints are missing!!! `IN PROGRESS`
-- Configurable distance metrics and search parameters. `PARTIALLY DONE, HNSW/search config is still hardcoded, but API supports it.`
+- Configurable distance metrics and search parameters.
+  `PARTIALLY DONE, HNSW/search config is still hardcoded, but API supports it.`
 - Tombstone deletion and Background reindexing for better performance. `DONE, but so many room for improvement`
 - Add embedded Embeddings model, no more API shit `NEED_HELP`
 - Add Backup Mechanism, Background Jobs? API Endpoint? or something else `DONE, but have rare edge case, but still`
+- Playground demo in [Landing Page](https://blazedb.online) using Qdrant used datasets `IN_PROGESS`
 
 ## References
 
