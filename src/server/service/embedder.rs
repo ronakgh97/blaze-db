@@ -4,7 +4,7 @@ use crate::server::dto::VectorDataDto;
 use crate::server::service::database::search_database_on_disk;
 use crate::server::{EmbedRequest, EmbedResponse, InsertRequest, InsertResponse};
 use crate::utils::{EmbeddingStore, Provider};
-use crate::{error, info, warn};
+use crate::{debug, error, info, trace, warn};
 use anyhow::{Context, Result};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;
@@ -118,7 +118,7 @@ pub async fn insert_run(
     // Lock duration: ~100-500ms depending on batch size and disk speed
     // This is INTENTIONAL to prevent index corruption - DO NOT CHANGE, unless we implement a more sophisticated locking mechanism that allows concurrent writes with proper merging or versioning
     let _write_guard = lock.write().await;
-    info!(
+    trace!(
         "Acquired write lock for database '{}:{}'",
         source, database_name
     );
@@ -141,7 +141,7 @@ pub async fn insert_run(
                 })?;
         }
         total_embedded += embedded_count;
-        info!(
+        debug!(
             "Batch: {}, Embedded: {} Vectors (Total so far: {})",
             batch_index, embedded_count, total_embedded
         );
@@ -180,12 +180,12 @@ pub async fn insert_run(
     if let Err(e) = tokio::fs::copy(&current_filename, &replica_filename).await {
         warn!("Failed to create replica snapshot (non-critical): {}", e);
     } else {
-        info!("Created replica snapshot → HNSW_INDEX.replica");
+        debug!("Created replica snapshot → HNSW_INDEX.replica");
     }
 
     // Write lock will be automatically released here when _write_guard goes out of scope
     drop(_write_guard);
-    info!("Released write lock for database '{}'", database_name);
+    trace!("Released write lock for database '{}'", database_name);
 
     // Update node_count in SERVER_FILE
     // TODO: This acquires SERVER_FILE write lock after releasing per-db lock
@@ -199,7 +199,7 @@ pub async fn insert_run(
             );
             // Don't fail the operation - metadata update is not critical
         } else {
-            info!(
+            debug!(
                 "Updated metadata: node_count={} for database '{}'",
                 node_count, database_name
             );
@@ -298,7 +298,7 @@ pub async fn embed_run(
     // Lock duration: Can be VERY long (seconds) for large batches
     // This prevents concurrent writes to same DB - necessary for index consistency
     let _write_guard = lock.write().await;
-    info!(
+    trace!(
         "Acquired write lock for database '{}:{}'",
         source, database_name
     );
@@ -334,7 +334,7 @@ pub async fn embed_run(
                 }
 
                 total_embedded += embedded_count;
-                info!(
+                debug!(
                     "Batch: {}, Embedded: {} Vectors (Total so far: {})",
                     batch_index, embedded_count, total_embedded
                 );
@@ -371,12 +371,12 @@ pub async fn embed_run(
     if let Err(e) = tokio::fs::copy(&current_filename, &replica_filename).await {
         warn!("Failed to create replica snapshot (non-critical): {}", e);
     } else {
-        info!("Created replica snapshot → HNSW_INDEX.replica");
+        debug!("Created replica snapshot → HNSW_INDEX.replica");
     }
 
     // Write lock will be automatically released here when _write_guard goes out of scope
     drop(_write_guard);
-    info!("Released write lock for database '{}'", database_name);
+    trace!("Released write lock for database '{}'", database_name);
 
     // Update node_count in SERVER_FILE
     {
@@ -388,7 +388,7 @@ pub async fn embed_run(
             );
             // Don't fail the operation - metadata update is not critical
         } else {
-            info!(
+            debug!(
                 "Updated metadata: node_count={} for database '{}'",
                 node_count, database_name
             );
@@ -405,7 +405,7 @@ pub async fn embed_run(
 /// Loads the HNSW index from the database directory, with crash recovery fallback
 /// Uses read lock to allow concurrent reads while blocking writes
 pub async fn load_index_from_database(database: String, source: String) -> Option<EmbeddingStore> {
-    info!("Reading embeddings from database '{}'", database);
+    debug!("Reading embeddings from database '{}'", database);
     let database_name = match search_database_on_disk(&database, &source).await {
         Ok(path) => path,
         Err(e) => {
@@ -413,7 +413,7 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
             return None;
         }
     };
-    info!("Loading binary embeddings from: {:?}", database_name);
+    debug!("Loading binary embeddings from: {:?}", database_name);
 
     // Acquire read lock to allow concurrent reads but block if a write is in progress
     // Key format: "source:database" for consistency with backup.rs
@@ -426,7 +426,7 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
     };
 
     let _read_guard = lock.read().await;
-    info!("Acquired read lock for database '{}:{}'", source, database);
+    trace!("Acquired read lock for database '{}:{}'", source, database);
 
     // Try loading HNSW_INDEX.bin (current index)
     // If that fails, try HNSW_INDEX.replica (crash recovery fallback!)
@@ -437,7 +437,7 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
         // Normal case: Load current index
         match EmbeddingStore::load_index_file(&bin_path).await {
             Ok(store) => {
-                info!("Loaded current index: HNSW_INDEX.bin");
+                debug!("Loaded current index: HNSW_INDEX.bin");
                 Some(store)
             }
             Err(e) => {
@@ -461,12 +461,12 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
 
                 // Drop read lock BEFORE writing to disk (can't write while holding read lock!)
                 drop(_read_guard);
-                info!("Released read lock for database '{}'", database);
+                trace!("Released read lock for database '{}'", database);
 
                 // CRITICAL: Write recovered index back to .bin to restore disk consistency
                 warn!("[CRASH RECOVERY] Acquiring write lock to restore HNSW_INDEX.bin");
                 let _write_guard = lock.write().await;
-                info!("[CRASH RECOVERY] Acquired write lock for recovery");
+                trace!("[CRASH RECOVERY] Acquired write lock for recovery");
 
                 // Check again if .bin still doesn't exist (race condition check)
                 // Another thread might have recovered while we were waiting for lock
@@ -487,11 +487,11 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
                     );
                     // Still return the store - it's usable in memory even if disk write failed
                 } else {
-                    info!("[CRASH RECOVERY] Successfully restored HNSW_INDEX.bin from replica");
+                    debug!("[CRASH RECOVERY] Successfully restored HNSW_INDEX.bin from replica");
                 }
 
                 drop(_write_guard);
-                info!("[CRASH RECOVERY] Released write lock");
+                trace!("[CRASH RECOVERY] Released write lock");
 
                 return Some(store);
             }
@@ -518,7 +518,7 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
     }
 
     drop(_read_guard);
-    info!("Released read lock for database '{}'", database);
+    trace!("Released read lock for database '{}'", database);
 
     // Return (store) - we don't use version numbers anymore
     loaded_hnsw
@@ -554,12 +554,12 @@ async fn cleanup_old_indexes(db_path: &PathBuf, prefix: &str, keep_last: usize) 
     if index_files.len() > keep_last {
         let to_delete = index_files.len() - keep_last;
         for (idx, path) in index_files.iter().take(to_delete) {
-            info!("Cleaning up old index: {} at {:?}", idx, path);
+            debug!("Cleaning up old index: {} at {:?}", idx, path);
             tokio::fs::remove_file(path)
                 .await
                 .with_context(|| format!("Failed to delete old index: {:?}", path))?;
         }
-        info!(
+        debug!(
             "Cleanup complete: deleted {} old index(es), kept last {}",
             to_delete, keep_last
         );

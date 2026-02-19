@@ -15,7 +15,7 @@ use crate::server::{
     VectorQueryRequest,
 };
 use crate::utils::{BackupInfo, EmbeddingMetadata, EmbeddingStore, Provider};
-use crate::{error, info, warn};
+use crate::{debug, error, info, warn};
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -180,12 +180,12 @@ async fn cleanup_on_shutdown() {
     // Log final lock counts (LRU auto-cleans, no manual cleanup needed)
     {
         let locks = DB_WRITE_LOCKS.read().await;
-        info!("Server shutdown: {} DB_WRITE_LOCKS active", locks.len());
+        debug!("Server shutdown: {} DB_WRITE_LOCKS active", locks.len());
     }
 
     {
         let locks = LOADING_LOCKS.read().await;
-        info!("Server shutdown: {} LOADING_LOCKS active", locks.len());
+        debug!("Server shutdown: {} LOADING_LOCKS active", locks.len());
     }
 
     info!("Server shutdown complete");
@@ -212,7 +212,7 @@ pub async fn health_check() -> impl IntoResponse {
         uptime_hrs: get_uptime_hrs(),
     };
 
-    info!("health check ok, uptime: {}hr", get_uptime_hrs());
+    debug!("health check ok, uptime: {}hr", get_uptime_hrs());
 
     (StatusCode::OK, Json(health))
 }

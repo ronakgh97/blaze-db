@@ -8,7 +8,7 @@ use crate::server::service::database::search_database_on_disk;
 use crate::server::service::load_index_from_database;
 use crate::server::{QueryRequest, QueryResponse, VectorDataDto};
 use crate::utils::read_embeddings_metadata;
-use crate::{error, info, warn};
+use crate::{debug, error, info, trace, warn};
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -50,7 +50,7 @@ pub async fn query_vector(
     {
         let cache = INDEX_CACHE.read().await;
         if let Some(cached) = cache.peek(&cache_key) {
-            info!("Cache HIT for database '{}'", from_database);
+            debug!("Cache HIT for database '{}'", from_database);
 
             // Validate cache by comparing checksums
             let (checksum_on_disk, dimensions, node_count) =
@@ -70,17 +70,17 @@ pub async fn query_vector(
                 };
 
             if cached.0.checksum == checksum_on_disk {
-                info!("Cache is valid for database '{}'", from_database);
+                debug!("Cache is valid for database '{}'", from_database);
 
                 let io_duration_sec = io_time_start.elapsed().as_secs_f64();
                 let (_metadata, hnsw_index) = (cached.0.clone(), cached.1.clone());
 
-                info!(
+                debug!(
                     "Loaded HNSW Index with {} entries",
                     hnsw_index.hnsw_store.nodes.len()
                 );
 
-                info!(
+                debug!(
                     "Performing vector search with provided embedding (top_k={})",
                     request.top_k
                 );
@@ -90,7 +90,7 @@ pub async fn query_vector(
                 let result: Vec<(String, f32, String)> = if dimensions * node_count
                     <= BRUTE_SEARCH_THRESHOLD
                 {
-                    info!(
+                    debug!(
                         "Database is small ({} vectors with {} dimensions), performing brute-force search",
                         node_count, dimensions
                     );
@@ -109,7 +109,7 @@ pub async fn query_vector(
                 };
 
                 let duration_sec = start_time.elapsed().as_secs_f64();
-                info!(
+                debug!(
                     "Search complete in {}s, found {} results",
                     duration_sec,
                     result.len()
@@ -150,7 +150,7 @@ pub async fn query_vector(
                 return Ok(response);
             }
 
-            info!(
+            debug!(
                 "Cache is stale for database '{}', will reload from disk",
                 from_database
             );
@@ -158,7 +158,7 @@ pub async fn query_vector(
     }
 
     // Cache miss or stale - need to load from disk
-    info!("Cache MISS for database '{}'", from_database);
+    debug!("Cache MISS for database '{}'", from_database);
 
     // Get per-database loading lock to prevent duplicate loads
     let loading_lock = {
@@ -171,7 +171,7 @@ pub async fn query_vector(
     // Acquire loading lock for this specific database
     // This ensures only one thread loads this database at a time
     let _load_guard = loading_lock.lock().await;
-    info!("Acquired loading lock for database '{}'", from_database);
+    trace!("Acquired loading lock for database '{}'", from_database);
 
     // Double-check cache (another thread might have loaded it while we waited)
     {
@@ -193,7 +193,7 @@ pub async fn query_vector(
             };
 
             if cached.0.checksum == checksum_on_disk {
-                info!(
+                debug!(
                     "Cache HIT after waiting for concurrent load of database '{}'",
                     from_database
                 );
@@ -201,12 +201,12 @@ pub async fn query_vector(
                 let io_duration_sec = io_time_start.elapsed().as_secs_f64();
                 let (_metadata, hnsw_index) = (cached.0.clone(), cached.1.clone());
 
-                info!(
+                debug!(
                     "Loaded HNSW Index with {} entries",
                     hnsw_index.hnsw_store.nodes.len()
                 );
 
-                info!(
+                debug!(
                     "Performing vector search with provided embedding (top_k={})",
                     request.top_k
                 );
@@ -221,7 +221,7 @@ pub async fn query_vector(
                     None,
                 );
                 let duration_sec = start_time.elapsed().as_secs_f64();
-                info!(
+                debug!(
                     "Search complete in {}s, found {} results",
                     duration_sec,
                     result.len()
@@ -265,7 +265,7 @@ pub async fn query_vector(
     }
 
     // Still missing or stale - load from disk (only one thread per database does this)
-    info!("Loading index from disk for database '{}'", from_database);
+    debug!("Loading index from disk for database '{}'", from_database);
     let store = load_index_from_database(from_database.clone(), source.clone()).await;
 
     // Read the metadata
@@ -295,19 +295,19 @@ pub async fn query_vector(
         cache.put(cache_key, (Arc::clone(&metadata), Arc::clone(&store)));
     }
 
-    info!("Released loading lock for database '{}'", from_database);
+    trace!("Released loading lock for database '{}'", from_database);
 
     let io_duration_sec = io_time_start.elapsed().as_secs_f64();
-    info!("I/O operations for loading index took {}s", io_duration_sec);
+    debug!("I/O operations for loading index took {}s", io_duration_sec);
 
     let hnsw_index = store;
 
-    info!(
+    debug!(
         "Loaded HNSW Index with {} entries",
         hnsw_index.hnsw_store.nodes.len()
     );
 
-    info!(
+    debug!(
         "Performing vector search with provided embedding (top_k={})",
         request.top_k
     );
@@ -395,7 +395,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     {
         let cache = INDEX_CACHE.read().await;
         if let Some(cached) = cache.peek(&cache_key) {
-            info!("Cache HIT for database '{}'", request.database);
+            debug!("Cache HIT for database '{}'", request.database);
 
             // Validate cache by comparing checksums
             let (checksum_on_disk, dimension, vector_count) =
@@ -415,17 +415,17 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 };
 
             if cached.0.checksum == checksum_on_disk {
-                info!("Cache is valid for database '{}'", request.database);
+                debug!("Cache is valid for database '{}'", request.database);
 
                 let io_duration_sec = io_time_start.elapsed().as_secs_f64();
                 let (_metadata, hnsw_index) = (cached.0.clone(), cached.1.clone());
 
-                info!(
+                debug!(
                     "Loaded HNSW Index with {} entries",
                     hnsw_index.hnsw_store.nodes.len()
                 );
 
-                info!(
+                debug!(
                     "Performing search with Cosine metric (top_k={})",
                     request.top_k
                 );
@@ -436,7 +436,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 let result: Vec<(String, f32, String)> = if dimension * vector_count
                     <= BRUTE_SEARCH_THRESHOLD
                 {
-                    info!(
+                    debug!(
                         "Database is small ({} vectors with {} dimensions), performing brute-force search",
                         vector_count, dimension
                     );
@@ -455,7 +455,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 };
 
                 let duration_sec = start_time.elapsed().as_secs_f64();
-                info!(
+                debug!(
                     "Search complete in {}s , found {} results",
                     duration_sec,
                     result.len()
@@ -492,7 +492,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 return Ok(response);
             }
 
-            info!(
+            debug!(
                 "Cache is stale for database '{}', will reload from disk",
                 request.database
             );
@@ -500,7 +500,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     }
 
     // Cache miss or stale - need to load from disk
-    info!("Cache MISS for database '{}'", request.database);
+    debug!("Cache MISS for database '{}'", request.database);
 
     // Get per-database loading lock to prevent duplicate loads
     let loading_lock = {
@@ -512,7 +512,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
 
     // Acquire loading lock for this specific database
     let _load_guard = loading_lock.lock().await;
-    info!("Acquired loading lock for database '{}'", request.database);
+    trace!("Acquired loading lock for database '{}'", request.database);
 
     // Double-check cache (another thread might have loaded it while we waited)
     {
@@ -542,12 +542,12 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 let io_duration_sec = io_time_start.elapsed().as_secs_f64();
                 let (_metadata, hnsw_index) = (cached.0.clone(), cached.1.clone());
 
-                info!(
+                debug!(
                     "Loaded HNSW Index with {} entries",
                     hnsw_index.hnsw_store.nodes.len()
                 );
 
-                info!(
+                debug!(
                     "Performing search with Cosine metric (top_k={})",
                     request.top_k
                 );
@@ -561,7 +561,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                     None,
                 );
                 let duration_sec = start_time.elapsed().as_secs_f64();
-                info!(
+                debug!(
                     "Search complete in {}s , found {} results",
                     duration_sec,
                     result.len()
@@ -601,7 +601,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     }
 
     // Still missing or stale - load from disk (only one thread per database does this)
-    info!(
+    debug!(
         "Loading index from disk for database '{}'",
         request.database
     );
@@ -637,19 +637,19 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
         );
     }
 
-    info!("Released loading lock for database '{}'", request.database);
+    trace!("Released loading lock for database '{}'", request.database);
 
     let io_duration_sec = io_time_start.elapsed().as_secs_f64();
-    info!("I/O operations for loading index took {}s", io_duration_sec);
+    debug!("I/O operations for loading index took {}s", io_duration_sec);
 
     let (_metadata, hnsw_index) = (metadata, store);
 
-    info!(
+    debug!(
         "Loaded HNSW Index with {} entries",
         hnsw_index.hnsw_store.nodes.len()
     );
 
-    info!(
+    debug!(
         "Performing search with Cosine metric (top_k={})",
         request.top_k
     );
@@ -658,7 +658,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     let result: Vec<(String, f32, String)> =
         HNSW::search_with_metadata(&hnsw_index.hnsw_store, &query_vector, request.top_k, None);
     let duration_sec = start_time.elapsed().as_secs_f64();
-    info!(
+    debug!(
         "Search complete in {}s , found {} results",
         duration_sec,
         result.len()

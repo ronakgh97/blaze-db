@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Barrier;
+use tokio::time::sleep;
 use uuid::Uuid;
 
 const BASE_NUM_DATABASES_WRITE: usize = 100;
@@ -65,6 +66,7 @@ pub async fn bench_run() -> Result<()> {
 
     // Wait for server to be ready
     spinner.set_message(format!("{}", "Waiting for server to start...".dimmed()));
+    sleep(Duration::from_secs(1)).await;
     if !wait_for_server(&base_url, 30).await {
         spinner.finish_with_message(format!(
             "{} {}",
@@ -117,20 +119,21 @@ async fn run_benchmarks(base_url: &str, multi: &MultiProgress) -> Result<Benchma
     spinner.set_style(
         ProgressStyle::default_spinner()
             .tick_strings(&[
+                "█∙∙∙∙",
+                "▓█∙∙∙",
+                "░▓█∙∙",
+                "∙░▓█∙",
+                "∙∙░▓█",
+                "∙∙∙░▓",
+                "∙∙∙∙░",
                 "∙∙∙∙∙",
-                "■∙∙∙∙",
-                "◻■∙∙∙",
-                "∙◻■∙∙",
-                "∙∙◻■∙",
-                "∙∙∙◻■",
-                "∙∙∙∙◻",
-                "∙∙∙∙∙",
-                "∙∙∙∙■",
-                "∙∙∙■◻",
-                "∙∙■◻∙",
-                "∙■◻∙∙",
-                "■◻∙∙∙",
-                "◻∙∙∙∙",
+                "∙∙∙∙█",
+                "∙∙∙█▓",
+                "∙∙█▓░",
+                "∙█▓░∙",
+                "█▓░∙∙",
+                "▓░∙∙∙",
+                "░∙∙∙∙",
                 "∙∙∙∙∙",
             ])
             .template("{spinner:.cyan} {msg}")?,
@@ -150,30 +153,81 @@ async fn run_benchmarks(base_url: &str, multi: &MultiProgress) -> Result<Benchma
     Ok(stats)
 }
 
-async fn spawn_server(temp_dir: &PathBuf, port: u16) -> Result<Child> {
-    // Get the path to the blzdb binary
-    let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
-    let blzdb_path = current_exe
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?
-        .join("blzdb.exe"); // On Windows it's .exe
+/// Find the blzdb binary using multiple search strategies
+/// Priority:
+/// - If current exe IS blzdb, use it (handles cargo install)
+/// - Check CARGO_HOME env var (custom cargo installations)
+/// - Check ~/.cargo/bin (default cargo install location)
+/// - Search PATH environment variable
+/// - Check common installation directories
+fn find_blzdb_binary() -> Result<PathBuf> {
+    let exe_name = if cfg!(windows) { "blzdb.exe" } else { "blzdb" };
 
-    // If not found, try without .exe (Unix)
-    let blzdb_path = if blzdb_path.exists() {
-        blzdb_path
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(name) = current_exe.file_name() {
+            if name.to_string_lossy().to_lowercase() == exe_name.to_lowercase() {
+                return Ok(current_exe);
+            }
+        }
+    }
+
+    if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
+        let cargo_bin = PathBuf::from(cargo_home).join("bin").join(exe_name);
+        if cargo_bin.exists() {
+            return Ok(cargo_bin);
+        }
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        let cargo_bin = home.join(".cargo").join("bin").join(exe_name);
+        if cargo_bin.exists() {
+            return Ok(cargo_bin);
+        }
+    }
+
+    if let Ok(path_var) = std::env::var("PATH") {
+        let separator = if cfg!(windows) { ';' } else { ':' };
+        for path_dir in path_var.split(separator) {
+            let path = PathBuf::from(path_dir).join(exe_name);
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+    }
+
+    let common_dirs: Vec<PathBuf> = if cfg!(windows) {
+        vec![
+            PathBuf::from("C:\\Program Files\\blzdb"),
+            PathBuf::from("C:\\Program Files (x86)\\blzdb"),
+        ]
     } else {
-        current_exe
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?
-            .join("blzdb")
+        vec![
+            PathBuf::from("/usr/local/bin"),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+        ]
     };
 
-    if !blzdb_path.exists() {
-        anyhow::bail!(
-            "blzdb binary not found at {}. Make sure to build with: cargo build --bin blzdb",
-            blzdb_path.display()
-        );
+    for dir in common_dirs {
+        let path = dir.join(exe_name);
+        if path.exists() {
+            return Ok(path);
+        }
     }
+
+    anyhow::bail!(
+        "Could not find 'blzdb' binary in any of the following locations:\n\
+         - Current executable (blzdb bench running from blzdb)\n\
+         - $CARGO_HOME/bin/\n\
+         - ~/.cargo/bin/\n\
+         - PATH directories\n\
+         - Common install directories"
+    )
+}
+
+async fn spawn_server(temp_dir: &PathBuf, port: u16) -> Result<Child> {
+    // Find the blzdb binary using multiple search strategies
+    let blzdb_path = find_blzdb_binary()?;
 
     // Spawn init first
     let init_output = Command::new(&blzdb_path)
@@ -195,6 +249,7 @@ async fn spawn_server(temp_dir: &PathBuf, port: u16) -> Result<Child> {
         .arg("serve")
         .arg("--port")
         .arg(port.to_string())
+        .arg("--no-env")
         .env("BLAZE_HOME", temp_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

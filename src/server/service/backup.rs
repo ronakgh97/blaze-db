@@ -5,7 +5,7 @@ use crate::utils::{
     BackupInfo, cleanup_old_backups, create_multi_file_backup, delete_backup as delete_backup_file,
     list_database_backups, read_embeddings_metadata, restore_database_backup,
 };
-use crate::{error, info, warn};
+use crate::{error, info, trace, warn};
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -286,14 +286,14 @@ impl BackupService {
 
         if let Some(lock) = locks.peek(&db_key) {
             let is_locked = lock.try_write().is_err();
-            info!(
+            trace!(
                 "Backup check for {}: Lock exists, Try_write={})",
                 db_key,
                 if is_locked { "LOCKED" } else { "FREE" }
             );
             // is_locked // Can't acquire write lock = someone is writing
         } else {
-            info!("Backup check for {}: no lock entry in LRU", db_key);
+            trace!("Backup check for {}: no lock entry in LRU", db_key);
             // false // No lock exists = no write in progress
         }
         false
