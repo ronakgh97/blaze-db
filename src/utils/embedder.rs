@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
 // A Bridge Wrapper struct to hold vector data and associated metadata, for outside module usage
@@ -104,6 +105,8 @@ pub struct Provider {
     pub model: String,
     pub api_key: String,
     pub client: reqwest::Client,
+    pub mock_mode: bool,
+    pub mock_dimensions: usize,
 }
 
 impl Provider {
@@ -120,7 +123,49 @@ impl Provider {
             model,
             api_key,
             client: reqwest::Client::new(),
+            mock_mode: false,
+            mock_dimensions: 1024,
         }
+    }
+
+    pub fn init_mock(dimensions: usize) -> Self {
+        Self {
+            url: "mock://localhost".to_string(),
+            model: "mock-embeddings".to_string(),
+            api_key: "mock-key".to_string(),
+            client: reqwest::Client::new(),
+            mock_mode: true,
+            mock_dimensions: dimensions,
+        }
+    }
+
+    /// Generate deterministic mock embeddings based on content hash
+    /// Uses SHA256 hash of each chunk to create reproducible vectors
+    fn generate_mock_embeddings(&self, chunks: &[String]) -> Result<VectorData> {
+        let dimensions = self.mock_dimensions;
+        let mut all_embeddings = Vec::with_capacity(chunks.len());
+
+        for chunk in chunks {
+            let mut hasher = Sha256::new();
+            hasher.update(chunk.as_bytes());
+            let hash_result = hasher.finalize();
+
+            let mut vector = Vec::with_capacity(dimensions);
+            for i in 0..dimensions {
+                let hash_byte = hash_result[i % hash_result.len()];
+                // Convert to [-1, 1] range using simple normalization
+                let value = (hash_byte as f32 / 127.5) - 1.0;
+                vector.push(value);
+            }
+
+            all_embeddings.push(vector);
+        }
+
+        Ok(VectorData {
+            chunk: chunks.to_vec(),
+            embedding: all_embeddings,
+            dimensions,
+        })
     }
 
     #[inline]
@@ -140,6 +185,10 @@ impl Provider {
 
     /// Fetch embeddings for the given chunks of text
     pub async fn fetch_embeddings(&self, chunks: &[String]) -> Result<VectorData> {
+        if self.mock_mode {
+            return self.generate_mock_embeddings(chunks);
+        }
+
         let body = serde_json::json!({
             "model": &self.model,
             "input": chunks,
