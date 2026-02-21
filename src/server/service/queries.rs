@@ -173,7 +173,6 @@ pub async fn query_vector(
     let _load_guard = loading_lock.lock().await;
     trace!("Acquired loading lock for database '{}'", from_database);
 
-    // Double-check cache (another thread might have loaded it while we waited)
     {
         let cache = INDEX_CACHE.read().await;
         if let Some(cached) = cache.peek(&cache_key) {

@@ -124,8 +124,9 @@ impl EmbeddingStore {
         Ok(stores)
     }
 
-    /// Write the EmbeddingStore to disk and store the hash checksum
-    pub async fn write_to_disk(&mut self, file_path: &PathBuf) -> Result<()> {
+    /// Write the EmbeddingStore to disk and store the hash checksum.
+    /// Returns the computed checksum so callers can update an in-memory checksum cache
+    pub async fn write_to_disk(&mut self, file_path: &PathBuf) -> Result<String> {
         // Add extension if not present
         let formatted_path = if file_path
             .extension()
@@ -154,9 +155,9 @@ impl EmbeddingStore {
             &formatted_path
                 .parent()
                 .ok_or_else(|| anyhow!("File path has no parent directory"))?
-                .to_path_buf(), // TODO: Unwrap safe?
+                .to_path_buf(),
             &EmbeddingMetadata {
-                checksum,
+                checksum: checksum.clone(),
                 total_vectors: self.hnsw_store.nodes.len(),
                 dimensions: self.hnsw_store.nodes[0].vector.len(), //TODO: Very hacky but works for now (hopes does not panic 🛐)
                 last_modified: chrono::Utc::now().to_rfc3339(),
@@ -170,7 +171,7 @@ impl EmbeddingStore {
             .await
             .with_context(|| format!("Failed to write file: {:?}", formatted_path))?;
 
-        Ok(())
+        Ok(checksum)
     }
 
     /// Write the EmbeddingStore to disk as a JSON file and store the hash checksum (for readability and debugging)

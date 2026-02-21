@@ -7,6 +7,7 @@ use crate::utils::{EmbeddingStore, Provider};
 use crate::{debug, error, info, trace, warn};
 use anyhow::{Context, Result};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -54,6 +55,24 @@ pub async fn insert_run(
             }
         }
     };
+
+    // Early check for unique IDs across the entire batch before processing
+    // Although during insertion, HNSW checks for duplicate IDs
+    // But we maybe waste resources inserting vectors only to have it fail at the end
+    let mut id_set = HashSet::with_capacity(total_entries);
+    for vec_data in vector_batch_data.iter().flatten() {
+        if !id_set.insert(&vec_data.id) {
+            error!("Duplicate ID found in batch: {}", vec_data.id);
+            return Err(ErrorTypes::InvalidField(format!(
+                "Duplicate ID found in batch: {}. All vector IDs must be unique.",
+                vec_data.id
+            ))
+            .into());
+        }
+    }
+
+    // Nobody cares ;(
+    drop(id_set);
 
     // DO THIS LAST TO AVOID WASTING TIME
     // VERY IMPORTANT!!, OR ELSE IT WILL CORRUPT THE INDEX WITH INCONSISTENT DIMENSIONS
@@ -115,7 +134,6 @@ pub async fn insert_run(
     // Acquire write lock - this ensures only one write operation per database at a time
     // Multiple databases can still be written to concurrently
     // TODO: PERFORMANCE - Write lock held during HNSW insertions + disk I/O
-    // Lock duration: ~100-500ms depending on batch size and disk speed
     // This is INTENTIONAL to prevent index corruption - DO NOT CHANGE, unless we implement a more sophisticated locking mechanism that allows concurrent writes with proper merging or versioning
     let _write_guard = lock.write().await;
     trace!(
@@ -173,14 +191,14 @@ pub async fn insert_run(
         .await
         .with_context(|| "Failed to rename temp index to current")?;
 
-    info!("Index saved: {} nodes total → HNSW_INDEX.bin", node_count);
+    info!("Index saved: {} nodes total -> HNSW_INDEX.bin", node_count);
 
     // Create replica snapshot (exact copy for backups) under write lock to ensure it's an exact snapshot of the current .bin
     // This is NON-CRITICAL, BUT FOR BACKUPS - if it fails, .bin is still valid
     if let Err(e) = tokio::fs::copy(&current_filename, &replica_filename).await {
         warn!("Failed to create replica snapshot (non-critical): {}", e);
     } else {
-        debug!("Created replica snapshot → HNSW_INDEX.replica");
+        debug!("Created replica snapshot -> HNSW_INDEX.replica");
     }
 
     // Write lock will be automatically released here when _write_guard goes out of scope
@@ -232,6 +250,25 @@ pub async fn embed_run(
         error!("Source '{}' not found", source);
         return Err(ErrorTypes::SourceNotFound(format!("Source '{}' not found", source)).into());
     }
+
+    // Early check for unique IDs across the entire batch before processing
+    // Although during insertion, HNSW checks for duplicate IDs
+    // But we maybe waste resources inserting vectors only to have it fail at the end
+    let mut id_set = HashSet::with_capacity(total_items);
+    for chunks in batch_content.iter() {
+        for chunk in chunks.iter() {
+            if !id_set.insert(&chunk.id) {
+                error!("Duplicate ID found in batch: {}", chunk.id);
+                return Err(ErrorTypes::InvalidField(format!(
+                    "Duplicate ID found in batch: {}. All vector IDs must be unique.",
+                    chunk.id
+                ))
+                .into());
+            }
+        }
+    }
+    // Nobody cares ;(
+    drop(id_set);
 
     let metrics = {
         let server_file = SERVER_FILE.read().await;
@@ -364,14 +401,14 @@ pub async fn embed_run(
         .await
         .with_context(|| "Failed to rename temp index to current")?;
 
-    info!("Index saved: {} nodes total → HNSW_INDEX.bin", node_count);
+    info!("Index saved: {} nodes total -> HNSW_INDEX.bin", node_count);
 
     // Create replica snapshot (exact copy for backups) under write lock to ensure it's an exact snapshot of the current .bin
     // This is NON-CRITICAL - if it fails, .bin is still valid
     if let Err(e) = tokio::fs::copy(&current_filename, &replica_filename).await {
         warn!("Failed to create replica snapshot (non-critical): {}", e);
     } else {
-        debug!("Created replica snapshot → HNSW_INDEX.replica");
+        debug!("Created replica snapshot -> HNSW_INDEX.replica");
     }
 
     // Write lock will be automatically released here when _write_guard goes out of scope
