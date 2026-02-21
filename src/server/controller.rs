@@ -33,27 +33,25 @@ static START_TIME: OnceLock<chrono::DateTime<chrono::Local>> = OnceLock::new();
 static PROVIDER: OnceLock<Provider> = OnceLock::new();
 static BACKUP_SERVICE: OnceLock<Arc<RwLock<BackupService>>> = OnceLock::new();
 
-// pub static LOADED_INDEXES: OnceLock<Arc<Mutex<HashMap<String, EmbeddingStore>>>> = OnceLock::new();
-
 lazy_static! {
-    /// Per-database write locks with LRU eviction (cap: 1000 locks)
+    /// Per-database write locks with LRU eviction
     /// Automatically evicts least-recently-used locks when capacity is reached
-    /// Key format: "source:database" for consistency
+    /// Key format: "source:database"
     pub static ref DB_WRITE_LOCKS: Arc<RwLock<LruCache<String, Arc<RwLock<()>>>>> =
         Arc::new(RwLock::new(LruCache::new(
             NonZeroUsize::new(4096).unwrap() // Max 4096 concurrent database locks
         )));
 
-    /// Per-database loading locks with LRU eviction (cap: 1000 locks)
+    /// Per-database loading locks with LRU eviction
     /// Prevents duplicate index loads during cache misses
+    /// Key format: "source_database"
     pub static ref LOADING_LOCKS: Arc<RwLock<LruCache<String, Arc<Mutex<()>>>>> =
         Arc::new(RwLock::new(LruCache::new(
             NonZeroUsize::new(4096).unwrap() // Max 4096 concurrent loading locks
         )));
 
-    // TODO: Maybe use wrapper struct to keep most used metadata in memory too for faster access
     /// LRU Cache for loaded indexes to limit memory usage during queries
-    /// Caches up to 12 databases in memory
+    /// Key format: "source_database"
     pub static ref INDEX_CACHE: Arc<RwLock<LruCache<String, (Arc<EmbeddingMetadata>, Arc<EmbeddingStore>)>>> =
         Arc::new(RwLock::new(LruCache::new(
             NonZeroUsize::new(128).unwrap() // Cache upto 128 index

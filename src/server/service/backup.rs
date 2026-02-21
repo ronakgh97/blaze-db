@@ -12,60 +12,79 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
-/// Global backup state to track ongoing backups and prevent conflicts
+/// Global backup state to track ongoing backup/restore/delete operations per database.
 pub struct BackupState {
-    /// Track ongoing backups per database (source_name:database_name -> lock)
-    ongoing_backups: Arc<RwLock<HashMap<String, Arc<Mutex<()>>>>>,
+    /// Per-database operation lock (source_name:database_name -> RwLock).
+    op_locks: Arc<RwLock<HashMap<String, Arc<RwLock<()>>>>>,
 }
 
 impl BackupState {
     pub fn new() -> Self {
         Self {
-            ongoing_backups: Arc::new(RwLock::new(HashMap::new())),
+            op_locks: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// Try to acquire backup lock for a database
-    /// Returns the lock guard if successful, error if backup already in progress
-    /// The guard must be held for the entire duration of the backup operation
-    pub async fn try_acquire_backup_lock(
+    /// Return the per-db `RwLock`.
+    async fn get_or_create_lock(&self, db_key: &str) -> Arc<RwLock<()>> {
+        {
+            let map = self.op_locks.read().await;
+            if let Some(lock) = map.get(db_key) {
+                return Arc::clone(lock);
+            }
+        }
+        let mut map = self.op_locks.write().await;
+        map.entry(db_key.to_string())
+            .or_insert_with(|| Arc::new(RwLock::new(())))
+            .clone()
+    }
+
+    /// Try to acquire an exclusive operation lock for a database.
+    /// Returns the write-guard (must be held for the entire operation) or an error if any
+    /// conflicting operation is already running.
+    pub async fn try_acquire_op_lock(
         &self,
         db_key: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<()>> {
-        let lock = {
-            let mut backups = self.ongoing_backups.write().await;
-            backups
-                .entry(db_key.to_string())
-                .or_insert_with(|| Arc::new(Mutex::new(())))
-                .clone()
-        };
+        operation: &str,
+    ) -> Result<tokio::sync::OwnedRwLockWriteGuard<()>> {
+        let lock = self.get_or_create_lock(db_key).await;
 
-        // Try to acquire lock without waiting (fail fast)
-        match lock.try_lock_owned() {
+        match lock.try_write_owned() {
             Ok(guard) => Ok(guard),
-            Err(_) => anyhow::bail!("Backup already in progress for {}", db_key),
+            Err(_) => anyhow::bail!(
+                "Cannot {}: another backup/restore/delete operation is already in progress for {}",
+                operation,
+                db_key
+            ),
         }
     }
 
-    /// Check if a backup is currently running for this database
-    pub async fn is_backup_running(&self, db_key: &str) -> bool {
-        let backups = self.ongoing_backups.read().await;
-        if let Some(lock) = backups.get(db_key) {
-            lock.try_lock().is_err()
+    /// Returns `true` if any backup/restore/delete operation is currently running for this db.
+    pub async fn is_operation_in_progress(&self, db_key: &str) -> bool {
+        let map = self.op_locks.read().await;
+        if let Some(lock) = map.get(db_key) {
+            lock.try_write().is_err()
         } else {
             false
         }
     }
 
-    /// Clean up locks for databases that are no longer in use
-    /// Removes entries from the HashMap where only the HashMap itself holds a reference
+    /// Clean up per-db lock entries that are no longer actively held by any operation.
     pub async fn cleanup_unused_locks(&self) {
-        let mut backups = self.ongoing_backups.write().await;
-
-        // Remove locks that have no other Arc references (strong_count == 1 means only HashMap has it)
-        backups.retain(|_, lock| Arc::strong_count(lock) > 1);
+        let mut map = self.op_locks.write().await;
+        map.retain(|_, lock| {
+            // Keep if another task holds a clone outside the map (e.g. mid-way through
+            // get_or_create_lock or try_acquire_op_lock).
+            if Arc::strong_count(lock) > 1 {
+                return true;
+            }
+            // Arc::strong_count == 1 means only the map owns this Arc
+            // It is only safe to discard when no write-guard is outstanding (try_write succeeds).
+            // If try_write fails, an active guard still exists
+            lock.try_write().is_err()
+        });
     }
 }
 
@@ -100,7 +119,7 @@ impl Default for BackupConfig {
         Self {
             default_interval_hours: 48,
             max_backups_per_database: 5,
-            compression_level: 18,
+            compression_level: 21,
             backup_base_dir: if let Ok(blaze_home) = std::env::var("BLAZE_HOME") {
                 PathBuf::from(blaze_home).join("blaze").join("backups")
             } else {
@@ -207,7 +226,7 @@ impl BackupService {
                     true
                 };
 
-                if should_backup && !state.is_backup_running(&db_key).await {
+                if should_backup && !state.is_operation_in_progress(&db_key).await {
                     info!("Scheduled backup due for {}", db_key);
 
                     let source_name = source.source_name.clone();
@@ -217,17 +236,16 @@ impl BackupService {
 
                     // Spawn backup task with proper locking
                     tokio::spawn(async move {
-                        // Acquire backup lock in the spawned task
+                        // Acquire exclusive op lock in the spawned task
                         let db_key = format!("{}:{}", source_name, database_name);
 
-                        // Try to acquire lock, return early if unavailable (panic-safe)
-                        let _backup_guard = match state.try_acquire_backup_lock(&db_key).await {
+                        let _op_guard = match state.try_acquire_op_lock(&db_key, "backup").await {
                             Ok(guard) => {
                                 info!("Scheduled backup starting for {} (lock acquired)", db_key);
                                 guard
                             }
                             Err(e) => {
-                                // Backup already in progress (race condition with manual backup)
+                                // Another operation already in progress (race condition)
                                 info!("Scheduled backup for {} skipped: {}", db_key, e);
                                 return;
                             }
@@ -240,7 +258,6 @@ impl BackupService {
                         {
                             error!("Scheduled backup failed for {}: {}", db_key, e);
                         }
-                        // Lock released automatically when _backup_guard is dropped
                     });
                 }
             }
@@ -251,7 +268,7 @@ impl BackupService {
 
     #[inline]
     /// Trigger a manual backup via API
-    /// Holds backup lock for entire duration to prevent concurrent backups of same database
+    /// Holds exclusive op lock for entire duration to prevent concurrent backup/restore/delete of same database.
     pub async fn trigger_backup(&self, source: &str, database: &str) -> Result<BackupInfo> {
         let db_key = format!("{}:{}", source, database);
 
@@ -260,21 +277,20 @@ impl BackupService {
             anyhow::bail!("Cannot backup: write operation in progress for {}", db_key);
         }
 
-        // Try to acquire backup lock - this guard MUST be held for entire backup operation
-        // The lock is released automatically when guard is dropped
-        let _backup_guard = self
+        // Try to acquire exclusive op lock - this guard MUST be held for entire backup operation.
+        // This also blocks concurrent restore or delete on the same database.
+        let _op_guard = self
             .state
-            .try_acquire_backup_lock(&db_key)
+            .try_acquire_op_lock(&db_key, "backup")
             .await
-            .context("Backup already in progress")?;
+            .context("Backup/restore/delete already in progress")?;
 
         info!("Starting manual backup for {} (lock acquired)", db_key);
 
         // Execute backup - lock is held for entire duration
-        // This prevents multiple backups of the same database running simultaneously
         let result = Self::execute_backup(&self.config, &self.state, source, database).await;
 
-        // Lock is automatically released here when _backup_guard is dropped
+        // Lock is automatically released here when _op_guard is dropped
         result
     }
 
@@ -353,7 +369,7 @@ impl BackupService {
             }
         }
 
-        // Check for metadata file - if it doesn't exist, we can't backup properly
+        // Check for metadata file - if it doesn't exist, we can't back up properly
         let metadata_file = database_path.join("metadata.json");
         if !metadata_file.exists() {
             anyhow::bail!(
@@ -474,13 +490,16 @@ impl BackupService {
     ) -> Result<()> {
         let db_key = format!("{}:{}", source, database);
 
-        // Check if backup is running (avoid backup/restore conflict)
-        if self.state.is_backup_running(&db_key).await {
-            anyhow::bail!("Cannot restore while backup is in progress");
-        }
+        // This single lock prevents: backup <-> restore, restore <-> delete, restore <-> restore.
+        let _op_guard = self
+            .state
+            .try_acquire_op_lock(&db_key, "restore")
+            .await
+            .context("Backup/restore/delete already in progress")?;
+
+        info!("Starting restore for {}:{}", source, database);
 
         // Check if write is in progress (avoid write/restore conflict)
-        // This is important because writes update both .bin and .replica
         if Self::is_write_in_progress(source, database).await {
             anyhow::bail!("Cannot restore while write operation is in progress");
         }
@@ -502,13 +521,13 @@ impl BackupService {
             .context("Database not found on disk")?;
 
         info!(
-            "Starting restore for {}:{} from backup {}",
+            "Restoring {}:{} from backup {}",
             source, database, backup_filename
         );
 
         // Invalidate cache BEFORE restore to prevent serving stale data
-        // But this isnt needed checksum check always ensures we have latest index in memory,
-        // If we dont have it, we load from disk before query, so we should be safe without explicit cache invalidation here
+        // But this isn't needed checksum check always ensures we have latest index in memory,
+        // If we don't have it, we load from disk before query, so we should be safe without explicit cache invalidation here
         // {
         //     let mut cache = crate::server::controller::INDEX_CACHE.write().await;
         //     cache.pop(&db_key);
@@ -517,11 +536,12 @@ impl BackupService {
 
         // Restore the backup (destructive - overwrites current files)
         // This atomically replaces .replica and metadata.json
-        // Ongoing queries may fail with "file not found" - this is acceptable
-        // for a destructive operation. Next query will reload from restored files.
+        // For a destructive operation. Next query will reload from restored files.
         restore_database_backup(&backup_path, &database_path)
             .await
             .context("Failed to restore backup")?;
+
+        //TODO: Need to atomically rename .replica -> .bin, No Locks!!!
 
         // Reload metadata from restored files
         let metadata_path = database_path.join("metadata.json");
@@ -552,13 +572,21 @@ impl BackupService {
         Ok(())
     }
 
-    /// Delete a specific backup file
+    /// Delete a specific backup file, acquires a exclusive op lock to prevent concurrent backup/restore/delete of the same database.
     pub async fn delete_backup(
         &self,
         source: &str,
         database: &str,
         backup_filename: &str,
     ) -> Result<()> {
+        let db_key = format!("{}:{}", source, database);
+
+        let _op_guard = self
+            .state
+            .try_acquire_op_lock(&db_key, "delete")
+            .await
+            .context("Backup/restore/delete already in progress")?;
+
         let backup_path = self
             .config
             .backup_base_dir
@@ -586,7 +614,7 @@ impl BackupService {
 impl Clone for BackupState {
     fn clone(&self) -> Self {
         Self {
-            ongoing_backups: Arc::clone(&self.ongoing_backups),
+            op_locks: Arc::clone(&self.op_locks),
         }
     }
 }
