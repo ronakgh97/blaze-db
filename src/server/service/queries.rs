@@ -11,6 +11,7 @@ use crate::utils::read_embeddings_metadata;
 use crate::{debug, error, info, trace, warn};
 use anyhow::Result;
 use std::sync::Arc;
+use std::time::Instant;
 
 // This is the threshold for when we consider the database "small enough" to skip the HNSW search and do a brute-force search instead.
 // This is a very rough heuristic and should be tuned based on benchmarking with real data and hardware.
@@ -42,7 +43,7 @@ pub async fn query_vector(
 
     info!("Received vector query for database '{}'", from_database);
 
-    let io_time_start = std::time::Instant::now();
+    let io_time_start = Instant::now();
 
     // Check cache with read lock (allows concurrent reads)
     let cache_key = format!("{}_{}", from_database, source);
@@ -85,7 +86,7 @@ pub async fn query_vector(
                     request.top_k
                 );
 
-                let start_time = std::time::Instant::now();
+                let start_time = Instant::now();
 
                 let result: Vec<(String, f32, String)> = if dimensions * node_count
                     <= BRUTE_SEARCH_THRESHOLD
@@ -212,7 +213,7 @@ pub async fn query_vector(
 
                 // Don't do brute-force search, since we are loading the index
                 // We need to be fast here, no matter the accuracy on first run ;)
-                let start_time = std::time::Instant::now();
+                let start_time = Instant::now();
                 let result: Vec<(String, f32, String)> = HNSW::search_with_metadata(
                     &hnsw_index.hnsw_store,
                     vector_query,
@@ -312,7 +313,7 @@ pub async fn query_vector(
     );
 
     // Same here
-    let start_time = std::time::Instant::now();
+    let start_time = Instant::now();
     let result: Vec<(String, f32, String)> =
         HNSW::search_with_metadata(&hnsw_index.hnsw_store, vector_query, request.top_k, None);
     let duration_sec = start_time.elapsed().as_secs_f64();
@@ -386,7 +387,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
 
     // info!("Loading vector data from database '{}'", from_database);
 
-    let io_time_start = std::time::Instant::now();
+    let io_time_start = Instant::now();
 
     // Check cache with read lock (allows concurrent reads)
     let cache_key = format!("{}_{}", &request.database, &request.source);
@@ -429,7 +430,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                     request.top_k
                 );
 
-                let start_time = std::time::Instant::now();
+                let start_time = Instant::now();
 
                 // Perform Brute-force search if, apply, this is fine, since its already in loaded
                 let result: Vec<(String, f32, String)> = if dimension * vector_count
@@ -552,7 +553,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 );
 
                 // Same apply here for brute-force search, since we are loading the index, we want to be fast on first run, no matter the accuracy
-                let start_time = std::time::Instant::now();
+                let start_time = Instant::now();
                 let result: Vec<(String, f32, String)> = HNSW::search_with_metadata(
                     &hnsw_index.hnsw_store,
                     &query_vector,
@@ -653,7 +654,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
         request.top_k
     );
 
-    let start_time = std::time::Instant::now();
+    let start_time = Instant::now();
     let result: Vec<(String, f32, String)> =
         HNSW::search_with_metadata(&hnsw_index.hnsw_store, &query_vector, request.top_k, None);
     let duration_sec = start_time.elapsed().as_secs_f64();

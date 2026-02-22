@@ -21,8 +21,9 @@ pub mod prelude {
         CreateDatabaseResponse, CreateSourceRequest, CreateSourceResponse, DeleteBackupRequest,
         DeleteBackupResponse, EmbedData, EmbedRequest, EmbedResponse, InsertRequest,
         InsertResponse, ListBackupsRequest, ListBackupsResponse, ListResponse, QueryRequest,
-        QueryResponse, RestoreBackupRequest, RestoreBackupResponse, VectorDataDto,
-        VectorQueryRequest, VectorQueryResponse, list_databases_from_disk, start_server,
+        QueryResponse, RestoreBackupRequest, RestoreBackupResponse, VectorBaseObject,
+        VectorDataDto, VectorQueryRequest, VectorQueryResponse, list_databases_from_disk,
+        start_server,
     };
     pub use crate::server_args::{ServerArgs, ServerCommands};
     pub use crate::utils::{EmbeddingStore, Ingestor, Provider, VectorData, log};

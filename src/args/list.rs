@@ -24,12 +24,7 @@ pub async fn list_run() -> Result<()> {
             for source_data in list {
                 println!("  Sources ({})", source_data.from_sources.yellow());
                 for db in source_data.databases {
-                    // // Parse db to get db name
-                    // let Some((db_name, _, _, _)) = parse_database_name(&db) else {
-                    //     println!("    • {}", db.cyan());
-                    //     continue;
-                    // };
-                    println!("    • {}", db.cyan());
+                    println!("    • {}", db.name.cyan());
                 }
             }
         }

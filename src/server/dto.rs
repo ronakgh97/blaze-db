@@ -48,8 +48,17 @@ pub struct CreateSourceResponse {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ListResponse {
     pub from_sources: String,
-    pub databases: Vec<String>,
-    // pub indexes: Vec<String>, //TODO: Maybe return index details later? like size, entries, etc.
+    pub databases: Vec<VectorBaseObject>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct VectorBaseObject {
+    pub id: String,
+    pub name: String,
+    pub dimensions: usize,
+    pub node_count: usize,
+    pub metrics: Metrics,
+    pub created_at: String,
 }
 
 /// Request DTO for embedding data

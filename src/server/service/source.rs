@@ -1,4 +1,5 @@
-use crate::core::{SERVER_FILE, get_source_path};
+use crate::core::{SERVER_FILE, Source};
+use crate::server::VectorBaseObject;
 use crate::server::controller::ErrorTypes;
 use crate::server::dto::{CreateSourceRequest, CreateSourceResponse, ListResponse};
 use anyhow::Result;
@@ -50,35 +51,36 @@ pub async fn create_new_source(request: CreateSourceRequest) -> Result<CreateSou
     })
 }
 
-// TODO: PERFORMANCE - Still scanning the disk for databases, need to optimize by storing in server file
-// This function does filesystem I/O while holding SERVER_FILE read lock
-// Impact: Blocks all write operations (create_source, add_database, etc.)
-
-// List all sources and their databases from the disk (server file)
+/// Lists all sources and their vector bases (databases), from SERVER_FILE in-memory state. Does not read from disk.
+/// Use minimal READ Lock on SERVER_FILE, then release before any heavy processing or I/O.
 pub async fn list_source() -> Result<Vec<ListResponse>> {
-    let server_file = SERVER_FILE.read().await;
+    // Get all source_obj and their respective vector base infos
+    let source_obj: Vec<Source> = {
+        let server_file = SERVER_FILE.read().await;
+        server_file.get_all_sources()?
+    };
 
-    // List all sources from server file
-    let sources = server_file.list_sources()?;
+    let mut response: Vec<ListResponse> = Vec::with_capacity(source_obj.len());
 
-    let mut response: Vec<ListResponse> = Vec::new();
+    for source in source_obj {
+        let source_name = source.source_name.clone();
+        let mut vector_bases: Vec<VectorBaseObject> = Vec::with_capacity(source.vector_bases.len());
 
-    // Listing databases for each source
-    for src in sources {
-        let mut databases: Vec<String> = Vec::new();
-        let source_path = get_source_path()?.join(&src);
+        for db in &source.vector_bases {
+            let vector_obj = VectorBaseObject {
+                id: db.vb_id.clone(),
+                name: db.vb_name.clone(),
+                dimensions: db.dimension as usize,
+                node_count: db.node_count as usize,
+                metrics: db.metric_type.clone(),
+                created_at: db.created_at.clone(),
+            };
 
-        if source_path.exists() {
-            let mut entries = tokio::fs::read_dir(source_path).await?;
-            while let Some(entry) = entries.next_entry().await? {
-                if entry.file_type().await?.is_dir() {
-                    databases.push(entry.file_name().to_string_lossy().to_string());
-                }
-            }
+            vector_bases.push(vector_obj);
         }
         response.push(ListResponse {
-            from_sources: src,
-            databases,
+            from_sources: source_name,
+            databases: vector_bases,
         });
     }
 
