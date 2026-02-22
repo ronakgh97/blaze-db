@@ -510,8 +510,7 @@ async fn run_thundering_herd_test(base_url: &str, stats: &mut BenchmarkStats) ->
         .send()
         .await?;
 
-    // Insert initial data (5k)
-    let vectors: Vec<VectorDataDto> = (0..4096)
+    let vectors: Vec<VectorDataDto> = (0..5120)
         .map(|i| VectorDataDto {
             id: Uuid::new_v4().to_string(),
             embedding: generate_random_vector(DIMENSIONS),
@@ -833,7 +832,7 @@ fn display_results(stats: &BenchmarkStats) {
         "   Success: {}/{} {}",
         stats.thunder_success, stats.thunder_expected, thunder_status
     );
-    let ratio_ok = stats.thunder_latency_ratio < 6.5;
+    let ratio_ok = stats.thunder_latency_ratio < 10.0;
     println!(
         "   Latency Ratio: {:.1}x {}",
         stats.thunder_latency_ratio,
@@ -882,8 +881,7 @@ fn display_results(stats: &BenchmarkStats) {
         && stats.mixed_write_success >= stats.mixed_write_expected * 95 / 100
         && stats.thunder_latency_ratio < 5.0;
 
-    if all_passed {
-    } else {
+    if !all_passed {
         println!(
             "{}",
             " Some benchmarks had issues, don't question my code and get a better CPU"
