@@ -703,4 +703,10 @@ impl Node {
             tombstone: false,
         }
     }
+
+    /// Returns true if this node has been soft-deleted (tombstoned).
+    #[inline]
+    pub fn is_deleted(&self) -> bool {
+        self.tombstone
+    }
 }

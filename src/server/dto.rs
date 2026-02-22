@@ -164,6 +164,22 @@ pub struct VectorQueryResult {
 //     pub total_unloaded: usize,
 // }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct GetIndexDetailsRequest {
+    pub source: String,
+    pub database: String,
+    pub page: usize,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct GetIndexDetailsResponse {
+    pub source: String,
+    pub database: String,
+    pub total_pages: usize,
+    pub current_page: usize,
+    pub entries: Vec<VectorDataDto>,
+}
+
 /// Request DTO for creating a backup
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CreateBackupRequest {

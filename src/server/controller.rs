@@ -1,13 +1,13 @@
 use crate::core::Metrics;
 use crate::server::dto::{
     BackupInfoDto, CreateBackupRequest, CreateBackupResponse, CreateSourceRequest,
-    CreateSourceResponse, DeleteBackupRequest, DeleteBackupResponse, ListBackupsRequest,
-    ListBackupsResponse, ListResponse, RestoreBackupRequest, RestoreBackupResponse,
-    VectorQueryResponse,
+    CreateSourceResponse, DeleteBackupRequest, DeleteBackupResponse, GetIndexDetailsRequest,
+    GetIndexDetailsResponse, ListBackupsRequest, ListBackupsResponse, ListResponse,
+    RestoreBackupRequest, RestoreBackupResponse, VectorQueryResponse,
 };
 use crate::server::service::{
-    BackupConfig, BackupService, create_new_database, create_new_source, embed_run, insert_run,
-    list_source, query_search, query_vector,
+    BackupConfig, BackupService, create_new_database, create_new_source, embed_run,
+    get_index_by_page, insert_run, list_source, query_search, query_vector,
 };
 use crate::server::{
     CreateDatabaseRequest, CreateDatabaseResponse, EmbedRequest, EmbedResponse,
@@ -63,7 +63,7 @@ async fn create_router() -> Router {
         .route("/v1/blazedb/health", get(health_check))
         .route("/v1/blazedb/databases/create", post(create_database))
         .route("/v1/blazedb/sources/create", post(create_src))
-        .route("/v1/blazedb/list", get(list_sources))
+        .route("/v1/blazedb/list", get(list_all))
         .route("/v1/blazedb/backup/create", post(create_backup))
         .route("/v1/blazedb/backup/list", post(list_backups))
         .route("/v1/blazedb/backup/restore", post(restore_backup))
@@ -75,6 +75,7 @@ async fn create_router() -> Router {
         .route("/v1/blazedb/query/vector", post(search_vector))
         .route("/v1/blazedb/embed", post(new_embeddings))
         .route("/v1/blazedb/query", post(search_query))
+        .route("/v1/blazedb/index", post(get_index_details))
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
 }
 
@@ -639,7 +640,7 @@ pub async fn new_insert(Json(payload): Json<InsertRequest>) -> impl IntoResponse
     }
 }
 
-pub async fn list_sources() -> impl IntoResponse {
+pub async fn list_all() -> impl IntoResponse {
     info!("[GET /databases] Request to list all databases");
 
     match list_source().await {
@@ -874,34 +875,56 @@ pub async fn search_vector(Json(payload): Json<VectorQueryRequest>) -> impl Into
     }
 }
 
-// pub async fn list_sources() -> impl IntoResponse {
-//     (
-//         StatusCode::NOT_IMPLEMENTED,
-//         Json(ListSourcesResponse { sources: vec![] }),
-//     )
-// }
-//
-// pub async fn load_src(Json(_payload): Json<SourceLoadRequest>) -> impl IntoResponse {
-//     (
-//         StatusCode::NOT_IMPLEMENTED,
-//         Json(SourceLoadResponse {
-//             source: "".to_string(),
-//             database: "".to_string(),
-//             total_index: 0,
-//         }),
-//     )
-// }
-//
-// pub async fn unload_src(Json(_payload): Json<SourceUnloadRequest>) -> impl IntoResponse {
-//     (
-//         StatusCode::NOT_IMPLEMENTED,
-//         Json(SourceUnloadResponse {
-//             source: "".to_string(),
-//             database: "".to_string(),
-//             total_unloaded: 0,
-//         }),
-//     )
-// }
+pub async fn get_index_details(Json(payload): Json<GetIndexDetailsRequest>) -> impl IntoResponse {
+    if !validate_empty_string(&payload.database) || !validate_empty_string(&payload.source) {
+        error!("[POST /index] Invalid get index details request: database or source is empty");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(GetIndexDetailsResponse {
+                database: "null".to_string(),
+                total_pages: 0,
+                current_page: 0,
+                source: "null".to_string(),
+                entries: vec![],
+            }),
+        );
+    }
+
+    match get_index_by_page(payload).await {
+        Ok(response) => {
+            info!(
+                "[POST /index] Returning page {}/{} ({} entries)",
+                response.current_page,
+                response.total_pages,
+                response.entries.len()
+            );
+            (StatusCode::OK, Json(response))
+        }
+        Err(e) => {
+            let status = if e.downcast_ref::<ErrorTypes>().map_or(false, |et| {
+                matches!(
+                    et,
+                    ErrorTypes::DatabaseNotFound(_) | ErrorTypes::IndexNotFound(_)
+                )
+            }) {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            error!("[POST /index] Failed to retrieve index page: {:?}", e);
+            (
+                status,
+                Json(GetIndexDetailsResponse {
+                    database: "null".to_string(),
+                    total_pages: 0,
+                    current_page: 0,
+                    source: "null".to_string(),
+                    entries: vec![],
+                }),
+            )
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum ErrorTypes {
