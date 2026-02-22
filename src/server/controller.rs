@@ -99,7 +99,6 @@ pub async fn start_server(
     }
 
     // TODO: Add SourceManager to manage multiple sources dynamically and load/unload indexes as needed
-
     let addr = format!("0.0.0.0:{}", port);
     info!("Server is running on http://{}", addr);
     info!("Using {} Sources", source.len());
@@ -114,9 +113,8 @@ pub async fn start_server(
     // Initialize server start time
     START_TIME.get_or_init(|| server_time);
 
-    let shutdown_signal = setup_shutdown_signal();
+    let shutdown_signal = shutdown_signal();
 
-    // Create server and wrap with graceful shutdown
     let server = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal);
 
     info!("Server started");
@@ -129,8 +127,8 @@ pub async fn start_server(
     Ok(())
 }
 
-/// Setup signal handlers for graceful shutdown (Unix: SIGTERM/SIGINT, Windows: Ctrl+C)
-async fn setup_shutdown_signal() {
+#[inline]
+async fn shutdown_signal() {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{SignalKind, signal};
@@ -166,6 +164,7 @@ async fn setup_shutdown_signal() {
     }
 }
 
+#[inline]
 /// Cleanup resources on graceful shutdown
 async fn cleanup_on_shutdown() {
     // Stop backup scheduler if it was started
@@ -190,6 +189,7 @@ async fn cleanup_on_shutdown() {
     info!("Server shutdown complete");
 }
 
+#[inline]
 /// Get the server uptime in hours
 pub fn get_uptime_hrs() -> f64 {
     let uptime_hrs = if let Some(start_time) = START_TIME.get() {
@@ -203,6 +203,7 @@ pub fn get_uptime_hrs() -> f64 {
     uptime_hrs
 }
 
+#[inline]
 /// Health check handler
 pub async fn health_check() -> impl IntoResponse {
     let health = HealthCheckResponse {

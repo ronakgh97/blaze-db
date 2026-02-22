@@ -8,9 +8,10 @@ use anyhow::Result;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// Number of entries returned per page
-pub const PAGE_SIZE: usize = 4096;
+pub const PAGE_SIZE: usize = 1024;
 
 /// Pagination math helper.
 /// Returns `(total_pages, clamped_page, start_idx, end_idx)`.
@@ -44,7 +45,7 @@ pub async fn get_index_by_page(request: GetIndexDetailsRequest) -> Result<GetInd
             )))
         })?;
 
-    let io_start = std::time::Instant::now();
+    let io_start = Instant::now();
     let cache_key = format!("{}_{}", db_name, source);
 
     {
