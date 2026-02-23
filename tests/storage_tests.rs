@@ -75,9 +75,12 @@ async fn test_read_binary_multiple_files() {
     }
 
     // Read all files
-    let stores = EmbeddingStore::load_indexes(embeddings_dir.to_str().unwrap())
+    let mut stores = EmbeddingStore::load_indexes(embeddings_dir.to_str().unwrap())
         .await
         .unwrap();
+
+    // Sort by node count to ensure deterministic ordering across different filesystems
+    stores.sort_by_key(|s| s.hnsw_store.nodes.len());
 
     assert_eq!(stores.len(), 3);
     // First batch has 1 node, second has 2, third has 3 (cumulative)
