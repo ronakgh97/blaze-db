@@ -280,12 +280,11 @@ async fn run_benchmarks(
 fn find_blzdb_binary() -> Result<PathBuf> {
     let exe_name = if cfg!(windows) { "blzdb.exe" } else { "blzdb" };
 
-    if let Ok(current_exe) = std::env::current_exe() {
-        if let Some(name) = current_exe.file_name() {
-            if name.to_string_lossy().to_lowercase() == exe_name.to_lowercase() {
-                return Ok(current_exe);
-            }
-        }
+    if let Ok(current_exe) = std::env::current_exe()
+        && let Some(name) = current_exe.file_name()
+        && name.to_string_lossy().to_lowercase() == exe_name.to_lowercase()
+    {
+        return Ok(current_exe);
     }
 
     if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
@@ -414,10 +413,9 @@ async fn wait_for_server(base_url: &str, max_attempts: u32) -> bool {
             .get(format!("{}/v1/blazedb/health", base_url))
             .send()
             .await
+            && response.status().is_success()
         {
-            if response.status().is_success() {
-                return true;
-            }
+            return true;
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
@@ -849,10 +847,9 @@ async fn run_mixed_workload_test(
                     .json(&query_req)
                     .send()
                     .await
+                    && response.status().is_success()
                 {
-                    if response.status().is_success() {
-                        successful += 1;
-                    }
+                    successful += 1;
                 }
 
                 tokio::time::sleep(Duration::from_millis(10)).await;
@@ -901,10 +898,9 @@ async fn run_mixed_workload_test(
                     .json(&insert_req)
                     .send()
                     .await
+                    && response.status().is_success()
                 {
-                    if response.status().is_success() {
-                        successful += 1;
-                    }
+                    successful += 1;
                 }
 
                 tokio::time::sleep(Duration::from_millis(50)).await;

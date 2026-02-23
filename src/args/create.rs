@@ -58,7 +58,7 @@ pub async fn create_run(
 async fn create_database(
     name: String,
     metrics: Option<Metrics>,
-    src: &String,
+    src: &str,
     dimensions: usize,
     client: &Client,
     config: &UserConfig,
@@ -66,7 +66,7 @@ async fn create_database(
 ) -> Result<()> {
     let request_body = CreateDatabaseRequest {
         name,
-        source: src.clone(),
+        source: src.to_owned(),
         metrics,
         dimensions,
         backup_interval_hours: None,
@@ -74,7 +74,7 @@ async fn create_database(
 
     let response = client
         .post(
-            &config
+            config
                 .server
                 .instance_url
                 .to_string()
@@ -112,7 +112,7 @@ async fn create_source(
 
     let response = client
         .post(
-            &config
+            config
                 .server
                 .instance_url
                 .to_string()

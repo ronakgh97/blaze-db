@@ -5,7 +5,6 @@ use blaze_db::prelude::{
 };
 use rand::RngExt;
 use reqwest::Client;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -37,10 +36,9 @@ async fn wait_for_server(max_attempts: u32) -> bool {
             .get(format!("{}{}", BASE_URL, HEALTH_ENDPOINT))
             .send()
             .await
+            && response.status().is_success()
         {
-            if response.status().is_success() {
-                return true;
-            }
+            return true;
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
@@ -188,7 +186,8 @@ async fn test_backup_restore_full_workflow() {
     );
 
     println!("[6/8] Verifying backup file exists on disk...");
-    let backup_path = PathBuf::from(dirs::home_dir().unwrap())
+    let backup_path = dirs::home_dir()
+        .unwrap()
         .join("blaze")
         .join("backups")
         .join(&source_name)
@@ -437,7 +436,8 @@ async fn test_backup_restore_full_workflow_concurrent() {
                 }
 
                 println!("  User {}: [6/8] Verifying backup file exists...", user_id);
-                let backup_path = PathBuf::from(dirs::home_dir().unwrap())
+                let backup_path = dirs::home_dir()
+                    .unwrap()
                     .join("blaze")
                     .join("backups")
                     .join(&source_name)
@@ -656,14 +656,14 @@ async fn test_backup_restore_workflow_concurrent_shared_db() {
                 .send()
                 .await;
 
-            if let Ok(resp) = resp {
-                if resp.status() == 200 {
-                    insert_count.fetch_add(1, Ordering::SeqCst);
-                    println!(
-                        "  User {}: ✓ Inserted {} vectors",
-                        user_id, vectors_per_user
-                    );
-                }
+            if let Ok(resp) = resp
+                && resp.status() == 200
+            {
+                insert_count.fetch_add(1, Ordering::SeqCst);
+                println!(
+                    "  User {}: ✓ Inserted {} vectors",
+                    user_id, vectors_per_user
+                );
             }
 
             // User 0: Try to create backup AFTER all inserts complete
@@ -737,11 +737,11 @@ async fn test_backup_restore_workflow_concurrent_shared_db() {
                 .send()
                 .await;
 
-            if let Ok(resp) = resp {
-                if resp.status() == 200 {
-                    query_count.fetch_add(1, Ordering::SeqCst);
-                    println!("  User {}: ✓ Query successful", user_id);
-                }
+            if let Ok(resp) = resp
+                && resp.status() == 200
+            {
+                query_count.fetch_add(1, Ordering::SeqCst);
+                println!("  User {}: ✓ Query successful", user_id);
             }
 
             // User 2: List backups
@@ -758,16 +758,15 @@ async fn test_backup_restore_workflow_concurrent_shared_db() {
                     .send()
                     .await;
 
-                if let Ok(resp) = resp {
-                    if resp.status() == 200 {
-                        if let Ok(list_resp) = resp.json::<ListBackupsResponse>().await {
-                            println!(
-                                "  User {}: ✓ Found {} backups",
-                                user_id,
-                                list_resp.backups.len()
-                            );
-                        }
-                    }
+                if let Ok(resp) = resp
+                    && resp.status() == 200
+                    && let Ok(list_resp) = resp.json::<ListBackupsResponse>().await
+                {
+                    println!(
+                        "  User {}: ✓ Found {} backups",
+                        user_id,
+                        list_resp.backups.len()
+                    );
                 }
             }
         });
@@ -914,7 +913,7 @@ async fn test_concurrent_backup_conflict() {
     println!("   Backup 2 status: {}", status2);
 
     // One should succeed (201), one should fail with conflict (409)
-    let statuses = vec![status1.as_u16(), status2.as_u16()];
+    let statuses = [status1.as_u16(), status2.as_u16()];
     assert!(
         statuses.contains(&201),
         "At least one backup should succeed"
@@ -1059,7 +1058,8 @@ async fn test_backup_retention_policy() {
     );
 
     // Verify the oldest backups were removed (should have 5 most recent)
-    let backup_dir = PathBuf::from(dirs::home_dir().unwrap())
+    let backup_dir = dirs::home_dir()
+        .unwrap()
         .join("blaze")
         .join("backups")
         .join(&source_name)

@@ -28,7 +28,7 @@ pub async fn query_vector(
     let from_database = &request.database;
 
     // Get database directory path
-    let db_path = search_database_on_disk(&from_database, &source)
+    let db_path = search_database_on_disk(from_database, source)
         .await
         .map_err(|e| {
             error!(
@@ -121,7 +121,7 @@ pub async fn query_vector(
                     .map(|r| VectorQueryResult {
                         vectordata: VectorDataDto {
                             id: r.0.clone(),
-                            embedding: HNSW::get_node_by_id(&hnsw_index.hnsw_store, &*r.0)
+                            embedding: HNSW::get_node_by_id(&hnsw_index.hnsw_store, &r.0)
                                 .unwrap()
                                 .vector
                                 .clone(), // Just pray here for to unwrap, since the ID should exist in the store
@@ -232,7 +232,7 @@ pub async fn query_vector(
                     .map(|r| VectorQueryResult {
                         vectordata: VectorDataDto {
                             id: r.0.clone(),
-                            embedding: HNSW::get_node_by_id(&hnsw_index.hnsw_store, &*r.0)
+                            embedding: HNSW::get_node_by_id(&hnsw_index.hnsw_store, &r.0)
                                 .unwrap()
                                 .vector
                                 .clone(), // Just pray here for to unwrap, since the ID should exist in the store
@@ -329,7 +329,7 @@ pub async fn query_vector(
         .map(|r| VectorQueryResult {
             vectordata: VectorDataDto {
                 id: r.0.clone(),
-                embedding: HNSW::get_node_by_id(&hnsw_index.hnsw_store, &*r.0)
+                embedding: HNSW::get_node_by_id(&hnsw_index.hnsw_store, &r.0)
                     .unwrap()
                     .vector
                     .clone(), // Just pray here for to unwrap, since the ID should exist in the store
@@ -367,7 +367,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     let from_database = &request.database;
 
     // Get database directory path
-    let db_path = search_database_on_disk(&from_database, &source)
+    let db_path = search_database_on_disk(from_database, source)
         .await
         .map_err(|e| {
             error!(
@@ -556,7 +556,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
                 let start_time = Instant::now();
                 let result: Vec<(String, f32, String)> = HNSW::search_with_metadata(
                     &hnsw_index.hnsw_store,
-                    &query_vector,
+                    query_vector,
                     request.top_k,
                     None,
                 );
@@ -656,7 +656,7 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
 
     let start_time = Instant::now();
     let result: Vec<(String, f32, String)> =
-        HNSW::search_with_metadata(&hnsw_index.hnsw_store, &query_vector, request.top_k, None);
+        HNSW::search_with_metadata(&hnsw_index.hnsw_store, query_vector, request.top_k, None);
     let duration_sec = start_time.elapsed().as_secs_f64();
     debug!(
         "Search complete in {}s , found {} results",

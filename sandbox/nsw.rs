@@ -17,12 +17,12 @@ use std::collections::HashSet;
 
 /// Navigable Small World (NSW) graph structure for approximate nearest neighbor search.
 #[derive(Debug, Clone)]
-struct NSW {
+struct Nsw {
     pub nodes: Vec<Node>,
     pub max_neighbours: usize,
 }
 
-impl NSW {
+impl Nsw {
     pub fn new(max_neighbours: usize, max_allocation: usize) -> Self {
         Self {
             nodes: Vec::with_capacity(max_allocation), // Pre-allocate for efficiency
@@ -57,7 +57,7 @@ impl NSW {
         let mut rng = rand::rng();
         nodes.shuffle(&mut rng); // randomness
 
-        let rearranged_nodes = nodes
+        nodes
             .par_iter()
             .map(|node| {
                 // For each node, find its nearest neighbors and connect them
@@ -92,18 +92,16 @@ impl NSW {
                 progress_bar.inc(1);
                 rearranged_node
             })
-            .collect::<Vec<Node>>();
-
-        rearranged_nodes
+            .collect::<Vec<Node>>()
     }
 
     // Search API - Parallel Greedy Search
     // Starts from multiple random entry points and performs greedy search in parallel
     pub fn parallel_greedy_search(
-        vector: &Vec<f32>,
+        vector: &[f32],
         top_k: i32,
         start_points: usize,
-        nodes: &Vec<Node>,
+        nodes: &[Node],
     ) -> Vec<Node> {
         // Get multiple random start nodes
         let mut rng = rand::rng();
@@ -169,9 +167,9 @@ impl NSW {
     /// Search API - Brute-force Search
     /// Perform parallel brute-force search over all nodes
     /// Use a lot of cpu and memory, but accurate and slow
-    fn brute_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<Node> {
-        let mut results: Vec<(Node, f32)> = Vec::new();
-        results.reserve(nodes.len()); // Pre-allocate
+    fn brute_search(vector: &[f32], top_k: i32, nodes: &Vec<Node>) -> Vec<Node> {
+        #[allow(unused_assignments)]
+        let mut results: Vec<(Node, f32)> = Vec::with_capacity(nodes.len());
 
         results = nodes
             .par_iter()
@@ -222,7 +220,7 @@ impl Node {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut nsw = NSW::new(4096, 512);
+    let mut nsw = Nsw::new(4096, 512);
 
     // Generate 20K random vectors
     let num_vectors = 10_000 * 2;
@@ -296,7 +294,7 @@ async fn main() -> anyhow::Result<()> {
     // Parallel Greedy Search
     let greedy_start_time = std::time::Instant::now();
     let start_points = 5;
-    let parallel_results = NSW::parallel_greedy_search(&query_vector, top_k, start_points, &graph);
+    let parallel_results = Nsw::parallel_greedy_search(&query_vector, top_k, start_points, &graph);
     let greedy_duration = greedy_start_time.elapsed().as_secs_f64();
     println!(
         "\nParallel Greedy search with {} start points, completed in {}s",
@@ -317,7 +315,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Brute-force Search
     let bruteforce_start_time = std::time::Instant::now();
-    let brute_results = NSW::brute_search(&query_vector, top_k, &graph);
+    let brute_results = Nsw::brute_search(&query_vector, top_k, &graph);
     let bruteforce_duration = bruteforce_start_time.elapsed().as_secs_f64();
     println!(
         "\nBrute Force search completed in {}s",
@@ -353,16 +351,15 @@ async fn get_cpu_usage() -> f32 {
     tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
     sys.refresh_cpu_usage();
 
-    let cpu_usage =
-        sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32; // Average CPU usage
+    // Average CPU usage
 
-    cpu_usage
+    sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32
 }
 
 #[allow(unused)]
 #[deprecated = "use parallel_greedy_search instead for better performance and accuracy"]
 /// Perform a single greedy search on built NSW graph
-fn greedy_search(vector: &Vec<f32>, top_k: i32, nodes: &Vec<Node>) -> Vec<Node> {
+fn greedy_search(vector: &[f32], top_k: i32, nodes: &[Node]) -> Vec<Node> {
     // Get a random start node
     let mut rng = rand::rng();
     let start_index = rng.random_range(0..nodes.len());

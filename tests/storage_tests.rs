@@ -29,8 +29,8 @@ async fn test_write_read_binary() {
     let random_id1 = uuid::Uuid::new_v4().to_string();
     let random_id2 = uuid::Uuid::new_v4().to_string();
 
-    let _ = hnsw.insert(random_id1, &*vector1, "null".to_string(), 0);
-    let _ = hnsw.insert(random_id2, &*vector2, "null".to_string(), 0);
+    let _ = hnsw.insert(random_id1, &vector1, "null".to_string(), 0);
+    let _ = hnsw.insert(random_id2, &vector2, "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -67,7 +67,7 @@ async fn test_read_binary_multiple_files() {
     for i in 0..3 {
         let vector = vec![i as f32, (i + 1) as f32];
         let random_id = uuid::Uuid::new_v4().to_string();
-        let _ = cumulative_hnsw.insert(random_id, &*vector, "null".to_string(), 0);
+        let _ = cumulative_hnsw.insert(random_id, &vector, "null".to_string(), 0);
 
         let mut store = EmbeddingStore::new(cumulative_hnsw.clone());
         let file_path = embeddings_dir.join(format!("batch_{}", i));
@@ -182,9 +182,9 @@ fn test_hnsw_search_basic() {
     let random_id2 = uuid::Uuid::new_v4().to_string();
     let random_id3 = uuid::Uuid::new_v4().to_string();
 
-    let _ = hnsw.insert(random_id1.clone(), &*vector1, "null".to_string(), 0);
-    let _ = hnsw.insert(random_id2, &*vector2, "null".to_string(), 0);
-    let _ = hnsw.insert(random_id3, &*vector3, "null".to_string(), 0);
+    let _ = hnsw.insert(random_id1.clone(), &vector1, "null".to_string(), 0);
+    let _ = hnsw.insert(random_id2, &vector2, "null".to_string(), 0);
+    let _ = hnsw.insert(random_id3, &vector3, "null".to_string(), 0);
 
     // Search for something similar to vector1
     let query = vec![1.0, 0.0, 0.0];
@@ -206,7 +206,7 @@ fn test_hnsw_node_insertion() {
     let level = 0;
     let random_id = uuid::Uuid::new_v4().to_string();
     let node_id = hnsw
-        .insert(random_id, &*vector, "null".to_string(), level)
+        .insert(random_id, &vector, "null".to_string(), level)
         .unwrap();
 
     assert_eq!(node_id, 0);
@@ -222,7 +222,7 @@ fn test_hnsw_multiple_insertions() {
     for i in 0..10 {
         let random_id = uuid::Uuid::new_v4().to_string();
         let vector = vec![i as f32, (i + 1) as f32, (i + 2) as f32];
-        let _ = hnsw.insert(random_id, &*vector, "null".to_string(), 0);
+        let _ = hnsw.insert(random_id, &vector, "null".to_string(), 0);
     }
 
     assert_eq!(hnsw.nodes.len(), 10);
@@ -244,12 +244,7 @@ async fn test_embedding_store_with_checksum() {
 
     let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     let random_id = uuid::Uuid::new_v4().to_string();
-    let _ = hnsw.insert(
-        random_id,
-        &*vec![1.0, 2.0, 3.0, 4.0, 5.0],
-        "null".to_string(),
-        0,
-    );
+    let _ = hnsw.insert(random_id, &[1.0, 2.0, 3.0, 4.0, 5.0], "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -278,7 +273,7 @@ async fn test_concurrent_file_loading_thread_safety() {
     for i in 0..100 {
         let random_id = uuid::Uuid::new_v4().to_string();
         let vector = vec![i as f32, (i + 1) as f32, (i + 2) as f32];
-        let _ = hnsw.insert(random_id, &*vector, format!("chunk_{}", i), 0);
+        let _ = hnsw.insert(random_id, &vector, format!("chunk_{}", i), 0);
     }
 
     let mut store = EmbeddingStore::new(hnsw);
@@ -328,7 +323,7 @@ async fn test_concurrent_different_files_loading() {
         for j in 0..((i + 1) * 10) {
             let random_id = uuid::Uuid::new_v4().to_string();
             let vector = vec![j as f32, (j + 1) as f32];
-            let _ = hnsw.insert(random_id, &*vector, format!("chunk_{}_{}", i, j), 0);
+            let _ = hnsw.insert(random_id, &vector, format!("chunk_{}_{}", i, j), 0);
         }
 
         let mut store = EmbeddingStore::new(hnsw);

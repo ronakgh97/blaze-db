@@ -30,11 +30,11 @@ async fn test_concurrent_writes_different_databases() {
                 let metadata = format!("db_{}_vector_{}", db_idx, i);
                 let level = hnsw.get_random_level();
                 let random_id = uuid::Uuid::new_v4().to_string();
-                let _ = hnsw.insert(random_id, &*vector, metadata, level);
+                let _ = hnsw.insert(random_id, &vector, metadata, level);
             }
 
             // Save to disk
-            let index_path = db_path.join("HNSW_INDEX_1".to_string());
+            let index_path = db_path.join("HNSW_INDEX_1");
             let mut store = EmbeddingStore::new(hnsw.clone());
             store.write_to_disk(&index_path).await.unwrap();
 
@@ -121,7 +121,7 @@ async fn test_concurrent_writes_same_database() {
                 let metadata = format!("writer_{}_vector_{}", writer_idx, i);
                 let level = hnsw.get_random_level();
                 let random_id = uuid::Uuid::new_v4().to_string();
-                let _ = hnsw.insert(random_id, &*vector, metadata, level);
+                let _ = hnsw.insert(random_id, &vector, metadata, level);
             }
 
             // Save to disk
@@ -188,7 +188,7 @@ async fn test_concurrent_reads_with_write() {
         let metadata = format!("initial_vector_{}", i);
         let level = hnsw.get_random_level();
         let random_id = uuid::Uuid::new_v4().to_string();
-        let _ = hnsw.insert(random_id, &*vector, metadata, level);
+        let _ = hnsw.insert(random_id, &vector, metadata, level);
     }
 
     let index_path = db_path.join("HNSW_INDEX_1");
@@ -258,9 +258,7 @@ async fn test_concurrent_reads_with_write() {
             let metadata = format!("new_vector_{}", i);
             let level = store.hnsw_store.get_random_level();
             let random_id = uuid::Uuid::new_v4().to_string();
-            let _ = store
-                .hnsw_store
-                .insert(random_id, &*vector, metadata, level);
+            let _ = store.hnsw_store.insert(random_id, &vector, metadata, level);
         }
 
         // Save
@@ -316,17 +314,15 @@ async fn test_cumulative_writes() {
         let mut max_index = 0;
         if let Ok(entries) = std::fs::read_dir(&db_path) {
             for entry in entries.flatten() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.starts_with("HNSW_INDEX_") && name.ends_with(".bin") {
-                        if let Some(num_str) = name
-                            .strip_prefix("HNSW_INDEX_")
-                            .and_then(|s| s.strip_suffix(".bin"))
-                        {
-                            if let Ok(num) = num_str.parse::<usize>() {
-                                max_index = max_index.max(num);
-                            }
-                        }
-                    }
+                if let Some(name) = entry.file_name().to_str()
+                    && name.starts_with("HNSW_INDEX_")
+                    && name.ends_with(".bin")
+                    && let Some(num_str) = name
+                        .strip_prefix("HNSW_INDEX_")
+                        .and_then(|s| s.strip_suffix(".bin"))
+                    && let Ok(num) = num_str.parse::<usize>()
+                {
+                    max_index = max_index.max(num);
                 }
             }
         }
@@ -352,7 +348,7 @@ async fn test_cumulative_writes() {
             let metadata = format!("batch_{}_vector_{}", batch_idx, i);
             let level = hnsw.get_random_level();
             let random_id = uuid::Uuid::new_v4().to_string();
-            let _ = hnsw.insert(random_id, &*vector, metadata, level);
+            let _ = hnsw.insert(random_id, &vector, metadata, level);
         }
 
         // Save with incremented index

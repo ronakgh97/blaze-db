@@ -19,7 +19,7 @@ pub const PAGE_SIZE: usize = 1024;
 /// - `total_pages` is at least 1 even when there are no entries.
 #[inline]
 pub fn compute_page(total_vectors: usize, requested_page: usize) -> (usize, usize, usize, usize) {
-    let total_pages = (total_vectors.max(1) + PAGE_SIZE - 1) / PAGE_SIZE;
+    let total_pages = total_vectors.max(1).div_ceil(PAGE_SIZE);
     let page = if requested_page == 0 || requested_page > total_pages {
         1
     } else {

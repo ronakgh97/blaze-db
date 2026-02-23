@@ -6,7 +6,7 @@ use wide::f32x8;
 use wincode::{SchemaRead, SchemaWrite};
 
 #[allow(unused)]
-#[deprecated(since = "2026-01-08", note = "Use `HNSW::new` instead")]
+#[deprecated(note = "Use `HNSW::new` instead")]
 #[derive(Serialize, Deserialize)]
 pub struct SearchQuery {
     pub top_k: usize,
@@ -15,7 +15,7 @@ pub struct SearchQuery {
 }
 
 #[allow(unused)]
-#[deprecated(since = "2026-01-08", note = "Use `HNSW::new` instead")]
+#[deprecated(note = "Use `HNSW::new` instead")]
 #[derive(Serialize, Deserialize)]
 pub struct SearchResult {
     pub chunk: String,
@@ -67,6 +67,7 @@ pub enum Metrics {
 }
 
 impl Metrics {
+    #[inline]
     pub fn calculate(&self, a: &[f32], b: &[f32]) -> f32 {
         match self {
             Metrics::Cosine => cosine_similarity(a, b),
@@ -75,7 +76,8 @@ impl Metrics {
         }
     }
 
-    pub fn to_string(&self) -> String {
+    #[inline]
+    pub fn string(&self) -> String {
         match self {
             Metrics::Cosine => "COSINE".to_string(),
             Metrics::Euclidean => "EUCLIDEAN".to_string(),

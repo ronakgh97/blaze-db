@@ -2,7 +2,7 @@ use anyhow::Result;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // A Bridge Wrapper struct to hold vector data and associated metadata, for outside module usage
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -10,6 +10,12 @@ pub struct VectorData {
     pub chunk: Vec<String>,
     pub embedding: Vec<Vec<f32>>,
     pub dimensions: usize,
+}
+
+impl Default for VectorData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl VectorData {
@@ -62,8 +68,8 @@ impl VectorData {
     }
 
     // Read VectorData from disk JSON file (Memory mapped)
-    pub async fn read_from_disk(path: &PathBuf) -> Result<Self> {
-        let path = path.clone();
+    pub async fn read_from_disk(path: &Path) -> Result<Self> {
+        let path = path.to_path_buf();
         let json_data = tokio::task::spawn_blocking(move || -> Result<Self> {
             let file = std::fs::File::open(path)?;
             let mmap = unsafe { memmap2::Mmap::map(&file)? };
@@ -71,7 +77,7 @@ impl VectorData {
             let vector_data: VectorData = serde_json::from_str(data_str)?;
             Ok(vector_data)
         });
-        Ok(json_data.await??)
+        json_data.await?
     }
 
     // Write VectorData to disk as a JSON file

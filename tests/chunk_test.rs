@@ -73,14 +73,14 @@ Each war has left its mark on human progress."#;
     assert!(total_chunks > 0, "Should create at least one chunk");
 
     // Each smart chunk should be significantly larger
-    if let Some(batch) = smart_batches.first() {
-        if let Some(first_chunk) = batch.first() {
-            let avg_line_length = test_content.len() / total_lines;
-            assert!(
-                first_chunk.len() > avg_line_length * 3,
-                "Overlap chunks should be much larger than individual lines"
-            );
-        }
+    if let Some(batch) = smart_batches.first()
+        && let Some(first_chunk) = batch.first()
+    {
+        let avg_line_length = test_content.len() / total_lines;
+        assert!(
+            first_chunk.len() > avg_line_length * 3,
+            "Overlap chunks should be much larger than individual lines"
+        );
     }
 
     println!(

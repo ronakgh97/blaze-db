@@ -33,6 +33,8 @@ static START_TIME: OnceLock<chrono::DateTime<chrono::Local>> = OnceLock::new();
 static PROVIDER: OnceLock<Provider> = OnceLock::new();
 static BACKUP_SERVICE: OnceLock<Arc<RwLock<BackupService>>> = OnceLock::new();
 
+type IndexEntry = Arc<RwLock<LruCache<String, (Arc<EmbeddingMetadata>, Arc<EmbeddingStore>)>>>;
+
 lazy_static! {
     /// Per-database write locks with LRU eviction
     /// Automatically evicts least-recently-used locks when capacity is reached
@@ -52,7 +54,7 @@ lazy_static! {
 
     /// LRU Cache for loaded indexes to limit memory usage during queries
     /// Key format: "source_database"
-    pub static ref INDEX_CACHE: Arc<RwLock<LruCache<String, (Arc<EmbeddingMetadata>, Arc<EmbeddingStore>)>>> =
+    pub static ref INDEX_CACHE: IndexEntry =
         Arc::new(RwLock::new(LruCache::new(
             NonZeroUsize::new(128).unwrap() // Cache upto 128 index
         )));
@@ -157,10 +159,7 @@ async fn shutdown_signal() {
     #[cfg(not(unix))]
     {
         // Windows or other non-Unix systems
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => {}
-            Err(_) => {}
-        }
+        if let Ok(()) = tokio::signal::ctrl_c().await {}
     }
 }
 
@@ -192,15 +191,13 @@ async fn cleanup_on_shutdown() {
 #[inline]
 /// Get the server uptime in hours
 pub fn get_uptime_hrs() -> f64 {
-    let uptime_hrs = if let Some(start_time) = START_TIME.get() {
+    if let Some(start_time) = START_TIME.get() {
         let now = chrono::Local::now();
         let duration = now.signed_duration_since(*start_time);
         duration.num_hours() as f64
     } else {
         0.0
-    };
-
-    uptime_hrs
+    }
 }
 
 #[inline]
@@ -359,24 +356,21 @@ pub async fn create_src(Json(payload): Json<CreateSourceRequest>) -> impl IntoRe
             (StatusCode::CREATED, Json(response))
         }
         Err(e) => {
-            if let Some(error_type) = e.downcast_ref::<ErrorTypes>() {
-                match error_type {
-                    ErrorTypes::SourceAlreadyExists(msg) => {
-                        warn!(
-                            "[POST /sources/create] Source already exists error during source creation: {}",
-                            msg
-                        );
-                        return (
-                            StatusCode::CONFLICT,
-                            Json(CreateSourceResponse {
-                                id: "null".to_string(),
-                                source: "null".to_string(),
-                                created_at: "null".to_string(),
-                            }),
-                        );
-                    }
-                    _ => {}
-                }
+            if let Some(error_type) = e.downcast_ref::<ErrorTypes>()
+                && let ErrorTypes::SourceAlreadyExists(msg) = error_type
+            {
+                warn!(
+                    "[POST /sources/create] Source already exists error during source creation: {}",
+                    msg
+                );
+                return (
+                    StatusCode::CONFLICT,
+                    Json(CreateSourceResponse {
+                        id: "null".to_string(),
+                        source: "null".to_string(),
+                        created_at: "null".to_string(),
+                    }),
+                );
             }
 
             error!(
@@ -902,19 +896,78 @@ pub async fn get_index_details(Json(payload): Json<GetIndexDetailsRequest>) -> i
             (StatusCode::OK, Json(response))
         }
         Err(e) => {
-            let status = if e.downcast_ref::<ErrorTypes>().map_or(false, |et| {
-                matches!(
-                    et,
-                    ErrorTypes::DatabaseNotFound(_) | ErrorTypes::IndexNotFound(_)
-                )
-            }) {
-                StatusCode::NOT_FOUND
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            };
+            if let Some(error_type) = e.downcast_ref::<ErrorTypes>() {
+                match error_type {
+                    ErrorTypes::DatabaseNotFound(msg) => {
+                        error!(
+                            "[POST /index] Database not found error during get_index_details: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NO_CONTENT,
+                            Json(GetIndexDetailsResponse {
+                                database: "null".to_string(),
+                                total_pages: 0,
+                                current_page: 0,
+                                source: "null".to_string(),
+                                entries: vec![],
+                            }),
+                        );
+                    }
+                    ErrorTypes::SourceNotFound(msg) => {
+                        error!(
+                            "[POST /index] Source not found error during get_index_details: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NO_CONTENT,
+                            Json(GetIndexDetailsResponse {
+                                database: "null".to_string(),
+                                total_pages: 0,
+                                current_page: 0,
+                                source: "null".to_string(),
+                                entries: vec![],
+                            }),
+                        );
+                    }
+                    ErrorTypes::IndexNotFound(msg) => {
+                        error!(
+                            "[POST /index] Index not found error during get_index_details: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::NO_CONTENT,
+                            Json(GetIndexDetailsResponse {
+                                database: "null".to_string(),
+                                total_pages: 0,
+                                current_page: 0,
+                                source: "null".to_string(),
+                                entries: vec![],
+                            }),
+                        );
+                    }
+                    ErrorTypes::InvalidField(msg) => {
+                        error!(
+                            "[POST /index] Invalid field error during get_index_details: {}",
+                            msg
+                        );
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(GetIndexDetailsResponse {
+                                database: "null".to_string(),
+                                total_pages: 0,
+                                current_page: 0,
+                                source: "null".to_string(),
+                                entries: vec![],
+                            }),
+                        );
+                    }
+                    _ => {}
+                }
+            }
             error!("[POST /index] Failed to retrieve index page: {:?}", e);
             (
-                status,
+                StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GetIndexDetailsResponse {
                     database: "null".to_string(),
                     total_pages: 0,

@@ -9,14 +9,14 @@ pub async fn create_new_source(request: CreateSourceRequest) -> Result<CreateSou
     let timestamp = chrono::Utc::now().to_rfc3339();
     let source_name = request.source_name;
 
-    if let Some(backup_interval) = request.backup_interval_hours {
-        if backup_interval < -1 {
-            return Err(ErrorTypes::InvalidField(format!(
+    if let Some(backup_interval) = request.backup_interval_hours
+        && backup_interval < -1
+    {
+        return Err(ErrorTypes::InvalidField(format!(
                 "backup_interval_hours must be -1 (disabled), 0 (default), or a positive integer. Got {}",
                 backup_interval
             ))
             .into());
-        }
     }
 
     let backup_interval_hours = request.backup_interval_hours.unwrap_or(0); // 0 means use default from config

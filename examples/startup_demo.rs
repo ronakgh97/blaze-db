@@ -4,7 +4,7 @@ use blaze_db::prelude::{EmbeddingStore, Metrics, Provider, VectorData};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct StartupDemo {
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     );
 
     let query = "Coffee";
-    let embedding = provider.fetch_embedding(&query.to_string()).await?;
+    let embedding = provider.fetch_embedding(query).await?;
 
     let index = EmbeddingStore::load_index_file(&PathBuf::from(index_path)).await?;
 
@@ -209,7 +209,7 @@ async fn check_datasets() -> Result<()> {
     Ok(())
 }
 
-async fn run_startup_index(index_path: &PathBuf) -> Result<()> {
+async fn run_startup_index(index_path: &Path) -> Result<()> {
     let vector_data =
         VectorData::read_from_disk(&PathBuf::from("embeddings/Startup_EMBEDDINGS.json")).await?;
 

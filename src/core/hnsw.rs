@@ -516,10 +516,10 @@ impl HNSW {
         self.mark_tombstone(node_id)?;
 
         // If this was the entry point, find a new one
-        if let Some(entry) = self.entry_point {
-            if entry == node_id {
-                self.set_new_entry_point();
-            }
+        if let Some(entry) = self.entry_point
+            && entry == node_id
+        {
+            self.set_new_entry_point();
         }
 
         Ok(())

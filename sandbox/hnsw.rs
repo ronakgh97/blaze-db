@@ -38,9 +38,7 @@ const _DEFAULT_TOMBSTONE_THRESHOLD: f32 = 0.33; // 33%
 /// **Insert**: Search from top layer down, connect at each layer bidirectionally
 /// **Search**: Greedy descent through upper layers, beam search at bottom layer
 /// **Pruning**: Keep only M closest neighbors per node per layer
-
-#[allow(unused)]
-struct HNSW {
+struct Hnsw {
     /// All nodes in the graph, not layer-wise
     pub nodes: Vec<Node>,
     /// First node at the top layer, used as entry point for searches
@@ -55,6 +53,7 @@ struct HNSW {
     /// More values explored during insertion means better chance of finding good neighbors
     pub ef_construction: usize,
     /// Controls the layer distribution of nodes (exponential distribution bias) CURRENTLY UNUSED
+    #[allow(unused)]
     pub distribution_bias: f32,
     /// Metrics type: COSINE, EUCLIDEAN, RAW_DOT_PRODUCT
     pub metrics_type: Option<Metrics>,
@@ -62,7 +61,7 @@ struct HNSW {
     id_mapper: HashMap<String, NodeId>,
 }
 
-impl HNSW {
+impl Hnsw {
     /// Creates a new HNSW instance with specified parameters.
     pub fn new(
         max_neighbors: usize,
@@ -71,7 +70,7 @@ impl HNSW {
         distribution_bias: f32,
         metrics_type: Option<Metrics>,
     ) -> Self {
-        HNSW {
+        Hnsw {
             nodes: Vec::with_capacity(10_000),
             entry_point: None,
             max_layers,
@@ -756,10 +755,10 @@ impl HNSW {
         self.mark_tombstone(node_id)?;
 
         // If this was the entry point, find a new one
-        if let Some(entry) = self.entry_point {
-            if entry == node_id {
-                self.set_new_entry_point();
-            }
+        if let Some(entry) = self.entry_point
+            && entry == node_id
+        {
+            self.set_new_entry_point();
         }
 
         Ok(())
@@ -962,7 +961,7 @@ impl Node {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut hnsw = HNSW::new(16, 200, 12, 0.8, Some(Metrics::Cosine));
+    let mut hnsw = Hnsw::new(16, 200, 12, 0.8, Some(Metrics::Cosine));
 
     let node_count = 10_000 * 2;
     // let dimension = 1024;
@@ -1036,7 +1035,7 @@ async fn main() -> Result<()> {
     let top_k = 100;
 
     let start = std::time::Instant::now();
-    let results = hnsw.search_with_metadata(&query_vector, top_k, None);
+    let results = hnsw.search_with_metadata(query_vector, top_k, None);
     let search_time = start.elapsed().as_secs_f64();
     println!("Search completed in: {}s", search_time.to_string().yellow());
 
@@ -1053,7 +1052,7 @@ async fn main() -> Result<()> {
     }
 
     let start_brute = std::time::Instant::now();
-    let brute_results = hnsw.brute_force_search_with_metadata(&query_vector, top_k);
+    let brute_results = hnsw.brute_force_search_with_metadata(query_vector, top_k);
     let brute_time = start_brute.elapsed().as_secs_f64();
     println!(
         "\nBrute-force search completed in: {}s",
@@ -1129,7 +1128,7 @@ async fn main() -> Result<()> {
         (hnsw.tombstone_ratio() * 100.0).to_string().yellow()
     );
 
-    let search_results = hnsw.search(&query_vector, 100, None);
+    let search_results = hnsw.search(query_vector, 100, None);
     let deleted_in_results = search_results
         .iter()
         .filter(|(external_id, _)| deleted_ids.contains(external_id))
@@ -1151,7 +1150,7 @@ async fn main() -> Result<()> {
         tombstoned_nodes,
         deleted_ids.len(),
         "Expected {} tombstones, found {}",
-        deleted_ids.len().to_string(),
+        deleted_ids.len(),
         tombstoned_nodes
     );
 
@@ -1204,7 +1203,7 @@ async fn main() -> Result<()> {
         entry_id
     );
 
-    let post_reindex_results = hnsw.search(&query_vector, top_k, None);
+    let post_reindex_results = hnsw.search(query_vector, top_k, None);
     assert_eq!(
         post_reindex_results.len(),
         top_k,
@@ -1213,14 +1212,14 @@ async fn main() -> Result<()> {
         post_reindex_results.len()
     );
 
-    let quality_check = compare_search_quality(&hnsw, &query_vector, top_k)?;
+    let quality_check = compare_search_quality(&hnsw, query_vector, top_k)?;
     println!(
         "Search quality maintained: {:.2}% of brute-force quality",
         quality_check * 100.0
     );
 
     let start = std::time::Instant::now();
-    let results = hnsw.search_with_metadata(&query_vector, top_k, None);
+    let results = hnsw.search_with_metadata(query_vector, top_k, None);
     let search_time = start.elapsed().as_secs_f64();
     println!("Search completed in: {}s", search_time.to_string().yellow());
 
@@ -1237,7 +1236,7 @@ async fn main() -> Result<()> {
     }
 
     let start_brute = std::time::Instant::now();
-    let brute_results = hnsw.brute_force_search_with_metadata(&query_vector, top_k);
+    let brute_results = hnsw.brute_force_search_with_metadata(query_vector, top_k);
     let brute_time = start_brute.elapsed().as_secs_f64();
     println!(
         "\nBrute-force search completed in: {}s",
@@ -1259,7 +1258,7 @@ async fn main() -> Result<()> {
     let speedup = brute_time / search_time;
     println!("\nSpeedup over brute-force: {:.2}x", speedup);
 
-    let quality_check = compare_search_quality(&hnsw, &query_vector, top_k)?;
+    let quality_check = compare_search_quality(&hnsw, query_vector, top_k)?;
     println!(
         "Search quality maintained: {:.2}% of brute-force quality",
         quality_check * 100.0
@@ -1268,7 +1267,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn print_layer_stats(hnsw: &HNSW) {
+fn print_layer_stats(hnsw: &Hnsw) {
     let mut layer_counts = vec![0usize; hnsw.max_layers];
 
     for node in &hnsw.nodes {
@@ -1295,7 +1294,7 @@ fn print_layer_stats(hnsw: &HNSW) {
 }
 
 #[allow(unused)]
-async fn get_level_math_debug(hnsw: &HNSW) -> Result<()> {
+async fn get_level_math_debug(hnsw: &Hnsw) -> Result<()> {
     let mut random_levels = HashMap::new();
 
     let samples = 1_000_000;
@@ -1320,7 +1319,7 @@ async fn get_level_math_debug(hnsw: &HNSW) -> Result<()> {
     println!("------|-----------|------------|--------------------");
 
     for level in &levels {
-        let count = random_levels.get(&level).unwrap();
+        let count = random_levels.get(level).unwrap();
         let percentage = (*count as f32 / samples as f32) * 100.0;
 
         let expected_ratio = if *level > 0 {
@@ -1340,7 +1339,7 @@ async fn get_level_math_debug(hnsw: &HNSW) -> Result<()> {
         );
 
         // Assert that higher levels are less frequent
-        for level in 1..(&levels).len() {
+        for level in 1..levels.len() {
             let lower_count = random_levels.get(&(level - 1)).unwrap_or(&0);
             let higher_count = random_levels.get(&level).unwrap_or(&0);
             assert!(
@@ -1356,7 +1355,7 @@ async fn get_level_math_debug(hnsw: &HNSW) -> Result<()> {
 }
 #[inline]
 /// Verify that the graph is still connected (all active nodes are reachable from entry point)
-fn verify_graph_connectivity(hnsw: &HNSW) -> Result<()> {
+fn verify_graph_connectivity(hnsw: &Hnsw) -> Result<()> {
     if hnsw.entry_point.is_none() {
         return Err(anyhow::anyhow!("No entry point found"));
     }
@@ -1398,7 +1397,7 @@ fn verify_graph_connectivity(hnsw: &HNSW) -> Result<()> {
 }
 #[inline]
 /// Verify that all neighbor references are valid (no out-of-bounds, no tombstones)
-fn verify_neighbor_validity(hnsw: &HNSW) -> Result<()> {
+fn verify_neighbor_validity(hnsw: &Hnsw) -> Result<()> {
     for (node_idx, node) in hnsw.nodes.iter().enumerate() {
         if node.tombstone {
             return Err(anyhow::anyhow!(
@@ -1447,7 +1446,7 @@ fn verify_neighbor_validity(hnsw: &HNSW) -> Result<()> {
 }
 #[inline]
 /// Verify that edges are bidirectional (if A->B then B->A)
-fn verify_bidirectional_edges(hnsw: &HNSW) -> Result<()> {
+fn verify_bidirectional_edges(hnsw: &Hnsw) -> Result<()> {
     for (node_idx, node) in hnsw.nodes.iter().enumerate() {
         for (layer, neighbors) in node.neighbors.iter().enumerate() {
             for &neighbor_id in neighbors {
@@ -1484,7 +1483,7 @@ fn verify_bidirectional_edges(hnsw: &HNSW) -> Result<()> {
 
 #[inline]
 /// Verify that max_neighbors constraint is respected
-fn verify_max_neighbors_constraint(hnsw: &HNSW) -> Result<()> {
+fn verify_max_neighbors_constraint(hnsw: &Hnsw) -> Result<()> {
     for (node_idx, node) in hnsw.nodes.iter().enumerate() {
         for (layer, neighbors) in node.neighbors.iter().enumerate() {
             if neighbors.len() > hnsw.max_neighbors {
@@ -1523,7 +1522,7 @@ fn verify_max_neighbors_constraint(hnsw: &HNSW) -> Result<()> {
 
 #[inline]
 /// Compare search results to verify quality is maintained
-fn compare_search_quality(hnsw: &HNSW, query: &[f32], k: usize) -> Result<f32> {
+fn compare_search_quality(hnsw: &Hnsw, query: &[f32], k: usize) -> Result<f32> {
     // Get HNSW results
     let hnsw_results = hnsw.search(query, k, None);
 
@@ -1560,7 +1559,7 @@ fn compare_search_quality(hnsw: &HNSW, query: &[f32], k: usize) -> Result<f32> {
 
 #[inline]
 /// Verify layer statistics are reasonable
-fn verify_layer_statistics(hnsw: &HNSW) -> Result<()> {
+fn verify_layer_statistics(hnsw: &Hnsw) -> Result<()> {
     if hnsw.nodes.is_empty() {
         return Ok(());
     }
@@ -1578,8 +1577,8 @@ fn verify_layer_statistics(hnsw: &HNSW) -> Result<()> {
             ));
         }
 
-        for layer in 0..=node.max_level {
-            layer_counts[layer] += 1;
+        for count in layer_counts.iter_mut().take(node.max_level + 1) {
+            *count += 1;
         }
     }
 

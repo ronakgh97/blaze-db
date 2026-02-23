@@ -38,10 +38,9 @@ async fn wait_for_server(max_attempts: u32) -> bool {
             .get(format!("{}{}", BASE_URL, HEALTH_ENDPOINT))
             .send()
             .await
+            && response.status().is_success()
         {
-            if response.status().is_success() {
-                return true;
-            }
+            return true;
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }

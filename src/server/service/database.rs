@@ -19,14 +19,14 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     let source = &request.source;
     let source_path = get_source_path()?;
 
-    if let Some(backup_interval) = request.backup_interval_hours {
-        if backup_interval < -1 {
-            return Err(ErrorTypes::InvalidField(format!(
+    if let Some(backup_interval) = request.backup_interval_hours
+        && backup_interval < -1
+    {
+        return Err(ErrorTypes::InvalidField(format!(
                 "backup_interval_hours must be -1 (disabled), 0 (default), or a positive integer. Got {}",
                 backup_interval
             ))
                 .into());
-        }
     }
 
     let backup_interval_hours = request.backup_interval_hours.unwrap_or(0); // 0 means use default from config
@@ -100,9 +100,9 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
 
     //let file_name = format!("#{}_#{}_#{}_#{}", name, database_id, dimensions, timestamp);
 
-    let file_name = format!("{}", name); // that's it bro....no need for fancy names
+    let file_name = name.to_string(); // that's it bro....no need for fancy names
 
-    let database_path = source_path.join(&source).join(&file_name);
+    let database_path = source_path.join(source).join(&file_name);
 
     // // Check if database directory path already exists (should not happen with UUID)
     // if database_path.exists() {
@@ -146,7 +146,7 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
 
 #[allow(unused)]
 /// List all databases from a source tracked in the server file, returns a vector of VectorBase.
-pub async fn list_database_from_server_file(source: &String) -> Result<Vec<VectorBase>> {
+pub async fn list_database_from_server_file(source: &str) -> Result<Vec<VectorBase>> {
     let server_file = SERVER_FILE.read().await;
     let mut result: Vec<VectorBase> = Vec::new();
 
@@ -178,7 +178,7 @@ pub async fn list_databases_from_disk(source: &String) -> Result<Vec<String>> {
 
     let mut result: Vec<String> = Vec::new();
 
-    let dir = base_src_path.join(&source);
+    let dir = base_src_path.join(source);
     if !dir.exists() {
         warn!("Source directory does not exist: {:?}", dir);
         return Ok(result);
@@ -224,7 +224,7 @@ pub async fn search_database_on_disk(db_name: &str, sources: &str) -> Result<Pat
     while let Some(entry) = read_dir.next_entry().await? {
         let file_name = entry.file_name().into_string().unwrap_or_default();
         if file_name == *db_name {
-            info!("Database '{}' found at: {:?}", db_name, entry.path());
+            info!("Found database: '{}'", db_name);
             return Ok(entry.path());
         }
     }
@@ -250,7 +250,7 @@ pub async fn get_databases_path_from_source(src_name: String) -> Result<Vec<Path
 }
 
 #[allow(unused)]
-#[deprecated(since = "2026-01-30", note = "No longer needed")]
+#[deprecated(note = "redundant")]
 /// Parse the database name from the given filename.
 /// The return format is: (name,id,dimensions,timestamp)
 /// Returns None if the format is incorrect.

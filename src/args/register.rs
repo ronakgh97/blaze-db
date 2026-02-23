@@ -98,7 +98,7 @@ pub async fn register_run() -> Result<()> {
     Ok(())
 }
 
-pub fn email_validate(email: &String) -> Result<()> {
+pub fn email_validate(email: &str) -> Result<()> {
     let email_regex = regex::Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")?;
     if email_regex.is_match(email) || email.is_empty() {
         Ok(())

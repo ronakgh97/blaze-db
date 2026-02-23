@@ -11,7 +11,7 @@ use uuid::Uuid;
 async fn a_very_generic_simple_test() -> Result<()> {
     let client = reqwest::Client::new();
 
-    let src_name = format!("test_src-{}", uuid::Uuid::new_v4().to_string());
+    let src_name = format!("test_src-{}", uuid::Uuid::new_v4());
 
     let create_source = CreateSourceRequest {
         source_name: src_name.clone(),
@@ -30,7 +30,7 @@ async fn a_very_generic_simple_test() -> Result<()> {
         resp.status()
     );
 
-    let database_name = format!("test_db-{}", uuid::Uuid::new_v4().to_string());
+    let database_name = format!("test_db-{}", Uuid::new_v4());
     let dimensions = 1536;
 
     let create_vectorbase = CreateDatabaseRequest {

@@ -30,8 +30,8 @@ async fn test_ingest_to_storage_pipeline() {
     let random_id1 = Uuid::new_v4().to_string();
     let random_id2 = Uuid::new_v4().to_string();
 
-    let _ = hnsw.insert(random_id1, &*vector1, "null".to_string(), 0);
-    let _ = hnsw.insert(random_id2, &*vector2, "null".to_string(), 0);
+    let _ = hnsw.insert(random_id1, &vector1, "null".to_string(), 0);
+    let _ = hnsw.insert(random_id2, &vector2, "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -77,7 +77,7 @@ async fn test_multiple_batch_processing() {
         let random_id = Uuid::new_v4().to_string();
         let _ = hnsw1.insert(
             random_id,
-            &*vec![i as f32, (i + 1) as f32],
+            &[i as f32, (i + 1) as f32],
             "null".to_string(),
             0,
         );
@@ -90,7 +90,7 @@ async fn test_multiple_batch_processing() {
         let random_id = Uuid::new_v4().to_string();
         let _ = hnsw2.insert(
             random_id,
-            &*vec![i as f32, (i + 1) as f32],
+            &[i as f32, (i + 1) as f32],
             "null".to_string(),
             0,
         );
@@ -148,9 +148,9 @@ async fn test_unicode_text_processing() {
     let random_id1 = Uuid::new_v4().to_string();
     let random_id2 = Uuid::new_v4().to_string();
     let random_id3 = Uuid::new_v4().to_string();
-    let _ = hnsw.insert(random_id1, &*vec![1.0, 2.0], "null".to_string(), 0);
-    let _ = hnsw.insert(random_id2, &*vec![3.0, 4.0], "null".to_string(), 0);
-    let _ = hnsw.insert(random_id3, &*vec![5.0, 6.0], "null".to_string(), 0);
+    let _ = hnsw.insert(random_id1, &[1.0, 2.0], "null".to_string(), 0);
+    let _ = hnsw.insert(random_id2, &[3.0, 4.0], "null".to_string(), 0);
+    let _ = hnsw.insert(random_id3, &[5.0, 6.0], "null".to_string(), 0);
 
     let mut store = EmbeddingStore::new(hnsw);
 
@@ -186,7 +186,7 @@ async fn test_large_embedding_dimensions() {
 
     let mut hnsw = HNSW::new(16, 100, 5, 0.7, &Some(Metrics::Cosine));
     let random_id = Uuid::new_v4().to_string();
-    let _ = hnsw.insert(random_id, &*embedding_vector, "null".to_string(), 0);
+    let _ = hnsw.insert(random_id, &embedding_vector, "null".to_string(), 0);
 
     assert_eq!(hnsw.nodes.len(), 1);
     assert_eq!(hnsw.nodes[0].vector.len(), 1536);

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::hash::Hash;
 use std::io::{BufWriter, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::RwLock;
 use tokio::fs;
@@ -126,7 +126,7 @@ impl EmbeddingStore {
 
     /// Write the EmbeddingStore to disk and store the hash checksum.
     /// Returns the computed checksum so callers can update an in-memory checksum cache
-    pub async fn write_to_disk(&mut self, file_path: &PathBuf) -> Result<String> {
+    pub async fn write_to_disk(&mut self, file_path: &Path) -> Result<String> {
         // Add extension if not present
         let formatted_path = if file_path
             .extension()
@@ -152,10 +152,9 @@ impl EmbeddingStore {
         let checksum = format!("{:x}", hasher.finalize());
 
         write_metadata(
-            &formatted_path
+            formatted_path
                 .parent()
-                .ok_or_else(|| anyhow!("File path has no parent directory"))?
-                .to_path_buf(),
+                .ok_or_else(|| anyhow!("File path has no parent directory"))?,
             &EmbeddingMetadata {
                 checksum: checksum.clone(),
                 total_vectors: self.hnsw_store.nodes.len(),
@@ -197,10 +196,9 @@ impl EmbeddingStore {
         let checksum = format!("{:x}", hasher.finalize());
 
         write_metadata(
-            &formatted_path
+            formatted_path
                 .parent()
-                .ok_or_else(|| anyhow!("File path has no parent directory"))?
-                .to_path_buf(), // TODO: Unwrap safe?
+                .ok_or_else(|| anyhow!("File path has no parent directory"))?, // TODO: Unwrap safe?
             &EmbeddingMetadata {
                 checksum,
                 total_vectors: self.hnsw_store.nodes.len(),
@@ -256,7 +254,7 @@ impl EmbeddingStore {
 
 /// Write or update the EmbeddingMetadata on disk, this is auto called when writing the EmbeddingStore
 /// Thread-safe with atomic writes using temp-file-rename pattern
-pub async fn write_metadata(dir_path: &PathBuf, metadata: &EmbeddingMetadata) -> Result<()> {
+pub async fn write_metadata(dir_path: &Path, metadata: &EmbeddingMetadata) -> Result<()> {
     let metadata_path = dir_path.join("metadata.json");
     let metadata = metadata.clone();
 
@@ -275,7 +273,7 @@ pub async fn write_metadata(dir_path: &PathBuf, metadata: &EmbeddingMetadata) ->
 #[allow(unused)]
 /// Read the EmbeddingMetadata from disk, good for invalidate cache or integrity checks
 /// Thread-safe - uses RwLock internally
-pub async fn read_embeddings_metadata(path: &PathBuf) -> Result<EmbeddingMetadata> {
+pub async fn read_embeddings_metadata(path: &Path) -> Result<EmbeddingMetadata> {
     let metadata_path = path.join("metadata.json");
 
     // Use blocking task for synchronous file operations
@@ -750,8 +748,8 @@ pub struct BackupInfo {
 /// - Uses atomic file operations (temporary file + rename) to ensure consistency
 /// - Thread-safe and safe for concurrent usage
 pub async fn create_file_backup(
-    backup_dir: &PathBuf,
-    file_to_backup: &PathBuf,
+    backup_dir: &Path,
+    file_to_backup: &Path,
     backup_filename: String, // Expected format: my_source_my_database_20240601_153000.tar.zst
     compression_level: i32,
 ) -> Result<BackupInfo> {
@@ -769,7 +767,7 @@ pub async fn create_file_backup(
 
     // Clone paths for blocking task
     let temp_backup_path_clone = temp_backup_path.clone();
-    let file_to_backup_clone = file_to_backup.clone();
+    let file_to_backup_clone = file_to_backup.to_path_buf().clone();
 
     // Perform compression inside a blocking task
     let (size_bytes, elapsed) = tokio::task::spawn_blocking(move || -> Result<(u64, f64)> {
@@ -853,7 +851,7 @@ pub async fn create_file_backup(
 /// - Uses atomic file operations (temp file + rename)
 /// - Files are archived with their original filenames
 pub async fn create_multi_file_backup(
-    backup_dir: &PathBuf,
+    backup_dir: &Path,
     files_to_backup: &[PathBuf],
     backup_filename: String,
     compression_level: i32,
@@ -880,7 +878,7 @@ pub async fn create_multi_file_backup(
 
     // Perform compression in blocking thread
     let size_bytes = tokio::task::spawn_blocking(move || -> Result<u64> {
-        let temp_file = std::fs::File::create(&temp_backup_path_clone)
+        let temp_file = File::create(&temp_backup_path_clone)
             .with_context(|| format!("Failed to create temp file: {:?}", temp_backup_path_clone))?;
 
         let encoder = zstd::Encoder::new(temp_file, compression_level)
@@ -956,8 +954,8 @@ pub async fn create_multi_file_backup(
 /// - Uses atomic temp file + rename strategy
 /// - Ensures data is flushed and synced to disk
 pub async fn create_directory_backup(
-    backup_dir: &PathBuf,
-    directory_to_backup: &PathBuf,
+    backup_dir: &Path,
+    directory_to_backup: &Path,
     backup_filename: String, // e.g. my_source_my_database_20240601_153000.tar.zst
     compression_level: i32,
 ) -> Result<BackupInfo> {
@@ -1114,21 +1112,21 @@ pub async fn list_database_backups(backup_root: &PathBuf) -> Result<Vec<BackupIn
 
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-            if filename.ends_with(".tar.zst") {
-                let metadata = entry.metadata().await?;
-                if metadata.is_file() {
-                    let size_bytes = metadata.len();
-                    let modified = metadata.modified()?;
-                    let timestamp: chrono::DateTime<chrono::Utc> = modified.into();
+        if let Some(filename) = path.file_name().and_then(|n| n.to_str())
+            && filename.ends_with(".tar.zst")
+        {
+            let metadata = entry.metadata().await?;
+            if metadata.is_file() {
+                let size_bytes = metadata.len();
+                let modified = metadata.modified()?;
+                let timestamp: chrono::DateTime<chrono::Utc> = modified.into();
 
-                    backups.push(BackupInfo {
-                        file_name: filename.to_string(),
-                        timestamp: timestamp.to_rfc3339(),
-                        size_mb: size_bytes as f64 / (1024.0 * 1024.0),
-                        time_taken_seconds: 0.0,
-                    });
-                }
+                backups.push(BackupInfo {
+                    file_name: filename.to_string(),
+                    timestamp: timestamp.to_rfc3339(),
+                    size_mb: size_bytes as f64 / (1024.0 * 1024.0),
+                    time_taken_seconds: 0.0,
+                });
             }
         }
     }

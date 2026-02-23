@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
     let csv_points = &csv_points[already_embedded_count..];
 
     // Process in batches and save to disk
-    let total_batches = (csv_points.len() + BATCH_SIZE - 1) / BATCH_SIZE;
+    let total_batches = csv_points.len().div_ceil(BATCH_SIZE);
     println!(
         "Processing {} batches of size {}",
         total_batches, BATCH_SIZE

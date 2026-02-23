@@ -156,7 +156,7 @@ fn build_hnsw_index(num_vectors: usize, dimensions: usize) -> HNSW {
     for (i, vec) in vectors.iter().enumerate() {
         let level = hnsw.get_random_level();
         let random_id = Uuid::new_v4().to_string();
-        let _ = hnsw.insert(random_id, &vec, format!("chunk_{}", i), level);
+        let _ = hnsw.insert(random_id, vec, format!("chunk_{}", i), level);
     }
 
     hnsw

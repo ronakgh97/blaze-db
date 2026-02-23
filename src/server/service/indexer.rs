@@ -32,7 +32,7 @@ pub async fn insert_run(
     info!("Starting indexing with total entries: {}", total_entries);
 
     // Checks source and database existence
-    if !check_source_valid(&source).await? {
+    if !check_source_valid(source).await? {
         error!("Source '{}' not found", source);
         return Err(ErrorTypes::SourceNotFound(format!("Source '{}' not found", source)).into());
     }
@@ -40,7 +40,7 @@ pub async fn insert_run(
     // Check all vector dimensions consistency with database init (dimensions)
     let (expected_dimensions, metrics) = {
         let server_file = SERVER_FILE.read().await;
-        match server_file.get_vector_base(&source, &database_name)? {
+        match server_file.get_vector_base(source, database_name)? {
             Some(vb) => (vb.dimension as usize, vb.metric_type),
             None => {
                 error!(
@@ -101,7 +101,7 @@ pub async fn insert_run(
     }
 
     // Locate the database directory
-    let database_path = search_database_on_disk(&database_name, &source)
+    let database_path = search_database_on_disk(database_name, source)
         .await
         .map_err(|e| {
             error!(
@@ -147,12 +147,12 @@ pub async fn insert_run(
 
         let embedded_count = vector_data.len();
 
-        for (_index, vec_data) in vector_data.iter().enumerate() {
+        for vec_data in vector_data.iter() {
             let id = vec_data.id.clone();
             let vector = &vec_data.embedding;
             let metadata = &vec_data.metadata;
             let random_level = hnsw.get_random_level();
-            hnsw.insert(id, &vector, metadata.clone(), random_level)
+            hnsw.insert(id, vector, metadata.clone(), random_level)
                 .map_err(|e| {
                     error!("Error inserting vector into HNSW index: {}", e);
                     ErrorTypes::InvalidField(format!("Failed to insert vector into index: {}", e))
@@ -210,7 +210,7 @@ pub async fn insert_run(
     // Could be optimized, but keeping it simple for now
     {
         let mut server_file = SERVER_FILE.write().await;
-        if let Err(e) = server_file.update_node_count(&source, &database_name, node_count as u32) {
+        if let Err(e) = server_file.update_node_count(source, database_name, node_count as u32) {
             warn!(
                 "Failed to update node_count for database '{}': {}",
                 database_name, e
@@ -246,7 +246,7 @@ pub async fn embed_run(
     info!("Starting embed_run: total_items={}", total_items);
 
     // Checks source and database existence
-    if !check_source_valid(&source).await? {
+    if !check_source_valid(source).await? {
         error!("Source '{}' not found", source);
         return Err(ErrorTypes::SourceNotFound(format!("Source '{}' not found", source)).into());
     }
@@ -272,7 +272,7 @@ pub async fn embed_run(
 
     let metrics = {
         let server_file = SERVER_FILE.read().await;
-        match server_file.get_vector_base(&source, &database_name)? {
+        match server_file.get_vector_base(source, database_name)? {
             Some(vb) => vb.metric_type,
             None => {
                 error!(
@@ -289,7 +289,7 @@ pub async fn embed_run(
     };
 
     // Locate the database directory
-    let database_path = search_database_on_disk(&database_name, &source)
+    let database_path = search_database_on_disk(database_name, source)
         .await
         .map_err(|e| {
             error!(
@@ -367,7 +367,7 @@ pub async fn embed_run(
                         .unwrap_or("EMPTY".to_string());
 
                     let random_level = hnsw.get_random_level();
-                    hnsw.insert(id, &vector, metadata, random_level)?;
+                    hnsw.insert(id, vector, metadata, random_level)?;
                 }
 
                 total_embedded += embedded_count;
@@ -418,7 +418,7 @@ pub async fn embed_run(
     // Update node_count in SERVER_FILE
     {
         let mut server_file = SERVER_FILE.write().await;
-        if let Err(e) = server_file.update_node_count(&source, &database_name, node_count as u32) {
+        if let Err(e) = server_file.update_node_count(source, database_name, node_count as u32) {
             warn!(
                 "Failed to update node_count for database '{}': {}",
                 database_name, e
@@ -573,13 +573,13 @@ async fn cleanup_old_indexes(db_path: &PathBuf, prefix: &str, keep_last: usize) 
     for entry in std::fs::read_dir(db_path)? {
         let entry = entry?;
         let path = entry.path();
-        if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-            if let Some(suffix) = file_name.strip_prefix(prefix) {
-                let suffix = suffix.strip_suffix(".bin").unwrap_or(suffix);
-                let suffix = suffix.strip_prefix('_').unwrap_or(suffix);
-                if let Ok(num) = suffix.parse::<usize>() {
-                    index_files.push((num, path));
-                }
+        if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
+            && let Some(suffix) = file_name.strip_prefix(prefix)
+        {
+            let suffix = suffix.strip_suffix(".bin").unwrap_or(suffix);
+            let suffix = suffix.strip_prefix('_').unwrap_or(suffix);
+            if let Ok(num) = suffix.parse::<usize>() {
+                index_files.push((num, path));
             }
         }
     }

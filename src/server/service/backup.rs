@@ -179,7 +179,10 @@ impl BackupService {
     async fn run_scheduled_backups(config: &BackupConfig, state: &BackupState) -> Result<()> {
         // Periodic cleanup of unused locks (every 100 runs ≈ 8 hours at 5-minute intervals)
         static CLEANUP_COUNTER: AtomicU64 = AtomicU64::new(0);
-        if CLEANUP_COUNTER.fetch_add(1, Ordering::Relaxed) % 100 == 0 {
+        if CLEANUP_COUNTER
+            .fetch_add(1, Ordering::Relaxed)
+            .is_multiple_of(100)
+        {
             state.cleanup_unused_locks().await;
         }
 
@@ -288,10 +291,8 @@ impl BackupService {
         info!("Starting manual backup for {} (lock acquired)", db_key);
 
         // Execute backup - lock is held for entire duration
-        let result = Self::execute_backup(&self.config, &self.state, source, database).await;
-
         // Lock is automatically released here when _op_guard is dropped
-        result
+        Self::execute_backup(&self.config, &self.state, source, database).await
     }
 
     #[inline]
@@ -414,12 +415,12 @@ impl BackupService {
 
         {
             let mut server_file = SERVER_FILE.write().await;
-            if let Some(mut src) = server_file.get_source(source)? {
-                if let Some(vb) = src.find_vector_base_mut(database) {
-                    vb.last_backup_at = Some(chrono::Utc::now().to_rfc3339());
-                    vb.will_backup_at = Some(next_backup.to_rfc3339());
-                    server_file.update_source(src)?;
-                }
+            if let Some(mut src) = server_file.get_source(source)?
+                && let Some(vb) = src.find_vector_base_mut(database)
+            {
+                vb.last_backup_at = Some(chrono::Utc::now().to_rfc3339());
+                vb.will_backup_at = Some(next_backup.to_rfc3339());
+                server_file.update_source(src)?;
             }
         }
 
@@ -479,9 +480,9 @@ impl BackupService {
     /// - Restore atomically replaces files on disk
     /// - Cache invalidation ensures stale data isn't served
     /// - Ongoing queries may fail temporarily (acceptable for destructive operation)
-    /// //TODO: What happens if queries are happening on .replica index, then we gonna corrupted index? Shitttt!!!!!
-    /// // We can mitigate this by ensuring that restore operation is atomic (write to temp file then rename)
-    /// // So queries always load the latest .replica file before executing, so even if a query starts while restore is happening, it will either get the old or new .replica file, but never a corrupted one.
+    ///   //TODO: What happens if queries are happening on .replica index, then we gonna corrupted index? Shitttt!!!!!
+    ///   //We can mitigate this by ensuring that restore operation is atomic (write to temp file then rename)
+    ///   //So queries always load the latest .replica file before executing, so even if a query starts while restore is happening, it will either get the old or new .replica file, but never a corrupted one.
     pub async fn restore_backup(
         &self,
         source: &str,

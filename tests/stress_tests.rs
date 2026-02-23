@@ -33,10 +33,9 @@ async fn wait_for_server(max_attempts: u32) -> bool {
             .get(format!("{}{}", BASE_URL, HEALTH_ENDPOINT))
             .send()
             .await
+            && response.status().is_success()
         {
-            if response.status().is_success() {
-                return true;
-            }
+            return true;
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
@@ -460,10 +459,9 @@ async fn stress_test_mixed_read_write_workload() {
                     .json(&query_req)
                     .send()
                     .await
+                    && response.status().is_success()
                 {
-                    if response.status().is_success() {
-                        successful += 1;
-                    }
+                    successful += 1;
                 }
 
                 total_latency += query_start.elapsed();
@@ -515,10 +513,9 @@ async fn stress_test_mixed_read_write_workload() {
                     .json(&insert_req)
                     .send()
                     .await
+                    && response.status().is_success()
                 {
-                    if response.status().is_success() {
-                        successful += 1;
-                    }
+                    successful += 1;
                 }
 
                 total_latency += write_start.elapsed();

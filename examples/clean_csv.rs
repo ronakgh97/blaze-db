@@ -61,7 +61,7 @@ fn main() -> Result<()> {
     let mut wtr = csv::Writer::from_path(output_path)?;
 
     // Write header
-    wtr.write_record(&[
+    wtr.write_record([
         "id",
         "title",
         "imgUrl",
@@ -77,7 +77,7 @@ fn main() -> Result<()> {
 
     // Write unique records
     for record in unique_records {
-        wtr.write_record(&[
+        wtr.write_record([
             &record.id,
             &record.title,
             &record.img_url,
