@@ -94,6 +94,46 @@ blzdb query --database amazon_products_2023 --source default_src --search "Wirel
 
 ## Benchmarks
 
+### Run Isolated Benchmark
+
+```shell
+blzdb bench
+
+blzdb bench
+BENCHMARK RESULTS
+
+Concurrent Writes
+   Databases: 103 | Vectors/DB: 735
+   Total Time: 10.07s
+   Min: 2.147s | Max: 9.982s | Avg: 6.719s
+   Success: 103/103 ✓
+   Speedup: 68.7x (vs sequential)
+   Server CPU: 79.6% (avg) / 92.9% (peak)
+   Server Memory: 399.7 MB (avg) / 594 MB (peak)
+
+Thundering herd
+   Concurrent Requests: 926
+   Total Time: 1.68s
+   Min: 0.057s | Max: 1.646s | Avg: 0.961s
+   Success: 926/926 ✓
+   Latency Ratio: 29.4x ✗ (high)
+   Memory: 70.8 MB (avg) / 98 MB (peak) ✗ (unstable)
+
+Mixed Read/Write Workload
+   Readers: 59 (45 queries each)
+   Writers: 23 (12 inserts of 497 vectors each)
+   Total Time: 87.03s
+   Successful Reads: 2655/2655 ✓
+   Successful Writes: 276/276 ✓
+   Server CPU: 73.6% (avg) / 92.2% (peak)
+   Server Memory: 869.4 MB (avg) / 1230 MB (peak)
+ Some benchmarks had issues, don't question my code and get a better CPU
+```
+
+- This commands spin ups child background blz servers in temp environment
+- Bench simulates client-server interactions with concurrent reads and writes, measuring latency, throughput, and resource usage.
+- Results show significant speedup for concurrent writes, but thundering herd issue is still present, which is expected due to the so many locking and I/O design. (Needs improvement, but still works for basic use cases)
+
 ### SEARCH ON 2023 AMAZON PRODUCT DATASET (350k Index)
 
 ```shell

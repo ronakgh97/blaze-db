@@ -11,16 +11,18 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+use sysinfo::{MINIMUM_CPU_UPDATE_INTERVAL, Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Barrier;
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use uuid::Uuid;
 
 const BASE_NUM_DATABASES_WRITE: usize = 100;
 const BASE_VECTORS_PER_DB: usize = 768;
 const DIMENSIONS: usize = 1024;
-const BASE_NUM_CONCURRENT_THUNDERING: usize = 75;
+const BASE_NUM_CONCURRENT_THUNDERING: usize = 1000;
 const BASE_NUM_DATABASES_MIXED: usize = 25;
 const BASE_NUM_VECTORS_MIXED: usize = 1024;
 const BASE_NUM_READERS: usize = 50;
@@ -28,6 +30,112 @@ const BASE_READ_QUERIES_PER_READER: usize = 50;
 const BASE_NUM_WRITERS: usize = 25;
 const BASE_WRITE_QUERIES_PER_WRITER: usize = 10;
 const BASE_VECTOR_PER_WRITE_QUERY: usize = 512;
+
+#[derive(Debug, Clone, Default)]
+struct ProcessStats {
+    cpu_avg: f32,
+    cpu_peak: f32,
+    memory_avg_mb: f64,
+    memory_peak_mb: u64,
+    sample_count: usize,
+}
+
+impl ProcessStats {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn finish(&mut self) {
+        if self.sample_count > 0 {
+            self.cpu_avg /= self.sample_count as f32;
+            self.memory_avg_mb /= self.sample_count as f64;
+        }
+    }
+}
+
+struct ProcessMonitor {
+    pub pid: u32,
+    pub num_cpus: u32,
+    pub stats: Arc<std::sync::Mutex<ProcessStats>>,
+    pub running: Arc<AtomicU64>,
+    _system: System,
+}
+
+impl ProcessMonitor {
+    fn new(pid: u32) -> Self {
+        let mut system = System::new();
+        system.refresh_all();
+        let num_cpus = system.cpus().len() as u32;
+
+        Self {
+            pid,
+            num_cpus,
+            stats: Arc::new(std::sync::Mutex::new(ProcessStats::new())),
+            running: Arc::new(AtomicU64::new(0)),
+            _system: system,
+        }
+    }
+
+    fn start_monitoring(&self, track_cpu: bool) -> JoinHandle<()> {
+        self.running.store(1, Ordering::SeqCst);
+        *self.stats.lock().unwrap() = ProcessStats::new();
+
+        let pid = self.pid;
+        let num_cpus = self.num_cpus;
+        let process_stats = Arc::clone(&self.stats);
+        let running = Arc::clone(&self.running);
+
+        tokio::spawn(async move {
+            let poll_interval = MINIMUM_CPU_UPDATE_INTERVAL;
+            let mut system = System::new();
+
+            if track_cpu {
+                system.refresh_processes_specifics(
+                    ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
+                    true,
+                    ProcessRefreshKind::everything(),
+                );
+                sleep(poll_interval).await;
+            }
+
+            loop {
+                system.refresh_processes_specifics(
+                    ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
+                    true,
+                    ProcessRefreshKind::everything(),
+                );
+
+                if let Some(process) = system.process(Pid::from_u32(pid)) {
+                    let memory_bytes = process.memory();
+                    let memory_mb = memory_bytes as f64 / (1024.0 * 1024.0);
+
+                    let mut s = process_stats.lock().unwrap();
+                    s.memory_peak_mb = s.memory_peak_mb.max(memory_mb as u64);
+                    s.memory_avg_mb += memory_mb;
+                    s.sample_count += 1;
+
+                    if track_cpu {
+                        let cpu_normalized = process.cpu_usage() / num_cpus as f32;
+                        s.cpu_peak = s.cpu_peak.max(cpu_normalized);
+                        s.cpu_avg += cpu_normalized;
+                    }
+                }
+
+                sleep(poll_interval).await;
+                if running.load(Ordering::SeqCst) == 0 {
+                    break;
+                }
+            }
+        })
+    }
+
+    fn stop(&self) -> ProcessStats {
+        self.running.store(0, Ordering::SeqCst);
+        let mut stats = self.stats.lock().unwrap();
+        stats.finish();
+        stats.clone()
+    }
+}
 
 #[inline]
 /// Generate a randomized value within ±20% of the base value
@@ -62,7 +170,7 @@ pub async fn bench_run() -> Result<()> {
     let base_url = format!("http://127.0.0.1:{}", port);
 
     // Spawn the server process with isolated HOME
-    let mut server_process = spawn_server(&temp_path, port).await?;
+    let (mut server_process, server_pid) = spawn_server(&temp_path, port).await?;
 
     // Wait for server to be ready
     spinner.set_message(format!("{}", "Waiting for server to start...".dimmed()));
@@ -80,7 +188,7 @@ pub async fn bench_run() -> Result<()> {
     spinner.set_message(format!("{}", "Running benchmarks".yellow()));
 
     // Run benchmarks with the same multi progress
-    let results = run_benchmarks(&base_url, &multi).await;
+    let results = run_benchmarks(&base_url, &multi, server_pid).await;
 
     // Cleanup
     let _ = server_process.kill().await;
@@ -100,8 +208,13 @@ pub async fn bench_run() -> Result<()> {
     Ok(())
 }
 
-async fn run_benchmarks(base_url: &str, multi: &MultiProgress) -> Result<BenchmarkStats> {
+async fn run_benchmarks(
+    base_url: &str,
+    multi: &MultiProgress,
+    server_pid: u32,
+) -> Result<BenchmarkStats> {
     let mut stats = BenchmarkStats::default();
+    let process_monitor = ProcessMonitor::new(server_pid);
 
     // Generate randomized test parameters (±N% variance)
     stats.num_databases_write = randomized(BASE_NUM_DATABASES_WRITE);
@@ -141,13 +254,17 @@ async fn run_benchmarks(base_url: &str, multi: &MultiProgress) -> Result<Benchma
     spinner.enable_steady_tick(Duration::from_millis(80));
 
     spinner.set_message(format!("{}", "Concurrent Writes".bold().magenta()));
-    run_concurrent_writes_test(base_url, &mut stats).await?;
+    run_concurrent_writes_test(base_url, &mut stats, &process_monitor).await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     spinner.set_message(format!("{}", "Thundering herd".bold().magenta()));
-    run_thundering_herd_test(base_url, &mut stats).await?;
+    run_thundering_herd_test(base_url, &mut stats, &process_monitor).await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     spinner.set_message(format!("{}", "Mixed read/write Workload".bold().magenta()));
-    run_mixed_workload_test(base_url, &mut stats).await?;
+    run_mixed_workload_test(base_url, &mut stats, &process_monitor).await?;
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     spinner.finish_and_clear();
     Ok(stats)
@@ -225,7 +342,7 @@ fn find_blzdb_binary() -> Result<PathBuf> {
     )
 }
 
-async fn spawn_server(temp_dir: &PathBuf, port: u16) -> Result<Child> {
+async fn spawn_server(temp_dir: &PathBuf, port: u16) -> Result<(Child, u32)> {
     // Find the blzdb binary using multiple search strategies
     let blzdb_path = find_blzdb_binary()?;
 
@@ -256,7 +373,8 @@ async fn spawn_server(temp_dir: &PathBuf, port: u16) -> Result<Child> {
         .spawn()
         .context("Failed to spawn blzdb serve")?;
 
-    // Log server output in background
+    let pid = child.id().unwrap_or(0);
+
     if let Some(stdout) = child.stdout.take() {
         tokio::spawn(async move {
             let reader = BufReader::new(stdout);
@@ -277,7 +395,7 @@ async fn spawn_server(temp_dir: &PathBuf, port: u16) -> Result<Child> {
         });
     }
 
-    Ok(child)
+    Ok((child, pid))
 }
 
 #[inline]
@@ -351,9 +469,18 @@ struct BenchmarkStats {
     mixed_read_expected: u64,
     mixed_write_success: u64,
     mixed_write_expected: u64,
+
+    // Process stats
+    write_process: ProcessStats,
+    thunder_process: ProcessStats,
+    mixed_process: ProcessStats,
 }
 
-async fn run_concurrent_writes_test(base_url: &str, stats: &mut BenchmarkStats) -> Result<()> {
+async fn run_concurrent_writes_test(
+    base_url: &str,
+    stats: &mut BenchmarkStats,
+    monitor: &ProcessMonitor,
+) -> Result<()> {
     let client = create_client();
     let timestamp = chrono::Utc::now().timestamp();
     let num_databases = stats.num_databases_write;
@@ -398,6 +525,8 @@ async fn run_concurrent_writes_test(base_url: &str, stats: &mut BenchmarkStats) 
     }
 
     let start = Instant::now();
+    let monitor_handle = monitor.start_monitoring(true);
+
     let barrier = Arc::new(Barrier::new(num_databases));
     let success_count = Arc::new(AtomicU64::new(0));
 
@@ -475,10 +604,17 @@ async fn run_concurrent_writes_test(base_url: &str, stats: &mut BenchmarkStats) 
         1.0
     };
 
+    monitor_handle.abort();
+    stats.write_process = monitor.stop();
+
     Ok(())
 }
 
-async fn run_thundering_herd_test(base_url: &str, stats: &mut BenchmarkStats) -> Result<()> {
+async fn run_thundering_herd_test(
+    base_url: &str,
+    stats: &mut BenchmarkStats,
+    monitor: &ProcessMonitor,
+) -> Result<()> {
     let client = create_client();
     let timestamp = chrono::Utc::now().timestamp();
     let num_concurrent = stats.num_concurrent_thunder;
@@ -532,6 +668,8 @@ async fn run_thundering_herd_test(base_url: &str, stats: &mut BenchmarkStats) ->
     let success_count = Arc::new(AtomicU64::new(0));
 
     let start = Instant::now();
+    let monitor_handle = monitor.start_monitoring(false);
+
     let mut handles = vec![];
 
     for _ in 0..num_concurrent {
@@ -596,10 +734,17 @@ async fn run_thundering_herd_test(base_url: &str, stats: &mut BenchmarkStats) ->
             / stats.thunder_min_latency.as_millis() as f64;
     }
 
+    monitor_handle.abort();
+    stats.thunder_process = monitor.stop();
+
     Ok(())
 }
 
-async fn run_mixed_workload_test(base_url: &str, stats: &mut BenchmarkStats) -> Result<()> {
+async fn run_mixed_workload_test(
+    base_url: &str,
+    stats: &mut BenchmarkStats,
+    monitor: &ProcessMonitor,
+) -> Result<()> {
     let client = create_client();
     let timestamp = chrono::Utc::now().timestamp();
 
@@ -670,6 +815,8 @@ async fn run_mixed_workload_test(base_url: &str, stats: &mut BenchmarkStats) -> 
     let write_success = Arc::new(AtomicU64::new(0));
 
     let start = Instant::now();
+    let monitor_handle = monitor.start_monitoring(true);
+
     let mut handles = vec![];
 
     // Spawn readers
@@ -778,6 +925,9 @@ async fn run_mixed_workload_test(base_url: &str, stats: &mut BenchmarkStats) -> 
     stats.mixed_write_success = write_success.load(Ordering::SeqCst);
     stats.mixed_write_expected = (num_writers * write_queries) as u64;
 
+    monitor_handle.abort();
+    stats.mixed_process = monitor.stop();
+
     Ok(())
 }
 
@@ -810,6 +960,14 @@ fn display_results(stats: &BenchmarkStats) {
         stats.write_success, stats.write_expected, write_status
     );
     println!("   Speedup: {:.1}x (vs sequential)", stats.write_speedup);
+    println!(
+        "   Server CPU: {:.1}% (avg) / {:.1}% (peak)",
+        stats.write_process.cpu_avg, stats.write_process.cpu_peak
+    );
+    println!(
+        "   Server Memory: {:.1} MB (avg) / {} MB (peak)",
+        stats.write_process.memory_avg_mb, stats.write_process.memory_peak_mb
+    );
 
     println!("\n{}", "Thundering herd".bold());
     println!("   Concurrent Requests: {}", stats.num_concurrent_thunder);
@@ -840,6 +998,19 @@ fn display_results(stats: &BenchmarkStats) {
             "✓ (good)".green()
         } else {
             "✗ (high)".red()
+        }
+    );
+    let mem_stable =
+        (stats.thunder_process.memory_peak_mb as f64 - stats.thunder_process.memory_avg_mb).abs()
+            < 10.0;
+    println!(
+        "   Memory: {:.1} MB (avg) / {} MB (peak) {}",
+        stats.thunder_process.memory_avg_mb,
+        stats.thunder_process.memory_peak_mb,
+        if mem_stable {
+            "✓ (stable)".green()
+        } else {
+            "✗ (unstable)".red()
         }
     );
 
@@ -874,12 +1045,23 @@ fn display_results(stats: &BenchmarkStats) {
         "   Successful Writes: {}/{} {}",
         stats.mixed_write_success, stats.mixed_write_expected, write_status
     );
+    println!(
+        "   Server CPU: {:.1}% (avg) / {:.1}% (peak)",
+        stats.mixed_process.cpu_avg, stats.mixed_process.cpu_peak
+    );
+    println!(
+        "   Server Memory: {:.1} MB (avg) / {} MB (peak)",
+        stats.mixed_process.memory_avg_mb, stats.mixed_process.memory_peak_mb
+    );
 
     let all_passed = stats.write_success == stats.write_expected
         && stats.thunder_success == stats.thunder_expected
         && stats.mixed_read_success >= stats.mixed_read_expected * 95 / 100
         && stats.mixed_write_success >= stats.mixed_write_expected * 95 / 100
-        && stats.thunder_latency_ratio < 5.0;
+        && stats.thunder_latency_ratio < 10.0
+        && (stats.thunder_process.memory_peak_mb as f64 - stats.thunder_process.memory_avg_mb)
+            .abs()
+            < 10.0;
 
     if !all_passed {
         println!(
@@ -890,15 +1072,6 @@ fn display_results(stats: &BenchmarkStats) {
         );
     }
 }
-
-// #[inline]
-// fn format_duration(d: Duration) -> String {
-//     if d.as_millis() >= 1000 {
-//         format!("{:.2}s", d.as_secs_f64())
-//     } else {
-//         format!("{}ms", d.as_millis())
-//     }
-// }
 
 #[inline]
 fn generate_random_vector(dimensions: usize) -> Vec<f32> {
