@@ -131,8 +131,10 @@ Mixed Read/Write Workload
 ```
 
 - This commands spin ups child background blz servers in temp environment
-- Bench simulates client-server interactions with concurrent reads and writes, measuring latency, throughput, and resource usage.
-- Results show significant speedup for concurrent writes, but thundering herd issue is still present, which is expected due to the so many locking and I/O design. (Needs improvement, but still works for basic use cases)
+- Bench simulates client-server interactions with concurrent reads and writes, measuring latency, throughput, and
+  resource usage.
+- Results show significant speedup for concurrent writes, but thundering herd issue is still present, which is expected
+  due to the so many locking and I/O design. (Needs improvement, but still works for basic use cases)
 
 ### SEARCH ON 2023 AMAZON PRODUCT DATASET (350k Index)
 
@@ -387,13 +389,20 @@ Codebase is getting huge and hard to maintain it myself
 
 ### My Rules 😼
 
-- **DO NOT USE AI CODE PLEASE**, I can smell the SLOP from miles away, so get away from my trash. 🚫🤖 (Except boring
-  testing code, I do use AI for that. 🤧)
-- **DO NOT REMOVE THE COMMENTED OUT CODES**, Those are ritual sacrifices to the coding gods 🛐, it ward off evil bugs and
-  deadlocks.
-  🪦👹
+- **DO NOT USE AI CODE PLEASE**, I can smell the SLOP from miles away, so get away from my trash. (Except boring
+  testing code, I do use AI for that.) 🤖🚫
 - **DO NOT REFACTOR SERVER AND CORE MODULES**, Unless there is a less I/O operations, those codes are sacred. 🙏📜
 - **DO NOT BRING YOUR 'BEST PRACTICES' BS HERE**, Im very opinionated about coding styles and still learning, so don't
   waste your time. 🛑🧠
 - **DO NOT UNDER ANY CIRCUMSTANCES, ADD ANOTHER LOCKS/THREAD SPAWNS/ASYNC AWAIT UNLESS ABSOLUTELY NECESSARY**,
-  Those are the reasons why this code is thread-safe AND why the code is slow, and I even dont know HOW!!!!. 🛑🔒
+  Those are the reasons why this code is thread-safe AND why its slow, and I even dont know HOW!!!!. 🛑🔒
+
+<h3 style="text-align: center;">VPS Support 😾</h3>
+
+<p style="text-align: center;">
+  <a href="https://www.buymeacoffee.com/ronakgh97" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+         alt="Buy Me A Coffee"
+         style="height: 60px !important;width: 217px !important;">
+  </a>
+</p>
