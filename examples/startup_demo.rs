@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
 
     let embeddings_path = "embeddings/Startup_EMBEDDINGS.json";
 
-    let index_path = "examples/startup_index/startup_index.bin";
+    let index_path = "examples/startup_index/HNSW_INDEX.bin";
 
     if PathBuf::from(embeddings_path).exists() {
         println!("Embeddings file already exists.");

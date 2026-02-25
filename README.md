@@ -67,7 +67,7 @@ docker pull ronakgh97/blazedb:latest
 docker run -d \
   --name blazedb \
   -p 8080:8080 \
-  -env-file .env \
+  --env-file .env \
   -v blazedb-config:/home/blazedb/.config/blaze \
   -v blazedb-sources:/home/blazedb/blaze \
   -v blazedb-backups:/home/blazedb/backups \

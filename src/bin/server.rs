@@ -21,6 +21,9 @@ async fn main() -> Result<()> {
         Some(ServerCommands::Bench { .. }) => {
             bench_run().await?;
         }
+        Some(ServerCommands::Sync { .. }) => {
+            //    sync_run().await?;
+        }
         None => {
             let _ = print_ascii().await;
         }

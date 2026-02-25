@@ -20,6 +20,9 @@ pub enum ServerCommands {
         fix: bool,
     },
 
+    /// Sync Catalog file with Indexes and Databases on disk (useful for recovery or after manual file changes)
+    Sync {},
+
     /// Start the server
     Serve {
         /// Optional port to run the server on
