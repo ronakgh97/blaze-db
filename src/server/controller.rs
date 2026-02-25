@@ -17,6 +17,7 @@ use crate::server::{
 use crate::utils::{BackupInfo, EmbeddingMetadata, EmbeddingStore, Provider};
 use crate::{debug, error, info, warn};
 use axum::extract::DefaultBodyLimit;
+use axum::http::HeaderValue;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -28,6 +29,7 @@ use std::fmt::Display;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::{Mutex, RwLock};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 static START_TIME: OnceLock<chrono::DateTime<chrono::Local>> = OnceLock::new();
 static PROVIDER: OnceLock<Provider> = OnceLock::new();
@@ -61,6 +63,9 @@ lazy_static! {
 }
 
 async fn create_router() -> Router {
+    let cors = build_cors_layer();
+    // let cors  = CorsLayer::permissive();
+
     Router::new()
         .route("/v1/blazedb/health", get(health_check))
         .route("/v1/blazedb/databases/create", post(create_database))
@@ -79,6 +84,59 @@ async fn create_router() -> Router {
         .route("/v1/blazedb/query", post(search_query))
         .route("/v1/blazedb/index", post(get_index_details))
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
+        .layer(cors)
+}
+
+/// Valid formats:
+/// - Not set or "*" -> allows all origins (permissive)
+/// - "none" -> disables CORS completely
+/// - "http://localhost:3000,https://example.com" -> comma-separated list of allowed origins
+fn build_cors_layer() -> CorsLayer {
+    let cors_origins = std::env::var("BLAZE_CORS_ORIGINS").unwrap_or_else(|_| "*".to_string());
+
+    match cors_origins.trim() {
+        "none" => {
+            info!("CORS disabled");
+            // Return a minimal CORS layer that doesn't add any headers
+            CorsLayer::new()
+        }
+        "*" => {
+            info!("CORS enabled for all origins");
+            CorsLayer::permissive()
+        }
+        origins_str => {
+            let valid_origins: Vec<HeaderValue> = origins_str
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .filter_map(|origin| {
+                    if origin.starts_with("http://") || origin.starts_with("https://") {
+                        match origin.parse::<HeaderValue>() {
+                            Ok(v) => Some(v),
+                            Err(_) => {
+                                warn!("CORS: could not parse origin header value: {}", origin);
+                                None
+                            }
+                        }
+                    } else {
+                        warn!("CORS: skipping invalid origin (must start with http:// or https://): {}", origin);
+                        None
+                    }
+                })
+                .collect();
+
+            if valid_origins.is_empty() {
+                warn!("CORS: no valid origins in BLAZE_CORS_ORIGINS, falling back to permissive");
+                return CorsLayer::permissive();
+            }
+
+            info!("CORS enabled for specific origins: {:?}", valid_origins);
+            CorsLayer::new()
+                .allow_origin(AllowOrigin::list(valid_origins))
+                .allow_methods(tower_http::cors::Any)
+                .allow_headers(tower_http::cors::Any)
+        }
+    }
 }
 
 // Start the server with the given port and multiple sources or single source

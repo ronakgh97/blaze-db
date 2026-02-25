@@ -47,6 +47,7 @@ ENV HOME=/home/blazedb
 #ENV EMBEDDING_MODEL=text-embedding-qwen3-embedding-0.6b
 #ENV EMBEDDING_API_URL=http://host.docker.internal:1234/v1/embeddings
 #ENV EMBEDDING_API_KEY=local
+#ENV BLAZE_CORS_ORIGIN="*"
 
 # Health check - verify the binary exists
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD test -f /app/blzdb || exit 1
