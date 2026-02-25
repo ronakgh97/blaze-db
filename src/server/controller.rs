@@ -62,6 +62,7 @@ lazy_static! {
         )));
 }
 
+#[inline]
 async fn create_router() -> Router {
     let cors = build_cors_layer();
     // let cors  = CorsLayer::permissive();
@@ -87,52 +88,38 @@ async fn create_router() -> Router {
         .layer(cors)
 }
 
-/// Valid formats:
-/// - Not set or "*" -> allows all origins (permissive)
-/// - "none" -> disables CORS completely
-/// - "http://localhost:3000,https://example.com" -> comma-separated list of allowed origins
+/// - Not set or `*` -> allow all origins
+/// - `none` -> no CORS headers
+/// - Comma-separated origins -> `https://blazedb.online,https://app.example.com`
+#[inline]
 fn build_cors_layer() -> CorsLayer {
-    let cors_origins = std::env::var("BLAZE_CORS_ORIGINS").unwrap_or_else(|_| "*".to_string());
+    let raw = std::env::var("BLAZE_CORS_ORIGINS").unwrap_or_else(|_| "*".to_string());
 
-    match cors_origins.trim() {
-        "none" => {
-            info!("CORS disabled");
-            // Return a minimal CORS layer that doesn't add any headers
-            CorsLayer::new()
-        }
-        "*" => {
-            info!("CORS enabled for all origins");
+    match raw.trim() {
+        "*" | "" => {
+            info!("CORS: all origins allowed");
             CorsLayer::permissive()
         }
+        "none" => {
+            info!("CORS: no CORS headers will be set");
+            CorsLayer::new()
+        }
         origins_str => {
-            let valid_origins: Vec<HeaderValue> = origins_str
+            let origins: Vec<HeaderValue> = origins_str
                 .split(',')
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
-                .filter_map(|origin| {
-                    if origin.starts_with("http://") || origin.starts_with("https://") {
-                        match origin.parse::<HeaderValue>() {
-                            Ok(v) => Some(v),
-                            Err(_) => {
-                                warn!("CORS: could not parse origin header value: {}", origin);
-                                None
-                            }
-                        }
-                    } else {
-                        warn!("CORS: skipping invalid origin (must start with http:// or https://): {}", origin);
-                        None
-                    }
-                })
+                .filter_map(|s| s.parse::<HeaderValue>().ok())
                 .collect();
 
-            if valid_origins.is_empty() {
-                warn!("CORS: no valid origins in BLAZE_CORS_ORIGINS, falling back to permissive");
+            if origins.is_empty() {
+                warn!("CORS: no valid origins parsed, falling back to permissive");
                 return CorsLayer::permissive();
             }
 
-            info!("CORS enabled for specific origins: {:?}", valid_origins);
+            info!("CORS: restricted to {:?}", origins);
             CorsLayer::new()
-                .allow_origin(AllowOrigin::list(valid_origins))
+                .allow_origin(AllowOrigin::list(origins))
                 .allow_methods(tower_http::cors::Any)
                 .allow_headers(tower_http::cors::Any)
         }
