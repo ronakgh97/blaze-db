@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
         "local",
     );
 
-    let query = "Coffee";
+    let query = "Search engine";
     let embedding = provider.fetch_embedding(query).await?;
 
     let index = EmbeddingStore::load_index_file(&PathBuf::from(index_path)).await?;
@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
 
     let results = index
         .hnsw_store
-        .search_with_metadata(&embedding.embedding[0], 10, None);
+        .search_with_metadata(&embedding.embedding[0], 100, None);
 
     println!("Search results:");
     for (i, (node_id, score, metadata)) in results.iter().take(5).enumerate() {

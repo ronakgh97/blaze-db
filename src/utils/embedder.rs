@@ -80,10 +80,19 @@ impl VectorData {
         json_data.await?
     }
 
-    // Write VectorData to disk as a JSON file
+    // Write VectorData to disk as a JSON file using atomic write-rename
     pub async fn write_to_disk(&self, path: &PathBuf) -> Result<()> {
         let json_data = serde_json::to_string_pretty(self)?;
-        tokio::fs::write(path, json_data).await?;
+
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        let temp_path = path.with_extension("tmp");
+        tokio::fs::write(&temp_path, json_data).await?;
+
+        tokio::fs::rename(&temp_path, path).await?;
+
         Ok(())
     }
 }
