@@ -24,7 +24,7 @@ async fn test_cache_and_bench() -> anyhow::Result<()> {
 
     let time_taken_no_cache = std::time::Instant::now();
     let resp = client
-        .post("http://localhost:8080/v1/blaze/query")
+        .post("http://localhost:8080/v1/blazedb/query")
         .json(&query_request_1)
         .send()
         .await?;
@@ -62,7 +62,7 @@ async fn test_cache_and_bench() -> anyhow::Result<()> {
     // Send a query request to the server again to test cache
     let time_taken_with_cache = std::time::Instant::now();
     let resp_cached = client
-        .post("http://localhost:8080/v1/blaze/query")
+        .post("http://localhost:8080/v1/blazedb/query")
         .json(&query_request_2)
         .send()
         .await?;

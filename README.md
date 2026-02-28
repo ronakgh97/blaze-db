@@ -21,6 +21,9 @@ embeddings using HNSW Indexing.
 - Bench ARG `blzdb bench` to CLI for quick benchmarking on Concurrent Write/Reads workload with Isolated environment.
 - Lazy deletion with tombstone nodes and background reindexing job for low disk space usage. (Needs improvement, but
   works for now)
+- DashMap for superfast in-memory concurrent metadata storage, very good for cache invalidation and quick lookups. (No
+  more global locks for metadata! or disk hitting during non-write operations.)
+- Configurable server settings with environment variables and .env file support. (Docker friendly)
 
 ## Quick Links
 
@@ -40,16 +43,18 @@ embeddings using HNSW Indexing.
 # Initialize dotfiles
 blzdb init
 
-blzdb serve         
-[14:11:48][INFO] Starting the Server...
-[14:11:48][INFO] "Provider (Model: text-embedding-qwen3-embedding-0.6b, Url: http://local..., Key: loca...)"
-[14:11:48][INFO] Source: default_src is valid
-[14:11:48][INFO] Starting server with 1 valid source(s)
-[14:11:48][INFO] Server is running on http://0.0.0.0:8080
-[14:11:48][INFO] Using Sources: ["default_src"]
-[14:11:48][INFO] Backup scheduler enabled: false
-[14:11:48][INFO] Index cache capacity: 128
-[14:11:48][INFO] Server started
+blzdb serve
+[20:59:16][INFO] Starting the Server...
+[20:59:16][INFO] "Provider (Model: text-embedding-qwen3-embedding-0.6b, Url: http://host...., Key: loca...)"
+[20:59:16][INFO] Source: default_src is valid
+[20:59:16][INFO] Starting server with 1 valid source(s)
+[20:59:16][INFO] Server is running on http://0.0.0.0:8080
+[20:59:16][INFO] Using 1 Sources
+[20:59:16][INFO] Backup scheduler enabled: false
+[20:59:16][INFO] Index cache capacity: 128
+[20:59:16][INFO] CORS: all origins allowed
+[20:59:16][INFO] Process ID: 34716
+[20:59:16][INFO] Server started
 ```
 
 - Download the Index
@@ -69,7 +74,7 @@ docker run -d \
   -p 8080:8080 \
   --env-file .env \
   -v blazedb-config:/home/blazedb/.config/blaze \
-  -v blazedb-sources:/home/blazedb/blaze \
+  -v blazedb-sources:/home/blazedb/blaze \F
   -v blazedb-backups:/home/blazedb/backups \
   ronakgh97/blazedb:latest
 ```
@@ -97,44 +102,57 @@ blzdb query --database amazon_products_2023 --source default_src --search "Wirel
 ### Run Isolated Benchmark
 
 ```shell
-blzdb bench
-
-blzdb bench
+blzdb bench                                                  
 BENCHMARK RESULTS
 
 Concurrent Writes
-   Databases: 103 | Vectors/DB: 735
-   Total Time: 10.07s
-   Min: 2.147s | Max: 9.982s | Avg: 6.719s
-   Success: 103/103 ✓
-   Speedup: 68.7x (vs sequential)
-   Server CPU: 79.6% (avg) / 92.9% (peak)
-   Server Memory: 399.7 MB (avg) / 594 MB (peak)
+   Databases: 79 | Vectors/DB: 1148
+   Total Time: 16.37s
+   Min: 4.082s | Max: 16.273s | Avg: 10.039s
+   Success: 79/79 ✓
+   Speedup: 48.4x (vs sequential)
+   Server CPU: 68.7% (avg) / 115.4% (peak)
+   Server Memory: 369.0 MB (avg) / 610 MB (peak)
 
 Thundering herd
-   Concurrent Requests: 926
-   Total Time: 1.68s
-   Min: 0.057s | Max: 1.646s | Avg: 0.961s
-   Success: 926/926 ✓
-   Latency Ratio: 29.4x ✗ (high)
-   Memory: 70.8 MB (avg) / 98 MB (peak) ✗ (unstable)
+   Concurrent Requests: 844
+   Total Time: 1.67s
+   Min: 0.014s | Max: 1.643s | Avg: 0.834s
+   Success: 844/844 ✓
+   Latency Ratio: 117.3x ✗ (high)
+   Latency Percentiles: P50: 723.6ms | P95: 1612.2ms | P99: 1633.1ms
+   Server Search: P50: 3.6ms | P95: 10.7ms | P99: 42.2ms   (HNSW search time)
+   Server I/O: P50: 0.0ms | P95: 0.0ms | P99: 0.0ms   (disk/metadata I/O time)
+   Memory: 88.2 MB (avg) / 106 MB (peak) ✗ (unstable)
 
 Mixed Read/Write Workload
-   Readers: 59 (45 queries each)
-   Writers: 23 (12 inserts of 497 vectors each)
-   Total Time: 87.03s
-   Successful Reads: 2655/2655 ✓
-   Successful Writes: 276/276 ✓
-   Server CPU: 73.6% (avg) / 92.2% (peak)
-   Server Memory: 869.4 MB (avg) / 1230 MB (peak)
+   Readers: 63 (69 queries each)
+   Writers: 27 (8 inserts of 513 vectors each)
+   Total Time: 39.05s
+   Successful Reads: 4347/4347 ✓
+   Successful Writes: 216/216 ✓
+   Server CPU: 80.5% (avg) / 97.6% (peak)
+   Server Memory: 903.4 MB (avg) / 1151 MB (peak)
+
+Top K Scaling
+   top_k           latency      scaling
+   ------------------------------------
+   100              17.8ms        1.0x
+   500              16.1ms        0.9x
+   1000             14.6ms        0.8x
+   2500             14.5ms        0.8x
+   5000             14.8ms        0.8x
+   7500             12.7ms        0.7x
+   10000            13.4ms        0.8x
  Some benchmarks had issues, don't question my code and get a better CPU
 ```
 
 - This commands spin ups child background blz servers in temp environment
 - Bench simulates client-server interactions with concurrent reads and writes, measuring latency, throughput, and
   resource usage.
-- Results show significant speedup for concurrent writes, but thundering herd issue is still present, which is expected
-  due to the so many locking and I/O design. (Needs improvement, but still works for basic use cases)
+- Results show significant speedup for concurrent writes, but thundering herd issue is still present, this is done on
+  purpose, the bench is too extreme, and unrealistic.
+- The hell is going on with the latency ratio, I have no idea.
 
 ### SEARCH ON 2023 AMAZON PRODUCT DATASET (350k Index)
 
@@ -266,67 +284,41 @@ Speedup over brute-force: 6.49x
 
 ### Cache Benchmarking
 
-```shel
-[10:17:18][INFO] Acquired read lock for database 'test_db'
-[10:17:18][INFO] Released read lock for database 'test_db'
-[10:17:18][INFO] I/O operations for loading index or check cache took 0.0229236s
-[10:17:18][INFO] Loaded HNSW Index with 5981 entries
-[10:17:18][INFO] Performing search with Cosine metric (top_k=5)
-[10:17:18][INFO] Search complete in 0.0006869s , found 5 results
-[10:17:18][INFO] [POST /query] Query successful, returning 5 results
-[10:17:18][INFO] Cache HIT for database 'test_db'
-[10:17:18][INFO] Cache is valid for database 'test_db'
-[10:17:18][INFO] I/O operations for loading index or check cache took 0.0002841s
-[10:17:18][INFO] Loaded HNSW Index with 5981 entries
-[10:17:18][INFO] Performing search with Cosine metric (top_k=5)
-[10:17:18][INFO] Search complete in 0.0003899s , found 5 results
-[10:17:18][INFO] [POST /query] Query successful, returning 5 results
-```
-
 ```shell
-cargo nextest run --test query_test --release --no-capture --run-ignored only
-   Compiling blaze-db v0.1.0 (C:\codes\blaze-db)
-    Finished `release` profile [optimized] target(s) in 22.88s
- Nextest run ID 6e42b62d-a8d3-45b4-beb6-fe239aea1be6 with nextest profile: default
-    Starting 1 test across 1 binary
-     Running [ 00:00:00] 0/1: 0 running, 0 passed, 0 skipped
-       START (1/1) blaze-db::query_test test_cache_and_bench
+cargo nextest run test_cache_and_bench --release --run-ignored only --no-capture
 
 running 1 test
-Total time without cache: 2.8621101s (Client: 1.7749911s, Server: 1.0871190000000002s)
-Total time with cache: 0.0400475s (Client: 0.0378031s, Server: 0.0022443999999999997s)
-Improvement factor (Server side): 484.37x
+Total time without cache: 3.3927011s (Client: 2.0225559s, Server: 1.3701452s)
+Total time with cache: 0.041175100000000006s (Client: 0.0395715s, Server: 0.0016036000000000002s)
+Improvement factor (Server side): 854.42x
 test test_cache_and_bench ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.08s
 ```
 
-- Although there is still I/O overhead during cache validation (reading checksum from metadata.json),but it's
-  significantly
+- There is no I/O overhead during cache validation (since it read from in-memory checksum map), now less disk hitting
+  during non-write operations
   reduced. Checkout this file: [Cache Impl](./src/server/service/queries.rs)
 
 ### Concurrent Benchmarking
 
 ```shell
 cargo nextest run stress_test_concurrent_writes_different_databases --release --run-ignored only --no-capture
-   Compiling blaze-db v0.1.0 (C:\codes\blaze-db)
-    Finished `release` profile [optimized] target(s) in 25.59s
- Nextest run ID dd45f926-c746-491b-a9d3-cd57d943f8ad with nextest profile: default
-    Starting 1 test across 17 binaries (83 tests skipped)
-     Running [ 00:00:00] 0/1: 0 running, 0 passed, 0 skipped
-       START (1/1) blaze-db::stress_tests stress_test_concurrent_writes_different_databases
 
 running 1 test
 Source created, creating 50 databases...
 Databases created, starting concurrent writes...
+
  CONCURRENT WRITES TEST RESULTS:
   Databases written: 50
-  Vectors per database: 4096
+  Vectors per database: 2000
   Successful: 50/50
-  Total time: 74.3236711s
-  Min write time: 32.3023285s
-  Max write time: 68.0414242s
-  Avg write time: 47.294857942s
-  Expected if sequential: 2364.7428971s
-  Speedup: 31.82x
+  Total time: 45.0082293s
+  Min write time: 19.152629s
+  Max write time: 40.6575577s
+  Avg write time: 27.468832606s
+  Expected if sequential: 1373.4416303s
+  Speedup: 30.52x
 Concurrent writes to different databases work in parallel!
 test stress_test_concurrent_writes_different_databases ... ok
 ```
