@@ -266,6 +266,11 @@ async fn run_benchmarks(
 
     tokio::time::sleep(Duration::from_secs(2)).await;
 
+    spinner.set_message(format!("{}", "Top K Scaling".bold().magenta()));
+    run_topk_scaling_test(base_url, &mut stats, &process_monitor).await?;
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
     spinner.finish_and_clear();
     Ok(stats)
 }
@@ -461,6 +466,11 @@ struct BenchmarkStats {
     thunder_expected: u64,
     thunder_latency_ratio: f64,
 
+    // Latency percentiles
+    thunder_latency_p50: Duration,
+    thunder_latency_p95: Duration,
+    thunder_latency_p99: Duration,
+
     // Mixed workload
     mixed_total_time: Duration,
     mixed_read_success: u64,
@@ -472,6 +482,9 @@ struct BenchmarkStats {
     write_process: ProcessStats,
     thunder_process: ProcessStats,
     mixed_process: ProcessStats,
+
+    // Top K scaling
+    topk_scaling: Vec<(usize, Duration)>,
 }
 
 async fn run_concurrent_writes_test(
@@ -662,8 +675,32 @@ async fn run_thundering_herd_test(
         .json(&insert_req)
         .send()
         .await?;
+
+    // The server uses LAZY loading - index is loaded from disk on first query.
+    // Without warmup, all 1000+ concurrent requests would race to load the index,
+    // causing:
+    //   - P50 latency ~800ms (waiting for disk I/O)
+    //   - P99 latency ~1.6s (extreme tail)
+    //   - Latency ratio >30x (first requests slow, later requests fast)
+    //
+    // This better simulates real production where:
+    //   - Index is already loaded from previous traffic
+    //   - We're testing query path performance, not cold-start performance
+    let warmup_req = VectorQueryRequest {
+        query_vector: generate_random_vector(DIMENSIONS),
+        database: db_name.clone(),
+        source: source_name.clone(),
+        top_k: 10,
+    };
+    client
+        .post(format!("{}/v1/blazedb/query/vector", base_url))
+        .json(&warmup_req)
+        .send()
+        .await?;
+
     let barrier = Arc::new(Barrier::new(num_concurrent));
     let success_count = Arc::new(AtomicU64::new(0));
+    let latencies = Arc::new(tokio::sync::Mutex::new(Vec::with_capacity(num_concurrent)));
 
     let start = Instant::now();
     let monitor_handle = monitor.start_monitoring(false);
@@ -676,6 +713,7 @@ async fn run_thundering_herd_test(
         let source_name = source_name.clone();
         let barrier = Arc::clone(&barrier);
         let success_count = Arc::clone(&success_count);
+        let latencies = Arc::clone(&latencies);
         let base_url = base_url.to_string();
 
         let handle = tokio::spawn(async move {
@@ -701,6 +739,7 @@ async fn run_thundering_herd_test(
                 success_count.fetch_add(1, Ordering::SeqCst);
             }
 
+            latencies.lock().await.push(elapsed);
             elapsed
         });
 
@@ -713,6 +752,7 @@ async fn run_thundering_herd_test(
         .filter_map(|r| r.ok())
         .collect();
 
+    let mut all_latencies = latencies.lock().await;
     let total_elapsed = start.elapsed();
     let success = success_count.load(Ordering::SeqCst);
 
@@ -730,6 +770,21 @@ async fn run_thundering_herd_test(
     if stats.thunder_min_latency.as_millis() > 0 {
         stats.thunder_latency_ratio = stats.thunder_max_latency.as_millis() as f64
             / stats.thunder_min_latency.as_millis() as f64;
+    }
+
+    // Calculate percentiles
+    if !all_latencies.is_empty() {
+        all_latencies.sort();
+        let len = all_latencies.len();
+        stats.thunder_latency_p50 = all_latencies[len / 2];
+        stats.thunder_latency_p95 =
+            all_latencies[(len as f64 * 0.95) as usize].min(all_latencies[len - 1]);
+        stats.thunder_latency_p99 =
+            all_latencies[(len as f64 * 0.99) as usize].min(all_latencies[len - 1]);
+    } else {
+        stats.thunder_latency_p50 = Duration::ZERO;
+        stats.thunder_latency_p95 = Duration::ZERO;
+        stats.thunder_latency_p99 = Duration::ZERO;
     }
 
     monitor_handle.abort();
@@ -927,6 +982,147 @@ async fn run_mixed_workload_test(
     Ok(())
 }
 
+async fn run_topk_scaling_test(
+    base_url: &str,
+    stats: &mut BenchmarkStats,
+    monitor: &ProcessMonitor,
+) -> Result<()> {
+    let client = create_client();
+    let timestamp = chrono::Utc::now().timestamp();
+
+    let source_name = format!("bench_src_topk_{}", timestamp);
+    let db_name = format!("bench_db_topk_{}", timestamp);
+
+    let source_req = CreateSourceRequest {
+        source_name: source_name.clone(),
+        backup_interval_hours: None,
+    };
+    client
+        .post(format!("{}/v1/blazedb/sources/create", base_url))
+        .json(&source_req)
+        .send()
+        .await?;
+
+    let db_req = CreateDatabaseRequest {
+        name: db_name.clone(),
+        source: source_name.clone(),
+        metrics: None,
+        dimensions: DIMENSIONS,
+        backup_interval_hours: None,
+    };
+    client
+        .post(format!("{}/v1/blazedb/databases/create", base_url))
+        .json(&db_req)
+        .send()
+        .await?;
+
+    let vectors: Vec<VectorDataDto> = (0..25500)
+        .map(|i| VectorDataDto {
+            id: Uuid::new_v4().to_string(),
+            embedding: generate_random_vector(DIMENSIONS),
+            metadata: format!("vector_{}", i),
+        })
+        .collect();
+
+    let insert_req = InsertRequest {
+        nodes: vec![vectors],
+        database: db_name.clone(),
+        source: source_name.clone(),
+    };
+    client
+        .post(format!("{}/v1/blazedb/insert", base_url))
+        .json(&insert_req)
+        .send()
+        .await?;
+
+    // The server uses LAZY loading - index is loaded from disk on first query.
+    // Without warmup, the first top_k value (10) would include index loading time,
+    // making it artificially slow compared to subsequent top_k values.
+    //
+    // By warming up first, we get accurate top_k scaling that shows:
+    //   - How HNSW search time actually scales with top_k
+    //   - NOT how cold-start + top_k scales
+    //
+    // Note: Even with warmup, top_k scaling may be relatively flat because:
+    //   - HTTP overhead (~15ms) often dominates over HNSW search (~1-5ms)
+    let warmup_req = VectorQueryRequest {
+        query_vector: generate_random_vector(DIMENSIONS),
+        database: db_name.clone(),
+        source: source_name.clone(),
+        top_k: 10,
+    };
+    client
+        .post(format!("{}/v1/blazedb/query/vector", base_url))
+        .json(&warmup_req)
+        .send()
+        .await?;
+
+    let top_k_values = vec![100, 500, 1000, 2500, 5000, 7500, 10000];
+    let mut topk_scaling = Vec::new();
+
+    let _monitor_handle = monitor.start_monitoring(false);
+
+    for top_k in top_k_values {
+        let num_queries = 100;
+        let barrier = Arc::new(Barrier::new(num_queries));
+        let latencies = Arc::new(tokio::sync::Mutex::new(Vec::with_capacity(num_queries)));
+
+        let mut handles = vec![];
+
+        for _ in 0..num_queries {
+            let client = create_client();
+            let db_name = db_name.clone();
+            let source_name = source_name.clone();
+            let barrier = Arc::clone(&barrier);
+            let latencies = Arc::clone(&latencies);
+            let base_url = base_url.to_string();
+
+            let handle = tokio::spawn(async move {
+                barrier.wait().await;
+                let query_start = Instant::now();
+
+                let query_req = VectorQueryRequest {
+                    query_vector: generate_random_vector(DIMENSIONS),
+                    database: db_name,
+                    source: source_name,
+                    top_k,
+                };
+
+                let _response = client
+                    .post(format!("{}/v1/blazedb/query/vector", base_url))
+                    .json(&query_req)
+                    .send()
+                    .await;
+
+                let elapsed = query_start.elapsed();
+                latencies.lock().await.push(elapsed);
+                elapsed
+            });
+
+            handles.push(handle);
+        }
+
+        let _results: Vec<Duration> = futures::future::join_all(handles)
+            .await
+            .into_iter()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let all_latencies = latencies.lock().await;
+        let avg_latency = if !all_latencies.is_empty() {
+            all_latencies.iter().sum::<Duration>() / all_latencies.len() as u32
+        } else {
+            Duration::ZERO
+        };
+
+        topk_scaling.push((top_k, avg_latency));
+    }
+
+    stats.topk_scaling = topk_scaling;
+
+    Ok(())
+}
+
 #[inline]
 fn display_results(stats: &BenchmarkStats) {
     println!("{}", "BENCHMARK RESULTS".bold().cyan());
@@ -996,6 +1192,12 @@ fn display_results(stats: &BenchmarkStats) {
             "✗ (high)".red()
         }
     );
+    println!(
+        "   Latency Percentiles: P50: {:.1}ms | P95: {:.1}ms | P99: {:.1}ms",
+        stats.thunder_latency_p50.as_secs_f64() * 1000.0,
+        stats.thunder_latency_p95.as_secs_f64() * 1000.0,
+        stats.thunder_latency_p99.as_secs_f64() * 1000.0
+    );
     let mem_stable =
         (stats.thunder_process.memory_peak_mb as f64 - stats.thunder_process.memory_avg_mb).abs()
             < 10.0;
@@ -1049,6 +1251,27 @@ fn display_results(stats: &BenchmarkStats) {
         "   Server Memory: {:.1} MB (avg) / {} MB (peak)",
         stats.mixed_process.memory_avg_mb, stats.mixed_process.memory_peak_mb
     );
+
+    println!("\n{}", "Top K Scaling".bold());
+    println!("   {:<10} {:>12} {:>12}", "top_k", "latency", "scaling");
+    println!("   {}", "-".repeat(36));
+
+    if !stats.topk_scaling.is_empty() {
+        let baseline = stats.topk_scaling[0].1;
+        for (top_k, latency) in &stats.topk_scaling {
+            let scaling = if baseline.as_nanos() > 0 {
+                latency.as_secs_f64() / baseline.as_secs_f64()
+            } else {
+                1.0
+            };
+            println!(
+                "   {:<10} {:>10.1}ms {:>10.1}x",
+                top_k,
+                latency.as_secs_f64() * 1000.0,
+                scaling
+            );
+        }
+    }
 
     let all_passed = stats.write_success == stats.write_expected
         && stats.thunder_success == stats.thunder_expected

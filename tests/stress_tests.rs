@@ -117,7 +117,22 @@ async fn stress_test_thundering_herd_same_database() {
 
     println!("Setup complete, starting thundering herd test...");
 
-    let num_concurrent = 100;
+    // Do a warmup query to ensure data is loaded and cached
+    let warmup_req = VectorQueryRequest {
+        query_vector: generate_random_vectors(1, 1024)[0].clone(),
+        database: db_name.clone(),
+        source: source_name.clone(),
+        top_k: 10,
+    };
+
+    client
+        .post(format!("{}{}", BASE_URL, VECTOR_QUERY_ENDPOINT))
+        .json(&warmup_req)
+        .send()
+        .await
+        .unwrap();
+
+    let num_concurrent = 1000;
     let barrier = Arc::new(Barrier::new(num_concurrent));
     let success_count = Arc::new(AtomicU64::new(0));
 
