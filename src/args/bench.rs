@@ -1,5 +1,6 @@
 use crate::server::{
     CreateDatabaseRequest, CreateSourceRequest, InsertRequest, VectorDataDto, VectorQueryRequest,
+    VectorQueryResponse,
 };
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -19,16 +20,17 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use uuid::Uuid;
 
-const BASE_NUM_DATABASES_WRITE: usize = 100;
-const BASE_VECTORS_PER_DB: usize = 768;
 const DIMENSIONS: usize = 1024;
-const BASE_NUM_CONCURRENT_THUNDERING: usize = 1000;
-const BASE_NUM_DATABASES_MIXED: usize = 25;
+
+const BASE_NUM_DATABASES_WRITE: usize = 96;
+const BASE_VECTORS_PER_DB: usize = 1024;
+const BASE_NUM_CONCURRENT_THUNDERING: usize = 768;
+const BASE_NUM_DATABASES_MIXED: usize = 64;
 const BASE_NUM_VECTORS_MIXED: usize = 1024;
-const BASE_NUM_READERS: usize = 50;
-const BASE_READ_QUERIES_PER_READER: usize = 50;
-const BASE_NUM_WRITERS: usize = 25;
-const BASE_WRITE_QUERIES_PER_WRITER: usize = 10;
+const BASE_NUM_READERS: usize = 64;
+const BASE_READ_QUERIES_PER_READER: usize = 64;
+const BASE_NUM_WRITERS: usize = 24;
+const BASE_WRITE_QUERIES_PER_WRITER: usize = 8;
 const BASE_VECTOR_PER_WRITE_QUERY: usize = 512;
 
 #[derive(Debug, Clone, Default)]
@@ -471,6 +473,14 @@ struct BenchmarkStats {
     thunder_latency_p95: Duration,
     thunder_latency_p99: Duration,
 
+    // Server-side timings (from response)
+    thunder_server_search_p50: Duration,
+    thunder_server_search_p95: Duration,
+    thunder_server_search_p99: Duration,
+    thunder_server_io_p50: Duration,
+    thunder_server_io_p95: Duration,
+    thunder_server_io_p99: Duration,
+
     // Mixed workload
     mixed_total_time: Duration,
     mixed_read_success: u64,
@@ -701,6 +711,8 @@ async fn run_thundering_herd_test(
     let barrier = Arc::new(Barrier::new(num_concurrent));
     let success_count = Arc::new(AtomicU64::new(0));
     let latencies = Arc::new(tokio::sync::Mutex::new(Vec::with_capacity(num_concurrent)));
+    // Store (client_latency, server_search_time, server_io_time)
+    let server_timings = Arc::new(tokio::sync::Mutex::new(Vec::with_capacity(num_concurrent)));
 
     let start = Instant::now();
     let monitor_handle = monitor.start_monitoring(false);
@@ -714,6 +726,7 @@ async fn run_thundering_herd_test(
         let barrier = Arc::clone(&barrier);
         let success_count = Arc::clone(&success_count);
         let latencies = Arc::clone(&latencies);
+        let server_timings = Arc::clone(&server_timings);
         let base_url = base_url.to_string();
 
         let handle = tokio::spawn(async move {
@@ -735,8 +748,15 @@ async fn run_thundering_herd_test(
 
             let elapsed = query_start.elapsed();
 
-            if response.is_ok() && response.unwrap().status().is_success() {
+            if let Ok(resp) = response
+                && resp.status().is_success()
+            {
                 success_count.fetch_add(1, Ordering::SeqCst);
+                if let Ok(body) = resp.json::<VectorQueryResponse>().await {
+                    let search_time = Duration::from_secs_f64(body.search_time_sec);
+                    let io_time = Duration::from_secs_f64(body.io_time_sec);
+                    server_timings.lock().await.push((search_time, io_time));
+                }
             }
 
             latencies.lock().await.push(elapsed);
@@ -785,6 +805,39 @@ async fn run_thundering_herd_test(
         stats.thunder_latency_p50 = Duration::ZERO;
         stats.thunder_latency_p95 = Duration::ZERO;
         stats.thunder_latency_p99 = Duration::ZERO;
+    }
+
+    // Calculate server-side timing percentiles
+    let mut all_server_timings = server_timings.lock().await;
+    if !all_server_timings.is_empty() {
+        // Sort by search time for percentile calculation
+        all_server_timings.sort_by(|a, b| a.0.cmp(&b.0));
+        let len = all_server_timings.len();
+
+        stats.thunder_server_search_p50 = all_server_timings[len / 2].0;
+        stats.thunder_server_search_p95 = all_server_timings[(len as f64 * 0.95) as usize]
+            .0
+            .min(all_server_timings[len - 1].0);
+        stats.thunder_server_search_p99 = all_server_timings[(len as f64 * 0.99) as usize]
+            .0
+            .min(all_server_timings[len - 1].0);
+
+        // Sort by io time for percentile calculation
+        all_server_timings.sort_by(|a, b| a.1.cmp(&b.1));
+        stats.thunder_server_io_p50 = all_server_timings[len / 2].1;
+        stats.thunder_server_io_p95 = all_server_timings[(len as f64 * 0.95) as usize]
+            .1
+            .min(all_server_timings[len - 1].1);
+        stats.thunder_server_io_p99 = all_server_timings[(len as f64 * 0.99) as usize]
+            .1
+            .min(all_server_timings[len - 1].1);
+    } else {
+        stats.thunder_server_search_p50 = Duration::ZERO;
+        stats.thunder_server_search_p95 = Duration::ZERO;
+        stats.thunder_server_search_p99 = Duration::ZERO;
+        stats.thunder_server_io_p50 = Duration::ZERO;
+        stats.thunder_server_io_p95 = Duration::ZERO;
+        stats.thunder_server_io_p99 = Duration::ZERO;
     }
 
     monitor_handle.abort();
@@ -1197,6 +1250,20 @@ fn display_results(stats: &BenchmarkStats) {
         stats.thunder_latency_p50.as_secs_f64() * 1000.0,
         stats.thunder_latency_p95.as_secs_f64() * 1000.0,
         stats.thunder_latency_p99.as_secs_f64() * 1000.0
+    );
+    println!(
+        "   Server Search: P50: {:.1}ms | P95: {:.1}ms | P99: {:.1}ms  {}",
+        stats.thunder_server_search_p50.as_secs_f64() * 1000.0,
+        stats.thunder_server_search_p95.as_secs_f64() * 1000.0,
+        stats.thunder_server_search_p99.as_secs_f64() * 1000.0,
+        " (HNSW search time)".dimmed()
+    );
+    println!(
+        "   Server I/O: P50: {:.1}ms | P95: {:.1}ms | P99: {:.1}ms  {}",
+        stats.thunder_server_io_p50.as_secs_f64() * 1000.0,
+        stats.thunder_server_io_p95.as_secs_f64() * 1000.0,
+        stats.thunder_server_io_p99.as_secs_f64() * 1000.0,
+        " (disk/metadata I/O time)".dimmed()
     );
     let mem_stable =
         (stats.thunder_process.memory_peak_mb as f64 - stats.thunder_process.memory_avg_mb).abs()
