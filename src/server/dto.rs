@@ -178,6 +178,7 @@ pub struct GetIndexDetailsRequest {
     pub source: String,
     pub database: String,
     pub page: usize,
+    pub show_tombstone: bool, // whether to include deleted entries (tombstones) in the response
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

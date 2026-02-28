@@ -33,6 +33,7 @@ pub fn compute_page(total_vectors: usize, requested_page: usize) -> (usize, usiz
 pub async fn get_index_by_page(request: GetIndexDetailsRequest) -> Result<GetIndexDetailsResponse> {
     let db_name = &request.database;
     let source = &request.source;
+    let show_tombstone = &request.show_tombstone;
 
     // Resolve database directory
     let db_path = search_database_on_disk(db_name, source)
@@ -76,15 +77,27 @@ pub async fn get_index_by_page(request: GetIndexDetailsRequest) -> Result<GetInd
                 let (total_pages, current_page, start, end) =
                     compute_page(nodes.len(), request.page);
 
-                let entries = nodes[start..end]
-                    .par_iter()
-                    .filter(|n| !n.is_deleted()) // skip tombstoned nodes
-                    .map(|n| VectorDataDto {
-                        id: n.node_id.clone(),
-                        embedding: n.vector.clone(),
-                        metadata: n.metadata.clone(),
-                    })
-                    .collect();
+                let entries: Vec<VectorDataDto> = match show_tombstone {
+                    true => nodes[start..end]
+                        .par_iter()
+                        .map(|n| VectorDataDto {
+                            id: n.node_id.clone(),
+                            embedding: n.vector.clone(),
+                            metadata: n.metadata.clone(),
+                        })
+                        .collect(),
+                    false => {
+                        nodes[start..end]
+                            .par_iter() // skip tombstoned nodes
+                            .filter(|n| !n.is_deleted())
+                            .map(|n| VectorDataDto {
+                                id: n.node_id.clone(),
+                                embedding: n.vector.clone(),
+                                metadata: n.metadata.clone(),
+                            })
+                            .collect()
+                    }
+                };
 
                 info!(
                     "[page] Served page {}/{} for '{}' ({:.4}s IO)",
@@ -139,15 +152,27 @@ pub async fn get_index_by_page(request: GetIndexDetailsRequest) -> Result<GetInd
                 let (total_pages, current_page, start, end) =
                     compute_page(nodes.len(), request.page);
 
-                let entries = nodes[start..end]
-                    .iter()
-                    .filter(|n| !n.is_deleted())
-                    .map(|n| VectorDataDto {
-                        id: n.node_id.clone(),
-                        embedding: n.vector.clone(),
-                        metadata: n.metadata.clone(),
-                    })
-                    .collect();
+                let entries: Vec<VectorDataDto> = match show_tombstone {
+                    true => nodes[start..end]
+                        .par_iter()
+                        .map(|n| VectorDataDto {
+                            id: n.node_id.clone(),
+                            embedding: n.vector.clone(),
+                            metadata: n.metadata.clone(),
+                        })
+                        .collect(),
+                    false => {
+                        nodes[start..end]
+                            .par_iter() // skip tombstoned nodes
+                            .filter(|n| !n.is_deleted())
+                            .map(|n| VectorDataDto {
+                                id: n.node_id.clone(),
+                                embedding: n.vector.clone(),
+                                metadata: n.metadata.clone(),
+                            })
+                            .collect()
+                    }
+                };
 
                 info!(
                     "[page] Served page {}/{} for '{}' ({:.4}s IO)",
@@ -206,15 +231,27 @@ pub async fn get_index_by_page(request: GetIndexDetailsRequest) -> Result<GetInd
     let nodes = &store.hnsw_store.nodes;
     let (total_pages, current_page, start, end) = compute_page(nodes.len(), request.page);
 
-    let entries = nodes[start..end]
-        .iter()
-        .filter(|n| !n.is_deleted())
-        .map(|n| VectorDataDto {
-            id: n.node_id.clone(),
-            embedding: n.vector.clone(),
-            metadata: n.metadata.clone(),
-        })
-        .collect();
+    let entries: Vec<VectorDataDto> = match show_tombstone {
+        true => nodes[start..end]
+            .par_iter()
+            .map(|n| VectorDataDto {
+                id: n.node_id.clone(),
+                embedding: n.vector.clone(),
+                metadata: n.metadata.clone(),
+            })
+            .collect(),
+        false => {
+            nodes[start..end]
+                .par_iter() // skip tombstoned nodes
+                .filter(|n| !n.is_deleted())
+                .map(|n| VectorDataDto {
+                    id: n.node_id.clone(),
+                    embedding: n.vector.clone(),
+                    metadata: n.metadata.clone(),
+                })
+                .collect()
+        }
+    };
 
     info!(
         "[page] Served page {}/{} for '{}' ({:.4}s IO)",
