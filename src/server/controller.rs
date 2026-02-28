@@ -22,6 +22,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use dashmap::DashMap;
 use lazy_static::lazy_static;
 use lru::LruCache;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -60,6 +61,12 @@ lazy_static! {
         Arc::new(RwLock::new(LruCache::new(
             NonZeroUsize::new(128).unwrap() // Cache upto 128 index
         )));
+
+    /// In-memory checksum cache to avoid reading metadata.json from disk on every query
+    /// Key format: "source_database"
+    /// Value: checksum string
+    /// Populated on write operations, invalidated on restore
+    pub static ref CHECKSUM_CACHE: DashMap<String, String> = DashMap::new();
 }
 
 #[inline]
@@ -216,10 +223,10 @@ async fn cleanup_on_shutdown() {
         info!("Stopping schedulers..");
         let mut backup_service = backup_service_lock.write().await;
         backup_service.stop_scheduler().await;
-        info!("Backup scheduler stopped");
+        info!("Schedulers stopped");
     }
 
-    // Log final lock counts (LRU auto-cleans, no manual cleanup needed)
+    // Debug LRUs and Maps on shutdown
     {
         let locks = DB_WRITE_LOCKS.read().await;
         debug!("Server shutdown: {} DB_WRITE_LOCKS active", locks.len());
@@ -229,8 +236,12 @@ async fn cleanup_on_shutdown() {
         let locks = LOADING_LOCKS.read().await;
         debug!("Server shutdown: {} LOADING_LOCKS active", locks.len());
     }
+    {
+        let items = CHECKSUM_CACHE.len();
+        debug!("Server shutdown: {} CHECKSUM_CACHE active", items);
+    }
 
-    info!("Server shutdown complete");
+    info!("Server shutdown");
 }
 
 #[inline]

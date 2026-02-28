@@ -1,5 +1,5 @@
 use crate::core::{HNSW, SERVER_FILE, check_source_valid};
-use crate::server::controller::{DB_WRITE_LOCKS, ErrorTypes};
+use crate::server::controller::{CHECKSUM_CACHE, DB_WRITE_LOCKS, ErrorTypes};
 use crate::server::dto::VectorDataDto;
 use crate::server::service::database::search_database_on_disk;
 use crate::server::{EmbedRequest, EmbedResponse, InsertRequest, InsertResponse};
@@ -181,10 +181,18 @@ pub async fn insert_run(
     let mut embedding_store = EmbeddingStore::new(hnsw);
 
     // Write to temporary file
-    embedding_store
+    let checksum = embedding_store
         .write_to_disk(&database_path.join("HNSW_INDEX_TEMP.bin"))
         .await
         .with_context(|| "Failed to write index to temp file")?;
+
+    // Cache checksum in memory to avoid disk reads on every query
+    let cache_key = format!("{}_{}", source, database_name);
+    debug!(
+        "[INDEXER] Writing checksum in CHECKSUM_CACHE: key='{}' checksum='{}'",
+        cache_key, checksum
+    );
+    CHECKSUM_CACHE.insert(cache_key, checksum);
 
     // Atomic rename (crash-safe! If crash here, previous .bin is still valid)
     tokio::fs::rename(&temp_filename, &current_filename)
@@ -391,10 +399,18 @@ pub async fn embed_run(
     let mut embedding_store = EmbeddingStore::new(hnsw);
 
     // Write to temporary file
-    embedding_store
+    let checksum = embedding_store
         .write_to_disk(&database_path.join("HNSW_INDEX_TEMP.bin"))
         .await
         .with_context(|| "Failed to write index to temp file")?;
+
+    // Cache checksum in memory to avoid disk reads on every query
+    let cache_key = format!("{}_{}", source, database_name);
+    debug!(
+        "[INDEXER] Writing checksum in CHECKSUM_CACHE: key='{}' checksum='{}'",
+        cache_key, checksum
+    );
+    CHECKSUM_CACHE.insert(cache_key, checksum);
 
     // Atomic rename
     tokio::fs::rename(&temp_filename, &current_filename)
@@ -516,7 +532,8 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
                 }
 
                 warn!("[CRASH RECOVERY] Writing recovered index back to HNSW_INDEX.bin");
-                if let Err(e) = store.write_to_disk(&bin_path).await {
+                let checksum = store.write_to_disk(&bin_path).await;
+                if let Err(e) = checksum {
                     error!(
                         "[CRASH RECOVERY] Failed to write recovered index to disk: {}. \
                         Index loaded in memory but disk state inconsistent!",
@@ -525,6 +542,9 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
                     // Still return the store - it's usable in memory even if disk write failed
                 } else {
                     debug!("[CRASH RECOVERY] Successfully restored HNSW_INDEX.bin from replica");
+                    // Cache checksum for crash recovery case
+                    let cache_key = format!("{}_{}", source, database);
+                    CHECKSUM_CACHE.insert(cache_key, checksum.unwrap());
                 }
 
                 drop(_write_guard);

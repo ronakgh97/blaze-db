@@ -1,5 +1,5 @@
 use crate::core::SERVER_FILE;
-use crate::server::controller::DB_WRITE_LOCKS;
+use crate::server::controller::{CHECKSUM_CACHE, DB_WRITE_LOCKS};
 use crate::server::service::database::search_database_on_disk;
 use crate::utils::{
     BackupInfo, cleanup_old_backups, create_multi_file_backup, delete_backup as delete_backup_file,
@@ -527,7 +527,7 @@ impl BackupService {
         );
 
         // Invalidate cache BEFORE restore to prevent serving stale data
-        // But this isn't needed checksum check always ensures we have latest index in memory,
+        // But this isn't needed checksum CHECKS always ensures we have the latest index in memory,
         // If we don't have it, we load from disk before query, so we should be safe without explicit cache invalidation here
         // {
         //     let mut cache = crate::server::controller::INDEX_CACHE.write().await;
@@ -542,6 +542,10 @@ impl BackupService {
             .await
             .context("Failed to restore backup")?;
 
+        // Invalidate CHECKSUM_CACHE - the restored index has different checksum
+        // Next query will read new checksum from disk and update cache
+        CHECKSUM_CACHE.remove(&db_key);
+
         //TODO: Need to atomically rename .replica -> .bin, No Locks!!!
 
         // Reload metadata from restored files
@@ -549,6 +553,9 @@ impl BackupService {
         if metadata_path.exists() {
             match read_embeddings_metadata(&database_path).await {
                 Ok(metadata) => {
+                    // Update CHECKSUM_CACHE with new checksum from restored files
+                    CHECKSUM_CACHE.insert(db_key.clone(), metadata.checksum.clone());
+
                     // Update node count in SERVER_FILE
                     let mut server_file = SERVER_FILE.write().await;
                     if let Err(e) = server_file.update_node_count(

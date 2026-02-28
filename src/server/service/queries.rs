@@ -2,7 +2,7 @@
 use crate::core::{HNSW, Metrics, NodeIndex, SERVER_FILE};
 #[allow(unused)]
 use crate::prelude::Provider;
-use crate::server::controller::{ErrorTypes, INDEX_CACHE, LOADING_LOCKS};
+use crate::server::controller::{CHECKSUM_CACHE, ErrorTypes, INDEX_CACHE, LOADING_LOCKS};
 use crate::server::dto::{QueryResult, VectorQueryRequest, VectorQueryResponse, VectorQueryResult};
 use crate::server::service::database::search_database_on_disk;
 use crate::server::service::load_index_from_database;
@@ -46,29 +46,34 @@ pub async fn query_vector(
     let io_time_start = Instant::now();
 
     // Check cache with read lock (allows concurrent reads)
-    let cache_key = format!("{}_{}", from_database, source);
+    let cache_key = format!("{}_{}", source, from_database);
 
     {
         let cache = INDEX_CACHE.read().await;
         if let Some(cached) = cache.peek(&cache_key) {
             debug!("Cache HIT for database '{}'", from_database);
 
-            // Validate cache by comparing checksums
-            let (checksum_on_disk, dimensions, node_count) =
-                match read_embeddings_metadata(&db_path).await {
-                    Ok(meta) => (meta.checksum, meta.dimensions, meta.total_vectors),
-                    Err(e) => {
-                        error!(
-                            "Failed to read embeddings metadata for cache validation: {}",
-                            e
-                        );
-                        return Err(ErrorTypes::IndexNotFound(format!(
-                            "Failed to validate cache, index not found, Error: {}",
-                            e
-                        ))
-                        .into());
-                    }
-                };
+            // Validate cache by comparing checksums (from memory cache, fallback to disk)
+            let checksum_on_disk = CHECKSUM_CACHE
+                .get(&cache_key)
+                .map(|v| {
+                    debug!("CHECKSUM_CACHE HIT for key '{}'", cache_key);
+                    v.value().clone()
+                })
+                .unwrap_or_else(|| {
+                    // Fallback to disk read if checksum not in memory cache
+                    debug!(
+                        "CHECKSUM_CACHE MISS for key '{}' - falling back to disk",
+                        cache_key
+                    );
+                    futures::executor::block_on(read_embeddings_metadata(&db_path))
+                        .map(|meta| meta.checksum)
+                        .unwrap_or_default()
+                });
+
+            // Use cached metadata for dimensions and node_count (already in memory!)
+            let dimensions = cached.0.dimensions;
+            let node_count = cached.0.total_vectors;
 
             if cached.0.checksum == checksum_on_disk {
                 debug!("Cache is valid for database '{}'", from_database);
@@ -177,20 +182,15 @@ pub async fn query_vector(
     {
         let cache = INDEX_CACHE.read().await;
         if let Some(cached) = cache.peek(&cache_key) {
-            let checksum_on_disk = match read_embeddings_metadata(&db_path).await {
-                Ok(meta) => meta.checksum,
-                Err(e) => {
-                    error!(
-                        "Failed to read embeddings metadata for cache validation: {}",
-                        e
-                    );
-                    return Err(ErrorTypes::IndexNotFound(format!(
-                        "Failed to validate cache, index not found, Error: {}",
-                        e
-                    ))
-                    .into());
-                }
-            };
+            // Validate cache (from memory cache, fallback to disk)
+            let checksum_on_disk = CHECKSUM_CACHE
+                .get(&cache_key)
+                .map(|v| v.value().clone())
+                .unwrap_or_else(|| {
+                    futures::executor::block_on(read_embeddings_metadata(&db_path))
+                        .map(|meta| meta.checksum)
+                        .unwrap_or_default()
+                });
 
             if cached.0.checksum == checksum_on_disk {
                 debug!(
@@ -268,9 +268,17 @@ pub async fn query_vector(
     debug!("Loading index from disk for database '{}'", from_database);
     let store = load_index_from_database(from_database.clone(), source.clone()).await;
 
-    // Read the metadata
+    // Read the metadata (from disk - cache miss path)
     let metadata = match read_embeddings_metadata(&db_path).await {
-        Ok(meta) => Arc::new(meta),
+        Ok(meta) => {
+            // Populate CHECKSUM_CACHE for future queries (in case of server restart)
+            debug!(
+                "Storing CHECKSUM_CACHE with key '{}' = '{}'",
+                cache_key, meta.checksum
+            );
+            CHECKSUM_CACHE.insert(cache_key.clone(), meta.checksum.clone());
+            Arc::new(meta)
+        }
         Err(e) => {
             error!("Failed to read embeddings metadata: {}", e);
             return Err(ErrorTypes::IndexNotFound(format!(
@@ -390,29 +398,30 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     let io_time_start = Instant::now();
 
     // Check cache with read lock (allows concurrent reads)
-    let cache_key = format!("{}_{}", &request.database, &request.source);
+    let cache_key = format!("{}_{}", &request.source, &request.database);
 
     {
         let cache = INDEX_CACHE.read().await;
         if let Some(cached) = cache.peek(&cache_key) {
             debug!("Cache HIT for database '{}'", request.database);
 
-            // Validate cache by comparing checksums
-            let (checksum_on_disk, dimension, vector_count) =
-                match read_embeddings_metadata(&db_path).await {
-                    Ok(meta) => (meta.checksum, meta.dimensions, meta.total_vectors),
-                    Err(e) => {
-                        error!(
-                            "Failed to read embeddings metadata for cache validation: {}",
-                            e
-                        );
-                        return Err(ErrorTypes::IndexNotFound(format!(
-                            "Failed to validate cache, index not found, Error: {}",
-                            e
-                        ))
-                        .into());
-                    }
-                };
+            // Validate cache by comparing checksums (from memory cache, fallback to disk)
+            let checksum_on_disk = CHECKSUM_CACHE
+                .get(&cache_key)
+                .map(|v| v.value().clone())
+                .unwrap_or_else(|| {
+                    debug!(
+                        "CHECKSUM_CACHE MISS for key '{}' - falling back to disk",
+                        cache_key
+                    );
+                    futures::executor::block_on(read_embeddings_metadata(&db_path))
+                        .map(|meta| meta.checksum)
+                        .unwrap_or_default()
+                });
+
+            // Use cached metadata for dimensions and vector_count
+            let dimension = cached.0.dimensions;
+            let vector_count = cached.0.total_vectors;
 
             if cached.0.checksum == checksum_on_disk {
                 debug!("Cache is valid for database '{}'", request.database);
@@ -518,20 +527,15 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     {
         let cache = INDEX_CACHE.read().await;
         if let Some(cached) = cache.peek(&cache_key) {
-            let checksum_on_disk = match read_embeddings_metadata(&db_path).await {
-                Ok(meta) => meta.checksum,
-                Err(e) => {
-                    error!(
-                        "Failed to read embeddings metadata for cache validation: {}",
-                        e
-                    );
-                    return Err(ErrorTypes::IndexNotFound(format!(
-                        "Failed to validate cache, index not found, Error: {}",
-                        e
-                    ))
-                    .into());
-                }
-            };
+            // Validate cache (from memory cache, fallback to disk)
+            let checksum_on_disk = CHECKSUM_CACHE
+                .get(&cache_key)
+                .map(|v| v.value().clone())
+                .unwrap_or_else(|| {
+                    futures::executor::block_on(read_embeddings_metadata(&db_path))
+                        .map(|meta| meta.checksum)
+                        .unwrap_or_default()
+                });
 
             if cached.0.checksum == checksum_on_disk {
                 info!(
@@ -607,9 +611,17 @@ pub async fn query_search(request: QueryRequest, provider: &Provider) -> Result<
     );
     let store = load_index_from_database(request.database.clone(), request.source.clone()).await;
 
-    // Read the metadata
+    // Read the metadata (from disk - cache miss path)
     let metadata = match read_embeddings_metadata(&db_path).await {
-        Ok(meta) => Arc::new(meta),
+        Ok(meta) => {
+            debug!(
+                "Storing CHECKSUM_CACHE with key '{}' = '{}'",
+                cache_key, meta.checksum
+            );
+            // Populate CHECKSUM_CACHE for future queries
+            CHECKSUM_CACHE.insert(cache_key.clone(), meta.checksum.clone());
+            Arc::new(meta)
+        }
         Err(e) => {
             error!("Failed to read embeddings metadata: {}", e);
             return Err(ErrorTypes::IndexNotFound(format!(

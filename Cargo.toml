@@ -82,7 +82,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 anyhow = "1.0.102"
 colored = "3.1.1"
-wincode = { version = "0.4.4", features = ["derive", "std"] }
+wincode = { version = "0.4.5", features = ["derive", "std"] }
 clap = { version = "4.5.60", features = ["derive"] }
 axum = "0.8.8"
 tower-http = { version = "0.6.8", features = ["cors"] }
@@ -106,6 +106,7 @@ tar = "0.4.44"
 tempfile = "3.26.0"
 futures = "0.3.32"
 fastrand = "2.3.0"
+dashmap = "6.1.0"
 # fs2 = "0.4.3"
 # walkdir = "2.5.0"
 # rkyv = { version = "0.8.15" , features = ["std", "bytecheck"] }

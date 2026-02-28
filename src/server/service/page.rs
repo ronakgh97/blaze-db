@@ -1,4 +1,4 @@
-use crate::server::controller::{ErrorTypes, INDEX_CACHE, LOADING_LOCKS};
+use crate::server::controller::{CHECKSUM_CACHE, ErrorTypes, INDEX_CACHE, LOADING_LOCKS};
 use crate::server::dto::{GetIndexDetailsRequest, GetIndexDetailsResponse, VectorDataDto};
 use crate::server::service::database::search_database_on_disk;
 use crate::server::service::load_index_from_database;
@@ -46,24 +46,26 @@ pub async fn get_index_by_page(request: GetIndexDetailsRequest) -> Result<GetInd
         })?;
 
     let io_start = Instant::now();
-    let cache_key = format!("{}_{}", db_name, source);
+    let cache_key = format!("{}_{}", source, db_name);
 
     {
         let cache = INDEX_CACHE.read().await;
         if let Some(cached) = cache.peek(&cache_key) {
             debug!("Cache HIT for database '{}'", db_name);
 
-            let checksum_on_disk = match read_embeddings_metadata(&db_path).await {
-                Ok(meta) => meta.checksum,
-                Err(e) => {
-                    error!("Failed to read metadata for cache validation: {}", e);
-                    return Err(ErrorTypes::IndexNotFound(format!(
-                        "Failed to validate cache: {}",
-                        e
-                    ))
-                    .into());
-                }
-            };
+            // Validate cache (from memory cache, fallback to disk)
+            let checksum_on_disk = CHECKSUM_CACHE
+                .get(&cache_key)
+                .map(|v| v.value().clone())
+                .unwrap_or_else(|| {
+                    debug!(
+                        "CHECKSUM_CACHE MISS for key '{}' - falling back to disk",
+                        cache_key
+                    );
+                    futures::executor::block_on(read_embeddings_metadata(&db_path))
+                        .map(|meta| meta.checksum)
+                        .unwrap_or_default()
+                });
 
             if cached.0.checksum == checksum_on_disk {
                 debug!("Cache valid for '{}'", db_name);
@@ -76,7 +78,7 @@ pub async fn get_index_by_page(request: GetIndexDetailsRequest) -> Result<GetInd
 
                 let entries = nodes[start..end]
                     .par_iter()
-                    .filter(|n| !n.is_deleted()) // skip soft-deleted nodes
+                    .filter(|n| !n.is_deleted()) // skip tombstoned nodes
                     .map(|n| VectorDataDto {
                         id: n.node_id.clone(),
                         embedding: n.vector.clone(),
@@ -118,16 +120,15 @@ pub async fn get_index_by_page(request: GetIndexDetailsRequest) -> Result<GetInd
     {
         let cache = INDEX_CACHE.read().await;
         if let Some(cached) = cache.peek(&cache_key) {
-            let checksum_on_disk = match read_embeddings_metadata(&db_path).await {
-                Ok(meta) => meta.checksum,
-                Err(e) => {
-                    return Err(ErrorTypes::IndexNotFound(format!(
-                        "Failed to validate cache: {}",
-                        e
-                    ))
-                    .into());
-                }
-            };
+            // Validate cache (from memory cache, fallback to disk)
+            let checksum_on_disk = CHECKSUM_CACHE
+                .get(&cache_key)
+                .map(|v| v.value().clone())
+                .unwrap_or_else(|| {
+                    futures::executor::block_on(read_embeddings_metadata(&db_path))
+                        .map(|meta| meta.checksum)
+                        .unwrap_or_default()
+                });
 
             if cached.0.checksum == checksum_on_disk {
                 debug!("Cache HIT after waiting on loading lock for '{}'", db_name);
@@ -168,8 +169,17 @@ pub async fn get_index_by_page(request: GetIndexDetailsRequest) -> Result<GetInd
     debug!("Loading index from disk for '{}'", db_name);
     let store = load_index_from_database(db_name.clone(), source.clone()).await;
 
+    // Read metadata from disk (cache miss path)
     let metadata = match read_embeddings_metadata(&db_path).await {
-        Ok(meta) => Arc::new(meta),
+        Ok(meta) => {
+            debug!(
+                "Storing CHECKSUM_CACHE with key '{}' = '{}'",
+                cache_key, meta.checksum
+            );
+            // Populate CHECKSUM_CACHE for future queries
+            CHECKSUM_CACHE.insert(cache_key.clone(), meta.checksum.clone());
+            Arc::new(meta)
+        }
         Err(e) => {
             error!("Failed to read metadata: {}", e);
             return Err(
