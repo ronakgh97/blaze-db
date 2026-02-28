@@ -113,9 +113,16 @@ pub async fn create_new_database(request: CreateDatabaseRequest) -> Result<Creat
     //     .into());
     // }
 
-    info!("Creating database directory: {:?}", database_path);
+    info!(
+        "Creating database : {:?}",
+        database_path.file_name().unwrap()
+    );
     tokio::fs::create_dir_all(&database_path).await?;
-    info!("Database '{}' created at: {:?}", name, database_path);
+    info!(
+        "Database '{}' created in src: {:?}",
+        name,
+        database_path.parent().unwrap().file_name().unwrap()
+    );
     // Use `parse_database_name` to verify the created database name
 
     // if let Some((parsed_name, _, _, _)) = parse_database_name(&file_name) {

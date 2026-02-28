@@ -28,7 +28,10 @@ use lru::LruCache;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fmt::Display;
 use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 use tokio::sync::{Mutex, RwLock};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
@@ -67,6 +70,140 @@ lazy_static! {
     /// Value: checksum string
     /// Populated on write operations, invalidated on restore
     pub static ref CHECKSUM_CACHE: DashMap<String, String> = DashMap::new();
+
+
+    pub static ref SYSTEM_MONITOR: Arc<SystemMonitor> = Arc::new(SystemMonitor::new(100));
+
+}
+
+pub struct SystemMonitor {
+    cpu_usage: Arc<DashMap<u64, f32>>,
+    memory_usage: Arc<DashMap<u64, u64>>,
+    max_samples: usize,
+    running: Arc<AtomicBool>,
+}
+
+impl SystemMonitor {
+    #[inline]
+    pub fn new(max_samples: usize) -> Self {
+        Self {
+            cpu_usage: Arc::new(DashMap::new()),
+            memory_usage: Arc::new(DashMap::new()),
+            max_samples,
+            running: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn start_scheduler(&self, secs: u64, pid: Pid) {
+        self.running.store(true, Ordering::Relaxed);
+
+        let cpu_usage = Arc::clone(&self.cpu_usage);
+        let memory_usage = Arc::clone(&self.memory_usage);
+        let max_samples = self.max_samples;
+        let counter = Arc::new(AtomicU64::new(0));
+        let running = self.running.clone();
+
+        tokio::spawn(async move {
+            let poll_interval = Duration::from_secs(secs);
+            let mut system = System::new();
+            system.refresh_all();
+            let num_cpus = system.cpus().len() as f32;
+
+            system.refresh_processes_specifics(
+                ProcessesToUpdate::All,
+                true,
+                ProcessRefreshKind::everything(),
+            );
+
+            tokio::time::sleep(poll_interval).await;
+
+            while running.load(Ordering::Relaxed) {
+                system.refresh_processes_specifics(
+                    ProcessesToUpdate::Some(&[pid]),
+                    true,
+                    ProcessRefreshKind::everything(),
+                );
+
+                if let Some(process) = system.process(pid) {
+                    let cpu = process.cpu_usage() / num_cpus;
+                    let mem = process.memory();
+                    let idx = counter.fetch_add(1, Ordering::Relaxed);
+
+                    cpu_usage.insert(idx, cpu);
+                    memory_usage.insert(idx, mem);
+
+                    debug!(
+                        "System monitor sample collected: CPU={:.2}%, Memory={} MB",
+                        cpu,
+                        mem / 1024 / 1024
+                    );
+
+                    let cpu_len = cpu_usage.len();
+                    let mem_len = memory_usage.len();
+
+                    if cpu_len > max_samples {
+                        let to_remove = cpu_len - max_samples;
+                        for (i, entry) in cpu_usage.iter().enumerate() {
+                            if i < to_remove {
+                                cpu_usage.remove(entry.key());
+                            }
+                        }
+                    }
+
+                    if mem_len > max_samples {
+                        let to_remove = mem_len - max_samples;
+                        for (i, entry) in memory_usage.iter().enumerate() {
+                            if i < to_remove {
+                                memory_usage.remove(entry.key());
+                            }
+                        }
+                    }
+                } else {
+                    error!(
+                        "System monitor: Process NOT found for PID: {:?}",
+                        pid.as_u32()
+                    );
+                }
+
+                tokio::time::sleep(poll_interval).await;
+            }
+        });
+    }
+
+    #[inline]
+    pub fn stop_scheduler(&self) {
+        self.running.store(false, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn get_avg_usage_over_time(&self) -> (f32, u64) {
+        let cpu_len = self.cpu_usage.len();
+        let memory_len = self.memory_usage.len();
+
+        let avg_cpu = if cpu_len == 0 {
+            0.0
+        } else {
+            self.cpu_usage
+                .as_ref()
+                .iter()
+                .map(|entry| *entry.value())
+                .sum::<f32>()
+                / cpu_len as f32
+        };
+
+        let avg_memory = if memory_len == 0 {
+            0
+        } else {
+            self.memory_usage
+                .as_ref()
+                .iter()
+                .map(|entry| *entry.value())
+                .sum::<u64>()
+                / memory_len as u64
+        };
+
+        (avg_cpu, avg_memory)
+    }
 }
 
 #[inline]
@@ -167,6 +304,10 @@ pub async fn start_server(
     // Initialize server start time
     START_TIME.get_or_init(|| server_time);
 
+    let pid = Pid::from_u32(std::process::id());
+    info!("Process ID: {}", pid.as_u32());
+    SYSTEM_MONITOR.start_scheduler(5, pid);
+
     let shutdown_signal = shutdown_signal();
 
     let server = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal);
@@ -218,12 +359,12 @@ async fn shutdown_signal() {
 #[inline]
 /// Cleanup resources on graceful shutdown
 async fn cleanup_on_shutdown() {
+    info!("Stopping schedulers..");
+    SYSTEM_MONITOR.stop_scheduler();
     // Stop backup scheduler if it was started
     if let Some(backup_service_lock) = BACKUP_SERVICE.get() {
-        info!("Stopping schedulers..");
         let mut backup_service = backup_service_lock.write().await;
         backup_service.stop_scheduler().await;
-        info!("Schedulers stopped");
     }
 
     // Debug LRUs and Maps on shutdown
@@ -239,6 +380,15 @@ async fn cleanup_on_shutdown() {
     {
         let items = CHECKSUM_CACHE.len();
         debug!("Server shutdown: {} CHECKSUM_CACHE active", items);
+    }
+    {
+        let (cpu_u, mem_u) = SYSTEM_MONITOR.get_avg_usage_over_time();
+
+        info!(
+            "[SAMPLED] CPU usage: {:.2}%, Memory usage: {} MB",
+            cpu_u,
+            mem_u / 1024 / 1024
+        );
     }
 
     info!("Server shutdown");

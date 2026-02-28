@@ -12,6 +12,8 @@ pub enum Level {
 
 impl Level {
     fn from_env() -> Self {
+        dotenv::dotenv().ok();
+
         env::var("RUST_LOG")
             .ok()
             .and_then(|s| match s.to_lowercase().as_str() {
