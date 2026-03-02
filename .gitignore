@@ -8,4 +8,5 @@ datasets/amazon_products.csv
 datasets/amazon_products_backup.csv
 .gitattributes
 .env
+/.venv
 /models
