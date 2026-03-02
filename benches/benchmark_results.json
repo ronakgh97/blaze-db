@@ -1,0 +1,119 @@
+{
+  "benchmarks": [
+    {
+      "metric": "735 vec/sec",
+      "name": "construction_5000",
+      "time_ms": 6801.7794
+    },
+    {
+      "metric": "670 vec/sec",
+      "name": "construction_10000",
+      "time_ms": 14915.1573
+    },
+    {
+      "metric": "606 vec/sec",
+      "name": "construction_20000",
+      "time_ms": 33004.3355
+    },
+    {
+      "metric": "383 vec/sec",
+      "name": "construction_75000",
+      "time_ms": 195661.05769999998
+    },
+    {
+      "metric": "1311 qps",
+      "name": "search_qps",
+      "time_ms": 762.6418
+    },
+    {
+      "metric": "avg ms",
+      "name": "search_latency_avg",
+      "time_ms": 0.7656100000000002
+    },
+    {
+      "metric": "p50 ms",
+      "name": "search_latency_p50",
+      "time_ms": 0.7462000000000001
+    },
+    {
+      "metric": "p95 ms",
+      "name": "search_latency_p95",
+      "time_ms": 1.0782999999999998
+    },
+    {
+      "metric": "p99 ms",
+      "name": "search_latency_p99",
+      "time_ms": 1.3852
+    },
+    {
+      "metric": "73.10%",
+      "name": "recall_at_10",
+      "time_ms": 0.0
+    },
+    {
+      "metric": "1197 qps",
+      "name": "batch_search_10",
+      "time_ms": 8.3526
+    },
+    {
+      "metric": "1103 qps",
+      "name": "batch_search_50",
+      "time_ms": 45.3368
+    },
+    {
+      "metric": "1157 qps",
+      "name": "batch_search_100",
+      "time_ms": 86.4576
+    },
+    {
+      "metric": "0.32 ms/query",
+      "name": "search_k_1",
+      "time_ms": 0.319701
+    },
+    {
+      "metric": "0.80 ms/query",
+      "name": "search_k_5",
+      "time_ms": 0.802589
+    },
+    {
+      "metric": "0.94 ms/query",
+      "name": "search_k_10",
+      "time_ms": 0.9413820000000002
+    },
+    {
+      "metric": "1.21 ms/query",
+      "name": "search_k_20",
+      "time_ms": 1.205149
+    },
+    {
+      "metric": "2.35 ms/query",
+      "name": "search_k_50",
+      "time_ms": 2.3541570000000003
+    },
+    {
+      "metric": "0.57 ms/query",
+      "name": "search_ef_10",
+      "time_ms": 0.574802
+    },
+    {
+      "metric": "0.80 ms/query",
+      "name": "search_ef_30",
+      "time_ms": 0.80425
+    },
+    {
+      "metric": "0.98 ms/query",
+      "name": "search_ef_50",
+      "time_ms": 0.983827
+    },
+    {
+      "metric": "1.77 ms/query",
+      "name": "search_ef_100",
+      "time_ms": 1.7693130000000001
+    },
+    {
+      "metric": "4.23 ms/query",
+      "name": "search_ef_200",
+      "time_ms": 4.230453
+    }
+  ]
+}

@@ -1,425 +1,352 @@
+use blaze_db::core::HNSW;
 use blaze_db::core::Metrics;
-use blaze_db::core::hnsw::HNSW;
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use rand::RngExt;
-use std::hint::black_box;
-use uuid::Uuid;
+use memmap2::Mmap;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::fs::{File, write};
+use std::path::PathBuf;
+use std::time::Instant;
 
-#[allow(unused)]
-/// Generate random vectors for benchmarking
-fn generate_random_vectors(num_vectors: usize, dimensions: usize) -> Vec<Vec<f32>> {
-    let mut rng = rand::rng();
-    (0..num_vectors)
-        .map(|_| {
-            (0..dimensions)
-                .map(|_| rng.random_range(-1.0..1.0))
-                .collect()
-        })
-        .collect()
+#[inline]
+fn get_datasets_dir() -> PathBuf {
+    PathBuf::from("./datasets")
+}
+
+/// Load vectors - binary format
+/// [num_vectors: u32][dim: u32][vectors: f32...]
+fn load_vectors_mmap() -> (usize, usize, Mmap) {
+    let datasets_dir = get_datasets_dir();
+    let bin_path = datasets_dir.join("bench_vectors_100k.bin");
+    let file = File::open(&bin_path).expect("Failed to open binary file");
+    let mmap = unsafe { Mmap::map(&file).expect("Failed to mmap file") };
+
+    // Read header
+    let num_vectors = u32::from_le_bytes([mmap[0], mmap[1], mmap[2], mmap[3]]) as usize;
+    let dim = u32::from_le_bytes([mmap[4], mmap[5], mmap[6], mmap[7]]) as usize;
+
+    println!(
+        "Loaded {} vectors of {} dimensions (Mmapped)",
+        num_vectors, dim
+    );
+
+    (num_vectors, dim, mmap)
 }
 
 #[inline]
-/// Generate deterministic vectors for reproducible benchmarks
-fn generate_deterministic_vectors(num_vectors: usize, dimensions: usize) -> Vec<Vec<f32>> {
-    (0..num_vectors)
-        .map(|i| {
-            (0..dimensions)
-                .map(|j| ((i * dimensions + j) as f32 * 0.001).sin())
-                .collect()
-        })
-        .collect()
-}
-
-/// Generate a single query vector
-fn generate_query_vector(dimensions: usize) -> Vec<f32> {
-    (0..dimensions).map(|i| (i as f32 * 0.002).cos()).collect()
-}
-
-/// Benchmark HNSW construction with varying number of vectors (100, 500, 1K, 5K) 1024-dim
-fn bench_hnsw_construction_varying_vectors(c: &mut Criterion) {
-    let vector_counts = [1_000, 5_000, 10_000, 50_000];
-    let dimensions = 1024;
-
-    let mut group = c.benchmark_group("construction_benches");
-    group.sample_size(10); // Reduce sample size for slower operations
-
-    for count in vector_counts {
-        let vectors = generate_deterministic_vectors(count, dimensions);
-
-        group.throughput(Throughput::Elements(count as u64));
-        group.bench_with_input(BenchmarkId::new("vectors", count), &count, |bench, _| {
-            bench.iter(|| {
-                let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
-                for (i, vec) in vectors.iter().enumerate() {
-                    let level = hnsw.get_random_level();
-                    let random_id = Uuid::new_v4().to_string();
-                    let _ = hnsw.insert(random_id, black_box(vec), format!("chunk_{}", i), level);
-                }
-                hnsw
-            })
-        });
+/// Get a vector slice from mmap data
+fn get_vector(mmap: &Mmap, idx: usize, dim: usize) -> &[f32] {
+    let offset = 8 + idx * dim * 4; // 8 bytes header
+    unsafe {
+        let ptr = mmap.as_ptr().add(offset) as *const f32;
+        std::slice::from_raw_parts(ptr, dim)
     }
-
-    group.finish();
-}
-
-/// Benchmark HNSW construction with varying dimensions (1024, 768, 1024, 1536) with 1000 vectors
-fn bench_hnsw_construction_varying_dimensions(c: &mut Criterion) {
-    let dimensions = [512, 768, 1024, 1536];
-    let vector_count = 1_000;
-
-    let mut group = c.benchmark_group("construction_varying_dims");
-    group.sample_size(10);
-
-    for dim in dimensions {
-        let vectors = generate_deterministic_vectors(vector_count, dim);
-
-        group.throughput(Throughput::Elements((vector_count * dim) as u64));
-        group.bench_with_input(BenchmarkId::new("dims", dim), &dim, |bench, _| {
-            bench.iter(|| {
-                let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
-                for (i, vec) in vectors.iter().enumerate() {
-                    let random_id = Uuid::new_v4().to_string();
-                    let level = hnsw.get_random_level();
-                    let _ = hnsw.insert(random_id, black_box(vec), format!("chunk_{}", i), level);
-                }
-                hnsw
-            })
-        });
-    }
-
-    group.finish();
-}
-
-/// Benchmark HNSW construction with different max_neighbors (M) values (8, 16, 32, 48) with 1000 vectors, 1024-dim
-fn bench_hnsw_construction_varying_m(c: &mut Criterion) {
-    let m_values = [8, 16, 32, 48];
-    let vector_count = 1_000;
-    let dimensions = 1024;
-
-    let vectors = generate_deterministic_vectors(vector_count, dimensions);
-
-    let mut group = c.benchmark_group("construction_varying_m");
-    group.sample_size(10);
-
-    for m in m_values {
-        group.bench_with_input(BenchmarkId::new("m", m), &m, |bench, &m| {
-            bench.iter(|| {
-                let mut hnsw = HNSW::new(m, 200, 5, 1.0 / (m as f32).ln(), &Some(Metrics::Cosine));
-                for (i, vec) in vectors.iter().enumerate() {
-                    let random_id = Uuid::new_v4().to_string();
-                    let level = hnsw.get_random_level();
-                    let _ = hnsw.insert(random_id, black_box(vec), format!("chunk_{}", i), level);
-                }
-                hnsw
-            })
-        });
-    }
-
-    group.finish();
-}
-
-/// Benchmark HNSW construction with different ef_construction values (50, 100, 200, 400) with 1000 vectors, 1024-dim
-fn bench_hnsw_construction_varying_ef(c: &mut Criterion) {
-    let ef_values = [50, 100, 200, 400];
-    let vector_count = 1_000;
-    let dimensions = 1024;
-
-    let vectors = generate_deterministic_vectors(vector_count, dimensions);
-
-    let mut group = c.benchmark_group("construction_varying_ef");
-    group.sample_size(10);
-
-    for ef in ef_values {
-        group.bench_with_input(BenchmarkId::new("ef", ef), &ef, |bench, &ef| {
-            bench.iter(|| {
-                let mut hnsw = HNSW::new(16, ef, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
-                for (i, vec) in vectors.iter().enumerate() {
-                    let level = hnsw.get_random_level();
-                    let random_id = Uuid::new_v4().to_string();
-                    let _ = hnsw.insert(random_id, black_box(vec), format!("chunk_{}", i), level);
-                }
-                hnsw
-            })
-        });
-    }
-
-    group.finish();
 }
 
 #[inline]
-/// Helper to build a pre-populated HNSW index with params: mx_n: 16, ef_c: 200, mx_l 5, e: ln(1/16)
-fn build_hnsw_index(num_vectors: usize, dimensions: usize) -> HNSW {
+/// Calculate Recall@K given HNSW results and brute force results
+fn recall_at_k(hnsw_results: &[(String, f32)], brute_results: &[(String, f32)], k: usize) -> f32 {
+    let hnsw_set: HashSet<_> = hnsw_results
+        .iter()
+        .take(k)
+        .map(|(id, _)| id.clone())
+        .collect();
+    let mut hits = 0;
+    for (id, _) in brute_results.iter().take(k) {
+        if hnsw_set.contains(id) {
+            hits += 1;
+        }
+    }
+    hits as f32 / k as f32
+}
+
+#[derive(Serialize, Deserialize)]
+struct BenchmarkResults {
+    name: String,
+    time_ms: f64,
+    metric: String,
+}
+
+#[inline]
+fn print_results(results: &[BenchmarkResults]) {
+    println!("{}", "-".repeat(80));
+    println!(
+        "{:<30} | {:>15} | {:>20}",
+        "Benchmark", "Time (ms)", "Metric"
+    );
+    println!("{}", "-".repeat(80));
+
+    for r in results {
+        if r.time_ms > 0.0 {
+            println!("{:<30} | {:>15.2} | {:>20}", r.name, r.time_ms, r.metric);
+        } else {
+            println!("{:<30} | {:>15} | {:>20}", r.name, "-", r.metric);
+        }
+    }
+    println!();
+}
+
+#[inline]
+fn save_json(results: &[BenchmarkResults]) {
+    let json = serde_json::json!({
+        "benchmarks": results.iter().map(|r| {
+            BenchmarkResults {
+                name: r.name.clone(),
+                time_ms: r.time_ms,
+                metric: r.metric.clone(),
+                }
+        }).collect::<Vec<_>>()
+    });
+
+    write(
+        "benches/benchmark_results.json",
+        serde_json::to_string_pretty(&json).unwrap(),
+    )
+    .unwrap();
+    println!("Results saved to benchmark_results.json");
+}
+
+fn main() {
+    println!("HNSW Benchmark Suite");
+
+    let mut results: Vec<BenchmarkResults> = Vec::new();
+
+    // Load vectors with mmap
+    let (num_vectors, dim, mmap) = load_vectors_mmap();
+    let max_vectors = num_vectors.min(75_000);
+
+    let test_sizes = vec![5000, 10000, 20000];
+
+    for size in &test_sizes {
+        if *size > max_vectors {
+            break;
+        }
+
+        println!("Building index with {} vectors...", size);
+
+        let start = Instant::now();
+        let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
+
+        for i in 0..*size {
+            let vec = get_vector(&mmap, i, dim);
+            let level = hnsw.get_random_level();
+            let id = format!("chunk_{}", i);
+            hnsw.insert(id, vec, format!("metadata_{}", i), level).ok();
+        }
+
+        let elapsed = start.elapsed();
+        let time_ms = elapsed.as_secs_f64() * 1000.0;
+        let vectors_per_sec = *size as f64 / elapsed.as_secs_f64();
+
+        println!(
+            "  {} vectors: {:.2} ms ({:.0} vectors/sec)",
+            size, time_ms, vectors_per_sec
+        );
+
+        results.push(BenchmarkResults {
+            name: format!("construction_{}", size),
+            time_ms,
+            metric: format!("{:.0} vec/sec", vectors_per_sec),
+        });
+    }
+
+    println!("\nBUILDING FULL INDEX ({} vectors)", max_vectors);
+
+    let build_start = Instant::now();
     let mut hnsw = HNSW::new(16, 200, 5, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
-    let vectors = generate_deterministic_vectors(num_vectors, dimensions);
 
-    for (i, vec) in vectors.iter().enumerate() {
+    for i in 0..max_vectors {
+        if i % 10000 == 0 {
+            println!(
+                "  Inserted {}/{} ({:.1}%)",
+                i,
+                max_vectors,
+                i as f32 / max_vectors as f32 * 100.0
+            );
+        }
+        let vec = get_vector(&mmap, i, dim);
         let level = hnsw.get_random_level();
-        let random_id = Uuid::new_v4().to_string();
-        let _ = hnsw.insert(random_id, vec, format!("chunk_{}", i), level);
+        let id = format!("chunk_{}", i);
+        hnsw.insert(id, vec, format!("metadata_{}", i), level).ok();
     }
 
-    hnsw
-}
+    let build_elapsed = build_start.elapsed();
+    let build_time_ms = build_elapsed.as_secs_f64() * 1000.0;
+    let build_vectors_per_sec = max_vectors as f64 / build_elapsed.as_secs_f64();
 
-/// Benchmark search with varying index sizes (1K, 5K, 10K, 50K) with 1024-dim and k=10
-fn bench_hnsw_search_varying_index_size(c: &mut Criterion) {
-    let index_sizes = [1_000, 5_000, 10_000, 50_000];
-    let dimensions = 1024;
-    let k = 10;
+    println!(
+        "  Built in {:.2} ms ({:.0} vectors/sec)",
+        build_time_ms, build_vectors_per_sec
+    );
 
-    let mut group = c.benchmark_group("search_benches");
-    group.sample_size(30);
-
-    for size in index_sizes {
-        let hnsw = build_hnsw_index(size, dimensions);
-        let query = generate_query_vector(dimensions);
-
-        group.throughput(Throughput::Elements(size as u64));
-        group.bench_with_input(BenchmarkId::new("index_size", size), &size, |bench, _| {
-            bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
-        });
-    }
-
-    group.finish();
-}
-
-/// Benchmark search with varying k (top-k values) 1,5,10,20,50,100 on 10K index, 1024-dim
-fn bench_hnsw_search_varying_k(c: &mut Criterion) {
-    let k_values = [1, 5, 10, 20, 50, 100];
-    let index_size = 10_000;
-    let dimensions = 1024;
-
-    let hnsw = build_hnsw_index(index_size, dimensions);
-    let query = generate_query_vector(dimensions);
-
-    let mut group = c.benchmark_group("search_varying_k");
-    group.sample_size(50);
-
-    for k in k_values {
-        group.bench_with_input(BenchmarkId::new("k", k), &k, |bench, &k| {
-            bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
-        });
-    }
-
-    group.finish();
-}
-
-/// Benchmark search with varying dimensions (1024, 512, 768, 1024, 1536) on 10K index with k=10
-fn bench_hnsw_search_varying_dimensions(c: &mut Criterion) {
-    let dimensions = [512, 768, 1024, 1536];
-    let index_size = 10_000;
-    let k = 10;
-
-    let mut group = c.benchmark_group("search_varying_dims");
-    group.sample_size(30);
-
-    for dim in dimensions {
-        let hnsw = build_hnsw_index(index_size, dim);
-        let query = generate_query_vector(dim);
-
-        group.throughput(Throughput::Elements((index_size * dim) as u64));
-        group.bench_with_input(BenchmarkId::new("dims", dim), &dim, |bench, _| {
-            bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
-        });
-    }
-
-    group.finish();
-}
-
-/// Benchmark search with metadata retrieval
-fn bench_hnsw_search_with_metadata(c: &mut Criterion) {
-    let index_size = 10_000;
-    let dimensions = 1024;
-    let k = 10;
-
-    let hnsw = build_hnsw_index(index_size, dimensions);
-    let query = generate_query_vector(dimensions);
-
-    let mut group = c.benchmark_group("search_with_metadata");
-    group.sample_size(50);
-
-    group.bench_function("search_plain", |bench| {
-        bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
+    results.push(BenchmarkResults {
+        name: format!("construction_{}", max_vectors),
+        time_ms: build_time_ms,
+        metric: format!("{:.0} vec/sec", build_vectors_per_sec),
     });
 
-    group.bench_function("search_with_metadata", |bench| {
-        bench.iter(|| hnsw.search_with_metadata(black_box(&query), black_box(k), None))
+    let query_count = 1000;
+    let k = 10;
+
+    println!("Running {} search queries...", query_count);
+
+    let search_start = Instant::now();
+    for i in 0..query_count {
+        let query_idx = (i * 7) % max_vectors;
+        let query = get_vector(&mmap, query_idx, dim);
+        let _ = hnsw.search(query, k, None);
+    }
+    let search_elapsed = search_start.elapsed();
+    let qps = query_count as f64 / search_elapsed.as_secs_f64();
+
+    println!("  QPS: {:.0} queries/sec", qps);
+
+    results.push(BenchmarkResults {
+        name: "search_qps".to_string(),
+        time_ms: search_elapsed.as_secs_f64() * 1000.0,
+        metric: format!("{:.0} qps", qps),
     });
 
-    group.finish();
-}
+    let latency_queries = 100;
+    let mut latencies: Vec<f64> = Vec::new();
 
-/// Benchmark typical embedding dimensions (OpenAI, sentence-transformers, etc.)
-fn bench_hnsw_common_embedding_dimensions(c: &mut Criterion) {
-    let configs = [
-        ("openai_ada_002", 1536),      // OpenAI text-embedding-ada-002
-        ("sentence_bert_base", 768),   // BERT-base sentence embeddings
-        ("sentence_bert_small", 1024), // MiniLM sentence embeddings
-        ("cohere_embed", 1024),        // Cohere embeddings
-    ];
-    let index_size = 10_000;
-    let k = 10;
+    println!(
+        "Measuring search latency for {} queries...",
+        latency_queries
+    );
 
-    let mut group = c.benchmark_group("realworld_benches");
-    group.sample_size(20);
-
-    for (name, dim) in configs {
-        let hnsw = build_hnsw_index(index_size, dim);
-        let query = generate_query_vector(dim);
-
-        group.bench_with_input(BenchmarkId::new("search", name), &dim, |bench, _| {
-            bench.iter(|| hnsw.search(black_box(&query), black_box(k), None))
-        });
+    for i in 0..latency_queries {
+        let query_idx = (i * 13) % max_vectors;
+        let query = get_vector(&mmap, query_idx, dim);
+        let start = Instant::now();
+        let _ = hnsw.search(query, k, None);
+        latencies.push(start.elapsed().as_secs_f64() * 1000.0);
     }
 
-    group.finish();
-}
+    latencies.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-/// Benchmark batch query scenario (10, 50, 100, 500 queries) on 10K index, 1024-dim
-fn bench_hnsw_batch_queries(c: &mut Criterion) {
-    let batch_sizes = [10, 50, 100, 500];
-    let index_size = 10_000;
-    let dimensions = 1024;
-    let k = 10;
+    let p50 = latencies[latencies.len() / 2];
+    let p95 = latencies[(latencies.len() as f32 * 0.95) as usize];
+    let p99 = latencies[(latencies.len() as f32 * 0.99) as usize];
+    let avg: f64 = latencies.iter().sum::<f64>() / latencies.len() as f64;
 
-    let hnsw = build_hnsw_index(index_size, dimensions);
+    println!(
+        "  Latency - Avg: {:.3}ms, p50: {:.3}ms, p95: {:.3}ms, p99: {:.3}ms",
+        avg, p50, p95, p99
+    );
 
-    let mut group = c.benchmark_group("batch_queries");
-    group.sample_size(20);
+    results.push(BenchmarkResults {
+        name: "search_latency_avg".to_string(),
+        time_ms: avg,
+        metric: "avg ms".to_string(),
+    });
+    results.push(BenchmarkResults {
+        name: "search_latency_p50".to_string(),
+        time_ms: p50,
+        metric: "p50 ms".to_string(),
+    });
+    results.push(BenchmarkResults {
+        name: "search_latency_p95".to_string(),
+        time_ms: p95,
+        metric: "p95 ms".to_string(),
+    });
+    results.push(BenchmarkResults {
+        name: "search_latency_p99".to_string(),
+        time_ms: p99,
+        metric: "p99 ms".to_string(),
+    });
+
+    let recall_samples = 100;
+
+    let mut total_recall = 0.0f32;
+
+    println!("Measuring Recall@{} over {} samples...", k, recall_samples);
+
+    for i in 0..recall_samples {
+        let query_idx = (i * 17) % max_vectors;
+        let query = get_vector(&mmap, query_idx, dim);
+
+        // Get HNSW results
+        let hnsw_results = hnsw.search(query, k, None);
+
+        // Get brute force results using HNSW::brute_force_search
+        let bf_results = hnsw.brute_force_search(query, k);
+
+        let recall = recall_at_k(&hnsw_results, &bf_results, k);
+        total_recall += recall;
+    }
+
+    let avg_recall = total_recall / recall_samples as f32;
+    println!("  Recall@{}: {:.2}%", k, avg_recall * 100.0);
+
+    results.push(BenchmarkResults {
+        name: format!("recall_at_{}", k),
+        time_ms: 0.0,
+        metric: format!("{:.2}%", avg_recall * 100.0),
+    });
+
+    let batch_sizes = vec![10, 50, 100];
 
     for batch_size in batch_sizes {
-        let queries: Vec<Vec<f32>> = (0..batch_size)
-            .map(|i| {
-                (0..dimensions)
-                    .map(|j| ((i * dimensions + j) as f32 * 0.003).cos())
-                    .collect()
-            })
-            .collect();
+        let start = Instant::now();
+        for i in 0..batch_size {
+            let query_idx = (i * 23) % max_vectors;
+            let query = get_vector(&mmap, query_idx, dim);
+            let _ = hnsw.search(query, k, None);
+        }
+        let elapsed = start.elapsed();
+        let batch_qps = batch_size as f64 / elapsed.as_secs_f64();
 
-        group.throughput(Throughput::Elements(batch_size as u64));
-        group.bench_with_input(
-            BenchmarkId::new("batch_size", batch_size),
-            &batch_size,
-            |bench, _| {
-                bench.iter(|| {
-                    for query in &queries {
-                        black_box(hnsw.search(black_box(query), black_box(k), None));
-                    }
-                })
-            },
-        );
+        println!("  Batch {}: {:.0} queries/sec", batch_size, batch_qps);
+
+        results.push(BenchmarkResults {
+            name: format!("batch_search_{}", batch_size),
+            time_ms: elapsed.as_secs_f64() * 1000.0,
+            metric: format!("{:.0} qps", batch_qps),
+        });
     }
 
-    group.finish();
-}
+    let k_values = vec![1, 5, 10, 20, 50];
 
-/// Benchmark incremental inserts into existing index (500, 1K, 5K) adding 100 vectors each time, 1024-dim
-fn bench_hnsw_incremental_insert(c: &mut Criterion) {
-    let initial_sizes = [500, 1_000, 5_000];
-    let dimensions = 1024;
-    let inserts_per_bench = 100;
+    for k_val in k_values {
+        let start = Instant::now();
+        for i in 0..100 {
+            let query_idx = (i * 11) % max_vectors;
+            let query = get_vector(&mmap, query_idx, dim);
+            let _ = hnsw.search(query, k_val, None);
+        }
+        let elapsed = start.elapsed();
+        let ms_per_query = elapsed.as_secs_f64() * 1000.0 / 100.0;
 
-    let mut group = c.benchmark_group("incremental_benches");
-    group.sample_size(20);
+        println!("  k={}: {:.2} ms/query", k_val, ms_per_query);
 
-    for initial_size in initial_sizes {
-        let new_vectors = generate_deterministic_vectors(inserts_per_bench, dimensions);
-
-        group.throughput(Throughput::Elements(inserts_per_bench as u64));
-        group.bench_with_input(
-            BenchmarkId::new("batch_insert", initial_size),
-            &initial_size,
-            |bench, &size| {
-                bench.iter(|| {
-                    let mut hnsw = build_hnsw_index(size, dimensions);
-                    for (i, vec) in new_vectors.iter().enumerate() {
-                        let level = hnsw.get_random_level();
-                        let random_id = Uuid::new_v4().to_string();
-                        let _ = hnsw.insert(
-                            random_id,
-                            black_box(vec),
-                            format!("new_chunk_{}", i),
-                            black_box(level),
-                        );
-                    }
-                    hnsw
-                })
-            },
-        );
+        results.push(BenchmarkResults {
+            name: format!("search_k_{}", k_val),
+            time_ms: ms_per_query,
+            metric: format!("{:.2} ms/query", ms_per_query),
+        });
     }
 
-    group.finish();
-}
+    let ef_values = vec![10, 30, 50, 100, 200];
 
-/// Benchmark single insert operation at different index sizes (100, 500, 1K, 5K) 1024-dim
-fn bench_hnsw_single_insert_at_scale(c: &mut Criterion) {
-    let index_sizes = [100, 500, 1_000, 5_000];
-    let dimensions = 1024;
+    for ef in ef_values {
+        let start = Instant::now();
+        for i in 0..100 {
+            let query_idx = (i * 19) % max_vectors;
+            let query = get_vector(&mmap, query_idx, dim);
+            let _ = hnsw.search(query, k, Some(ef));
+        }
+        let elapsed = start.elapsed();
+        let ms_per_query = elapsed.as_secs_f64() * 1000.0 / 100.0;
 
-    let mut group = c.benchmark_group("single_insert_at_scale");
-    group.sample_size(30);
+        println!("  ef={}: {:.2} ms/query", ef, ms_per_query);
 
-    for size in index_sizes {
-        let new_vector = generate_query_vector(dimensions);
-
-        group.bench_with_input(
-            BenchmarkId::new("single_insert", size),
-            &size,
-            |bench, &size| {
-                bench.iter_batched(
-                    || build_hnsw_index(size, dimensions),
-                    |mut hnsw| {
-                        let level = hnsw.get_random_level();
-                        let random_id = Uuid::new_v4().to_string();
-                        let _ = hnsw.insert(
-                            random_id,
-                            black_box(&new_vector),
-                            "new_chunk".to_string(),
-                            level,
-                        );
-                        hnsw
-                    },
-                    criterion::BatchSize::LargeInput,
-                )
-            },
-        );
+        results.push(BenchmarkResults {
+            name: format!("search_ef_{}", ef),
+            time_ms: ms_per_query,
+            metric: format!("{:.2} ms/query", ms_per_query),
+        });
     }
 
-    group.finish();
+    print_results(&results);
+    save_json(&results);
 }
-
-criterion_group!(
-    construction_benches,
-    bench_hnsw_construction_varying_vectors,
-    bench_hnsw_construction_varying_dimensions,
-    bench_hnsw_construction_varying_m,
-    bench_hnsw_construction_varying_ef,
-);
-
-criterion_group!(
-    search_benches,
-    bench_hnsw_search_varying_index_size,
-    bench_hnsw_search_varying_k,
-    bench_hnsw_search_varying_dimensions,
-    bench_hnsw_search_with_metadata,
-);
-
-criterion_group!(
-    realworld_benches,
-    bench_hnsw_common_embedding_dimensions,
-    bench_hnsw_batch_queries,
-);
-
-criterion_group!(
-    incremental_benches,
-    bench_hnsw_incremental_insert,
-    bench_hnsw_single_insert_at_scale,
-);
-
-criterion_main!(
-    construction_benches,
-    search_benches,
-    realworld_benches,
-    incremental_benches,
-);

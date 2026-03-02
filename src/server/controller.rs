@@ -176,6 +176,12 @@ impl SystemMonitor {
     }
 
     #[inline]
+    pub fn clear_samples(&self) {
+        self.cpu_usage.clear();
+        self.memory_usage.clear();
+    }
+
+    #[inline]
     pub fn get_avg_usage_over_time(&self) -> (f32, u64) {
         let cpu_len = self.cpu_usage.len();
         let memory_len = self.memory_usage.len();
@@ -367,28 +373,37 @@ async fn cleanup_on_shutdown() {
         backup_service.stop_scheduler().await;
     }
 
-    // Debug LRUs and Maps on shutdown
-    {
-        let locks = DB_WRITE_LOCKS.read().await;
-        debug!("Server shutdown: {} DB_WRITE_LOCKS active", locks.len());
-    }
-
-    {
-        let locks = LOADING_LOCKS.read().await;
-        debug!("Server shutdown: {} LOADING_LOCKS active", locks.len());
-    }
-    {
-        let items = CHECKSUM_CACHE.len();
-        debug!("Server shutdown: {} CHECKSUM_CACHE active", items);
-    }
     {
         let (cpu_u, mem_u) = SYSTEM_MONITOR.get_avg_usage_over_time();
-
         info!(
             "[SAMPLED] CPU usage: {:.2}%, Memory usage: {} MB",
             cpu_u,
             mem_u / 1024 / 1024
         );
+        SYSTEM_MONITOR.clear_samples();
+    }
+
+    // Debug and clear LRUs and Maps on shutdown
+    {
+        let mut locks = DB_WRITE_LOCKS.write().await;
+        locks.clear();
+        debug!("Server shutdown: {} DB_WRITE_LOCKS active", locks.len());
+    }
+
+    {
+        let mut locks = LOADING_LOCKS.write().await;
+        locks.clear();
+        debug!("Server shutdown: {} LOADING_LOCKS active", locks.len());
+    }
+    {
+        let mut cache = INDEX_CACHE.write().await;
+        cache.clear();
+        debug!("Server shutdown: {} INDEX_CACHE active", cache.len());
+    }
+    {
+        let items = CHECKSUM_CACHE.len();
+        CHECKSUM_CACHE.clear();
+        debug!("Server shutdown: {} CHECKSUM_CACHE active", items);
     }
 
     info!("Server shutdown");
