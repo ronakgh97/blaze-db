@@ -30,14 +30,9 @@ pub struct EmbeddingMetadata {
 }
 
 impl EmbeddingStore {
+    #[inline]
     pub fn new(hnsw: HNSW) -> Self {
         Self { hnsw_store: hnsw }
-    }
-
-    /// Get information about the EmbeddingStore
-    pub fn get_info(&self) {
-        // TODO: What to do here? idk...
-        unimplemented!("get_info method not implemented yet");
     }
 
     /// Load from a single binary file using memory-mapped I/O for better performance (Thread-safe with blocking task)
@@ -57,7 +52,7 @@ impl EmbeddingStore {
 
             // TODO: Use streaming here for larger indexes
             let config = wincode::config::Configuration::default()
-                .with_preallocation_size_limit::<{ 64 * 1024 * 1024 }>();
+                .with_preallocation_size_limit::<{ 128 * 1024 * 1024 }>();
 
             // Deserialize from the memory-mapped bytes
             // This creates a zero copy of the data, so it's safe to return across thread boundaries
@@ -143,7 +138,7 @@ impl EmbeddingStore {
 
         // TODO: Use streaming here for larger indexes
         let config = wincode::config::Configuration::default()
-            .with_preallocation_size_limit::<{ 64 * 1024 * 1024 }>();
+            .with_preallocation_size_limit::<{ 128 * 1024 * 1024 }>();
 
         // Serialize to bytes and calculate checksum
         let initial_bytes = wincode::config::serialize(&*self, config)?;
