@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import pandas as pd
 import struct
 import sys
@@ -5,6 +7,7 @@ import os
 from pathlib import Path
 
 
+# Dataset Link: https://huggingface.co/datasets/KShivendu/dbpedia-entities-openai-1M
 def main():
     downloads = Path(os.path.expanduser("~/Downloads"))
     parquet_files = sorted(downloads.glob("train-*-of-00026-*.parquet"))

@@ -6,6 +6,9 @@
 /examples/startup_index
 datasets/amazon_products.csv
 datasets/amazon_products_backup.csv
+datasets/bench_vectors_100k.bin
+datasets/startups_demo.json
+benches/cache
 .gitattributes
 .env
 /.venv

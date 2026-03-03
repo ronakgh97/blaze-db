@@ -268,10 +268,10 @@ async fn run_benchmarks(
 
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    spinner.set_message(format!("{}", "Top K Scaling".bold().magenta()));
-    run_topk_scaling_test(base_url, &mut stats, &process_monitor).await?;
+    //spinner.set_message(format!("{}", "Top K Scaling".bold().magenta()));
+    //run_topk_scaling_test(base_url, &mut stats, &process_monitor).await?;
 
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    //tokio::time::sleep(Duration::from_secs(2)).await;
 
     spinner.finish_and_clear();
     Ok(stats)
@@ -493,6 +493,7 @@ struct BenchmarkStats {
     thunder_process: ProcessStats,
     mixed_process: ProcessStats,
 
+    #[allow(unused)]
     // Top K scaling
     topk_scaling: Vec<(usize, Duration)>,
 }
@@ -1035,6 +1036,7 @@ async fn run_mixed_workload_test(
     Ok(())
 }
 
+#[allow(unused)]
 async fn run_topk_scaling_test(
     base_url: &str,
     stats: &mut BenchmarkStats,
@@ -1319,26 +1321,26 @@ fn display_results(stats: &BenchmarkStats) {
         stats.mixed_process.memory_avg_mb, stats.mixed_process.memory_peak_mb
     );
 
-    println!("\n{}", "Top K Scaling".bold());
-    println!("   {:<10} {:>12} {:>12}", "top_k", "latency", "scaling");
-    println!("   {}", "-".repeat(36));
-
-    if !stats.topk_scaling.is_empty() {
-        let baseline = stats.topk_scaling[0].1;
-        for (top_k, latency) in &stats.topk_scaling {
-            let scaling = if baseline.as_nanos() > 0 {
-                latency.as_secs_f64() / baseline.as_secs_f64()
-            } else {
-                1.0
-            };
-            println!(
-                "   {:<10} {:>10.1}ms {:>10.1}x",
-                top_k,
-                latency.as_secs_f64() * 1000.0,
-                scaling
-            );
-        }
-    }
+    // println!("\n{}", "Top K Scaling".bold());
+    // println!("   {:<10} {:>12} {:>12}", "top_k", "latency", "scaling");
+    // println!("   {}", "-".repeat(36));
+    //
+    // if !stats.topk_scaling.is_empty() {
+    //     let baseline = stats.topk_scaling[0].1;
+    //     for (top_k, latency) in &stats.topk_scaling {
+    //         let scaling = if baseline.as_nanos() > 0 {
+    //             latency.as_secs_f64() / baseline.as_secs_f64()
+    //         } else {
+    //             1.0
+    //         };
+    //         println!(
+    //             "   {:<10} {:>10.1}ms {:>10.1}x",
+    //             top_k,
+    //             latency.as_secs_f64() * 1000.0,
+    //             scaling
+    //         );
+    //     }
+    // }
 
     let all_passed = stats.write_success == stats.write_expected
         && stats.thunder_success == stats.thunder_expected

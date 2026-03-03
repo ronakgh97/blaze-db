@@ -74,7 +74,7 @@ debug = true
 incremental = true
 
 [dependencies]
-tokio = { version = "1.49.0", features = ["full"] }
+tokio = { version = "1.50.0", features = ["full"] }
 memmap2 = "0.9.10"
 rayon = "1.11.0"
 reqwest = { version = "0.13.2", features = ["json", "blocking"] }
@@ -95,7 +95,7 @@ sha2 = "0.10.9"
 csv = "1.4.0"
 rand = "0.10.0"
 indicatif = { version = "0.18.4", features = ["rayon"] }
-sysinfo = "0.38.2"
+sysinfo = "0.38.3"
 lazy_static = "1.5.0"
 lru = "0.16.3"
 dotenv = "0.15.0"
@@ -111,7 +111,3 @@ dashmap = "6.1.0"
 # walkdir = "2.5.0"
 # rkyv = { version = "0.8.15" , features = ["std", "bytecheck"] }
 # thiserror = "2.0.18"
-
-[dev-dependencies]
-plotters = "0.3.7"
-serde_json = "1.0.149"
