@@ -1,246 +1,276 @@
 [
   {
-    "metric": "862 vec/sec",
+    "metric": "822 vec/sec",
     "name": "construction_2560",
-    "time_ms": 2969.0724
+    "time_ms": 3115.9074
   },
   {
-    "metric": "771 vec/sec",
+    "metric": "744 vec/sec",
     "name": "construction_5120",
-    "time_ms": 6644.0129
+    "time_ms": 6884.9241
   },
   {
-    "metric": "686 vec/sec",
+    "metric": "676 vec/sec",
     "name": "construction_10240",
-    "time_ms": 14934.9087
+    "time_ms": 15156.7395
   },
   {
-    "metric": "544 vec/sec",
+    "metric": "523 vec/sec",
     "name": "construction_20480",
-    "time_ms": 37621.9011
+    "time_ms": 39178.373999999996
   },
   {
-    "metric": "451 vec/sec",
+    "metric": "440 vec/sec",
     "name": "construction_40960",
-    "time_ms": 90898.3111
+    "time_ms": 93162.95890000001
   },
   {
-    "metric": "373 vec/sec",
+    "metric": "372 vec/sec",
     "name": "construction_81920",
-    "time_ms": 219873.42620000002
+    "time_ms": 220120.9492
   },
   {
-    "metric": "1695 vec/sec",
+    "metric": "927 vec/sec",
+    "name": "construction_M_18",
+    "time_ms": 13802.537400000001
+  },
+  {
+    "metric": "629 vec/sec",
+    "name": "construction_M_32",
+    "time_ms": 20334.9227
+  },
+  {
+    "metric": "462 vec/sec",
+    "name": "construction_M_48",
+    "time_ms": 27691.2427
+  },
+  {
+    "metric": "370 vec/sec",
+    "name": "construction_M_64",
+    "time_ms": 34620.8568
+  },
+  {
+    "metric": "230 vec/sec",
+    "name": "construction_M_96",
+    "time_ms": 55598.6827
+  },
+  {
+    "metric": "166 vec/sec",
+    "name": "construction_M_128",
+    "time_ms": 77135.9302
+  },
+  {
+    "metric": "1347 vec/sec",
     "name": "construction_ef_64",
-    "time_ms": 7551.9383
+    "time_ms": 9500.6872
   },
   {
-    "metric": "1443 vec/sec",
+    "metric": "1181 vec/sec",
     "name": "construction_ef_128",
-    "time_ms": 8872.1741
+    "time_ms": 10835.3079
   },
   {
-    "metric": "1089 vec/sec",
+    "metric": "936 vec/sec",
     "name": "construction_ef_256",
-    "time_ms": 11753.0828
+    "time_ms": 13669.420199999999
   },
   {
-    "metric": "724 vec/sec",
+    "metric": "667 vec/sec",
     "name": "construction_ef_512",
-    "time_ms": 17676.256699999998
+    "time_ms": 19197.8503
   },
   {
-    "metric": "582 vec/sec",
+    "metric": "553 vec/sec",
     "name": "construction_ef_768",
-    "time_ms": 21996.377500000002
+    "time_ms": 23166.5298
   },
   {
-    "metric": "499 vec/sec",
+    "metric": "462 vec/sec",
     "name": "construction_ef_1024",
-    "time_ms": 25643.4532
+    "time_ms": 27709.314
   },
   {
-    "metric": "841 qps",
+    "metric": "818 qps",
     "name": "search_qps_at_k_12",
-    "time_ms": 6089.4113
+    "time_ms": 6259.2901999999995
   },
   {
-    "metric": "601 qps",
+    "metric": "602 qps",
     "name": "search_qps_at_k_24",
-    "time_ms": 8515.2491
+    "time_ms": 8503.6983
   },
   {
-    "metric": "418 qps",
+    "metric": "391 qps",
     "name": "search_qps_at_k_48",
-    "time_ms": 12243.6328
+    "time_ms": 13107.7482
   },
   {
-    "metric": "255 qps",
+    "metric": "249 qps",
     "name": "search_qps_at_k_96",
-    "time_ms": 20066.2931
+    "time_ms": 20535.0565
   },
   {
-    "metric": "147 qps",
+    "metric": "155 qps",
     "name": "search_qps_at_k_192",
-    "time_ms": 34810.3906
+    "time_ms": 32932.919200000004
   },
   {
-    "metric": "91 qps",
+    "metric": "96 qps",
     "name": "search_qps_at_k_384",
-    "time_ms": 56021.7354
+    "time_ms": 53430.2926
   },
   {
     "metric": "avg ms",
     "name": "search_latency_avg_k_12",
-    "time_ms": 1.219586738281253
+    "time_ms": 1.2001756640625016
   },
   {
     "metric": "p50 ms",
     "name": "search_latency_p50_k_12",
-    "time_ms": 1.174
+    "time_ms": 1.1611
   },
   {
     "metric": "p95 ms",
     "name": "search_latency_p95_k_12",
-    "time_ms": 1.7342
+    "time_ms": 1.7133999999999998
   },
   {
     "metric": "p99 ms",
     "name": "search_latency_p99_k_12",
-    "time_ms": 2.3652
+    "time_ms": 2.315
   },
   {
     "metric": "avg ms",
     "name": "search_latency_avg_k_24",
-    "time_ms": 1.4105080566406225
+    "time_ms": 1.4252923828125001
   },
   {
     "metric": "p50 ms",
     "name": "search_latency_p50_k_24",
-    "time_ms": 1.3419
+    "time_ms": 1.3514
   },
   {
     "metric": "p95 ms",
     "name": "search_latency_p95_k_24",
-    "time_ms": 2.1776999999999997
+    "time_ms": 2.2843
   },
   {
     "metric": "p99 ms",
     "name": "search_latency_p99_k_24",
-    "time_ms": 2.9079
+    "time_ms": 2.9861000000000004
   },
   {
     "metric": "avg ms",
     "name": "search_latency_avg_k_48",
-    "time_ms": 1.7724744205729133
+    "time_ms": 1.7679038541666663
   },
   {
     "metric": "p50 ms",
     "name": "search_latency_p50_k_48",
-    "time_ms": 1.5681
+    "time_ms": 1.5859999999999999
   },
   {
     "metric": "p95 ms",
     "name": "search_latency_p95_k_48",
-    "time_ms": 3.1805000000000003
+    "time_ms": 3.1529000000000003
   },
   {
     "metric": "p99 ms",
     "name": "search_latency_p99_k_48",
-    "time_ms": 3.9944
+    "time_ms": 3.9408999999999996
   },
   {
     "metric": "avg ms",
     "name": "search_latency_avg_k_96",
-    "time_ms": 2.326095439453133
+    "time_ms": 2.304368852539072
   },
   {
     "metric": "p50 ms",
     "name": "search_latency_p50_k_96",
-    "time_ms": 1.9185999999999999
+    "time_ms": 1.9356
   },
   {
     "metric": "p95 ms",
     "name": "search_latency_p95_k_96",
-    "time_ms": 4.7873
+    "time_ms": 4.6235
   },
   {
     "metric": "p99 ms",
     "name": "search_latency_p99_k_96",
-    "time_ms": 5.8665
+    "time_ms": 5.7154
   },
   {
     "metric": "avg ms",
     "name": "search_latency_avg_k_192",
-    "time_ms": 3.1479150781250174
+    "time_ms": 3.104860417968758
   },
   {
     "metric": "p50 ms",
     "name": "search_latency_p50_k_192",
-    "time_ms": 2.4123
+    "time_ms": 2.4177999999999997
   },
   {
     "metric": "p95 ms",
     "name": "search_latency_p95_k_192",
-    "time_ms": 7.342300000000001
+    "time_ms": 7.204000000000001
   },
   {
     "metric": "p99 ms",
     "name": "search_latency_p99_k_192",
-    "time_ms": 8.6351
+    "time_ms": 8.6159
   },
   {
     "metric": "avg ms",
     "name": "search_latency_avg_k_384",
-    "time_ms": 4.365284248046894
+    "time_ms": 4.325762340494797
   },
   {
     "metric": "p50 ms",
     "name": "search_latency_p50_k_384",
-    "time_ms": 3.0921999999999996
+    "time_ms": 3.0336
   },
   {
     "metric": "p95 ms",
     "name": "search_latency_p95_k_384",
-    "time_ms": 11.386099999999999
+    "time_ms": 11.4207
   },
   {
     "metric": "p99 ms",
     "name": "search_latency_p99_k_384",
-    "time_ms": 13.2448
+    "time_ms": 13.2146
   },
   {
-    "metric": "99.05%",
+    "metric": "49.73%",
     "name": "recall_at_64_ef_32",
     "time_ms": 0.0
   },
   {
-    "metric": "97.75%",
+    "metric": "95.52%",
     "name": "recall_at_64_ef_64",
     "time_ms": 0.0
   },
   {
-    "metric": "99.21%",
+    "metric": "97.67%",
     "name": "recall_at_64_ef_128",
     "time_ms": 0.0
   },
   {
-    "metric": "99.21%",
+    "metric": "98.80%",
     "name": "recall_at_64_ef_256",
     "time_ms": 0.0
   },
   {
-    "metric": "98.83%",
+    "metric": "99.22%",
     "name": "recall_at_64_ef_512",
     "time_ms": 0.0
   },
   {
-    "metric": "99.01%",
+    "metric": "99.52%",
     "name": "recall_at_64_ef_768",
     "time_ms": 0.0
   },
   {
-    "metric": "99.17%",
+    "metric": "99.63%",
     "name": "recall_at_64_ef_1024",
     "time_ms": 0.0
   }

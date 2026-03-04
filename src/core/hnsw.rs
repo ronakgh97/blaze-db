@@ -106,7 +106,8 @@ pub struct HNSW {
     // TODO: Take Option type here
     pub metrics: Option<Metrics>,
     /// Mapping from external ID (set by params) to internal ID (array index)
-    id_mapper: HashMap<String, NodeIndex>,
+    /// It's just a fucking HashMap for O(1) lookups, that's all it is, nothing fancy
+    id_mapper: HashMap<NodeID, NodeIndex>,
 }
 
 impl Default for HNSW {
@@ -163,14 +164,14 @@ impl HNSW {
     /// 3. Connect the new node to its neighbors at each layer
     ///
     /// # Arguments
-    /// * `external_id` - User-provided external ID (must be unique)
+    /// * `node_id` - User-provided external ID (must be unique)
     /// * `vector` - The vector to insert
     /// * `metadata` - Metadata associated with the node
     /// * `max_level` - The maximum level for this node
     ///
     /// # Returns
     /// * `Ok(NodeId)` - The internal ID of the inserted node
-    /// * `Err` - If the external_id already exists
+    /// * `Err` - If the node_id already exists
     pub fn insert(
         &mut self,
         vector_id: String,
@@ -178,7 +179,7 @@ impl HNSW {
         metadata: String,
         max_level: usize,
     ) -> Result<NodeIndex> {
-        // Check for duplicate external_id
+        // Check for duplicate node_id
         if self.id_mapper.contains_key(&vector_id) {
             return Err(anyhow::anyhow!(
                 "External ID '{}' already exists",
@@ -446,7 +447,7 @@ impl HNSW {
     }
 
     /// Public search API: find K nearest neighbors to a query
-    /// Returns results as (external_id, similarity) tuples sorted by similarity (highest first)
+    /// Returns results as (node_id, similarity) tuples sorted by similarity (highest first)
     ///
     /// # Arguments
     /// * `query` - The query vector
@@ -477,7 +478,7 @@ impl HNSW {
                 return active_results.into_par_iter().take(k).collect();
             }
 
-            // Not enough active results, expand search
+            // Not enough active results, perform DOMAIN EXPANSION 🟣
             // TODO: This factor should be a configurable
             current_ef = (current_ef as f32 * 1.5) as usize;
             current_ef = current_ef.min(max_ef);
@@ -485,7 +486,7 @@ impl HNSW {
     }
 
     /// Internal search method that performs the actual HNSW search
-    fn search_internal(&self, query: &[f32], k: usize, ef: usize) -> Vec<(NodeIndex, f32)> {
+    pub fn search_internal(&self, query: &[f32], k: usize, ef: usize) -> Vec<(NodeIndex, f32)> {
         let entry = self.entry_point.expect("Entry point should exist");
         let entry_level = self.nodes[entry].max_level;
         let mut current = entry;
@@ -527,14 +528,14 @@ impl HNSW {
         let results = self.search(query, k, ef_search);
         results
             .into_iter()
-            .map(|(external_id, sim)| {
+            .map(|(node_id, sim)| {
                 let metadata = self
                     .id_mapper
-                    .get(&external_id)
+                    .get(&node_id)
                     .and_then(|&id| self.nodes.get(id))
                     .map(|node| node.metadata.clone())
                     .unwrap_or_default();
-                (external_id, sim, metadata)
+                (node_id, sim, metadata)
             })
             .collect()
     }
@@ -569,12 +570,12 @@ impl HNSW {
         let results = self.brute_force_search(query, k);
         results
             .into_iter()
-            .map(|(external_id, sim)| {
+            .map(|(node_id, sim)| {
                 let metadata = self
-                    .get_node_by_id(&external_id)
+                    .get_node_by_id(&node_id)
                     .map(|node| node.metadata.clone())
                     .unwrap_or_default();
-                (external_id, sim, metadata)
+                (node_id, sim, metadata)
             })
             .collect()
     }
@@ -582,12 +583,12 @@ impl HNSW {
     /// Delete a node by external ID
     /// If the deleted node is the entry point, finds a new one
     #[inline]
-    pub fn delete_node_by_id(&mut self, external_id: &str) -> Result<()> {
+    pub fn delete_node_by_id(&mut self, node_id: &str) -> Result<()> {
         let node_id = self
             .id_mapper
-            .get(external_id)
+            .get(node_id)
             .copied()
-            .ok_or_else(|| anyhow::anyhow!("External ID '{}' not found", external_id))?;
+            .ok_or_else(|| anyhow::anyhow!("External ID '{}' not found", node_id))?;
 
         // Mark as tombstone
         self.mark_tombstone(node_id)?;
@@ -746,6 +747,7 @@ impl HNSW {
 }
 
 /// Internal identifier for a node in the HNSW graph. (Changes during reindexing, not exposed to outside)
+/// It's just a fucking array index, that ip_mapper in HNSW? It's just for fucking O(1)
 pub type NodeIndex = usize;
 
 /// Unique identifier for a node. (Stable across reindexing)
