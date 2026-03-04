@@ -6,10 +6,70 @@ use rayon::prelude::IntoParallelIterator;
 #[allow(unused)]
 use rayon::prelude::IntoParallelRefIterator;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use wincode::{SchemaRead, SchemaWrite};
 
-const DEFAULT_EF_MULTIPLIER: usize = 3;
+/// Priority queue entry for nodes to explore during search.
+/// Example: candidates with similarities [0.5, 0.9, 0.3]
+/// - Heap top will be 0.9 (highest)
+/// - pop() returns 0.9, then 0.5, then 0.3
+#[derive(Clone, Copy)]
+struct Candidate(NodeIndex, f32);
+
+impl PartialEq for Candidate {
+    fn eq(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
+}
+
+impl Eq for Candidate {}
+
+impl Ord for Candidate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // pop() gives us the HIGHEST similarity candidate
+        self.1.partial_cmp(&other.1).unwrap()
+    }
+}
+
+impl PartialOrd for Candidate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// We want to quickly find the WORST result in our top-k (to know when to prune)
+/// By reversing the comparison, the heap top is the LOWEST similarity in our results
+/// pop() gives us the worst result, making pruning O(1)
+/// Example: results with similarities [0.9, 0.7, 0.5] (k=3)
+/// - Heap top will be 0.5 (lowest in our top-k)
+/// - When new candidate with 0.8 arrives:
+/// - 0.8 > 0.5 (worst), so we add it and pop the worst (0.5)
+#[derive(Clone, Copy)]
+struct ScoredResult(NodeIndex, f32);
+
+impl PartialEq for ScoredResult {
+    fn eq(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
+}
+
+impl Eq for ScoredResult {}
+
+impl Ord for ScoredResult {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // peek() gives us the WORST result in our top-k
+        other.1.partial_cmp(&self.1).unwrap()
+    }
+}
+
+impl PartialOrd for ScoredResult {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+const DEFAULT_EF_MULTIPLIER: usize = 4;
 
 /// # Hierarchical Navigable Small World (HNSW)
 ///
@@ -181,7 +241,6 @@ impl HNSW {
                 // Only connect if neighbor exists at this layer
                 if layer <= self.nodes[neighbor_id].max_level {
                     self.nodes[node_id].neighbors[layer].push(neighbor_id);
-
                     self.nodes[neighbor_id].neighbors[layer].push(node_id);
 
                     // Prune neighbor's connections if it has too many
@@ -241,7 +300,18 @@ impl HNSW {
     }
 
     /// K-NN search at a specific layer: find K nearest neighbors
-    /// Uses a BOUNDED beam search with ef parameter (critical for performance)
+    /// Uses a BOUNDED search with ef parameter (critical for performance)
+    ///
+    /// ALGORITHM:
+    /// 1. Start with entry point in both candidates and results
+    /// 2. Pop highest similarity candidate from heap (best-first)
+    /// 3. If candidate is worse than our worst result, skip (prune)
+    /// 4. Otherwise, explore all its neighbors
+    /// 5. Add promising neighbors to candidates AND results (if better than worst)
+    /// 6. Repeat until candidates empty
+    /// 7. Return top-k results sorted by similarity
+    ///
+    /// COMPLEXITY: O(log n) per operation instead of O(n log n)
     fn search_layer_knn(
         &self,
         query: &[f32],
@@ -250,30 +320,33 @@ impl HNSW {
         layer: usize,
     ) -> Vec<NodeIndex> {
         let mut visited = HashSet::with_capacity(self.nodes.len());
-        // Working set (to explore)
-        let mut candidates = Vec::with_capacity(12800);
-        // Best found so far
-        let mut results = Vec::with_capacity(candidates.capacity());
+
+        // CANDIDATES heap: explore highest similarity first
+        // pop() gives us the most promising node to explore next
+        let mut candidates: BinaryHeap<Candidate> = BinaryHeap::with_capacity(ef * 2);
+
+        // RESULTS heap: track top-k results
+        // peek() gives us the WORST result in our top-k (for pruning)
+        let mut results: BinaryHeap<ScoredResult> = BinaryHeap::with_capacity(ef);
 
         let entry_sim = self.similarity(query, &self.nodes[entry].vector, self.metrics.as_ref());
         visited.insert(entry);
-        candidates.push((entry, entry_sim));
-        results.push((entry, entry_sim));
+        candidates.push(Candidate(entry, entry_sim));
+        results.push(ScoredResult(entry, entry_sim));
 
-        // Bounded beam search - only explore ef best candidates
-        while let Some((current_id, current_sim)) = candidates.pop() {
-            // Pruning: if current is worse than worst result, skip
-            if !results.is_empty() {
-                results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap()); // Higher similarity first
-                if results.len() >= ef && current_sim < results[ef - 1].1 {
-                    continue;
-                }
+        while let Some(Candidate(current_id, current_sim)) = candidates.pop() {
+            // PRUNING: if we've filled ef slots and current is worse than our worst result,
+            // there's no point exploring it - all its neighbors will be even worse
+            if let Some(worst_result) = results.peek()
+                && results.len() >= ef
+                && current_sim < worst_result.1
+            {
+                continue;
             }
 
-            // Explore neighbors
+            // Explore neighbors of current candidate
             if layer <= self.nodes[current_id].max_level {
                 for &neighbor_id in &self.nodes[current_id].neighbors[layer] {
-                    // Skip tombstoned nodes during search
                     if self.nodes[neighbor_id].tombstone {
                         continue;
                     }
@@ -285,30 +358,36 @@ impl HNSW {
                             self.metrics.as_ref(),
                         );
 
-                        // Only add if better than worst result or we haven't found ef results yet
-                        if results.len() < ef || sim > results[ef - 1].1 {
-                            candidates.push((neighbor_id, sim));
-                            results.push((neighbor_id, sim));
+                        // WHATDAFAK: should we add this neighbor to our search frontier?
+                        // Add if: we haven't filled ef slots OR new node is better than our worst
+                        let worst_if_full = results.peek().map(|r| r.1);
+                        let should_add = match (results.len(), worst_if_full) {
+                            (len, _) if len < ef => true,            // still filling
+                            (_, Some(worst)) if sim > worst => true, // better than worst
+                            _ => false,
+                        };
 
-                            // Keep results sorted and bounded
+                        if should_add {
+                            candidates.push(Candidate(neighbor_id, sim));
+                            results.push(ScoredResult(neighbor_id, sim));
+
                             if results.len() > ef {
-                                results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-                                results.truncate(ef);
+                                results.pop();
                             }
                         }
                     }
                 }
             }
-
-            // TODO: Use binary heap here
-            // Sort candidates by similarity (highest first) for next iteration
-            candidates.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap()); // Lowest for pop()
         }
 
-        // Return just the node IDs, already sorted by similarity (highest first)
-        results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        // Final sort for highest similarity first for output consistency (results is a min-heap by similarity, so we reverse it)
+        let mut sorted_results: Vec<ScoredResult> = results.into_vec();
+        sorted_results.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        results.into_par_iter().map(|(id, _)| id).collect()
+        sorted_results
+            .into_iter()
+            .map(|ScoredResult(id, _)| id)
+            .collect()
     }
 
     /// Remove connections to keep only the M closest neighbors
@@ -333,7 +412,6 @@ impl HNSW {
             })
             .collect();
 
-        // Keep only the M most similar
         neighbor_sims.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         neighbor_sims.truncate(self.max_neighbors);
 
@@ -341,7 +419,6 @@ impl HNSW {
             neighbor_sims.into_par_iter().map(|(id, _)| id).collect();
         let new_neighbors_set: HashSet<NodeIndex> = new_neighbors.iter().copied().collect();
 
-        // Find nodes that were removed (old - new)
         let removed_neighbors: Vec<NodeIndex> = old_neighbors
             .difference(&new_neighbors_set)
             .copied()
@@ -687,7 +764,7 @@ pub struct Node {
     pub neighbors: Vec<Vec<NodeIndex>>,
     /// The highest layer this node exists in
     pub max_level: usize,
-    /// Flag for lazy deletion
+    /// Flag 🪦 for lazy deletion
     tombstone: bool,
 }
 
