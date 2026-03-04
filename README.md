@@ -323,10 +323,21 @@ Concurrent writes to different databases work in parallel!
 test stress_test_concurrent_writes_different_databases ... ok
 ```
 
-- Concurrent writes to different databases work in parallel, with significant speedup over sequential writes! 😎🔥
-- Each write operation is still quite slow due to HNSW indexing and disk I/O, but at least they don't block each
-  other. (Which is a huge improvement over the previous version where all writes were serialized due to global locks. 😭)
+- Concurrent writes to different databases work in parallel🔥
+- Each write operation is still quite slow due to HNSW indexing and slight disk read checks, but at least they don't
+  block each other.
 - Checkout the Test: [Stress Test](tests/stress_tests.rs)
+
+### **Trust Me Bro** Benchmarks
+
+![Index_time_varying_Size](./benches/plots/construction_speed.png)
+![Index_time_varying_M](./benches/plots/construction_M.png)
+![Recall@64_varying_EF](./benches/plots/recall_vs_ef.png)
+![Query_time_varying_K](./benches/plots/qps_vs_k.png)
+
+- All Benchmarks are done with 16GB RAM and AMD i7 14th CPU, checkout `benches/` directory.
+- [Datasets used](https://huggingface.co/datasets/KShivendu/dbpedia-entities-openai-1M/tree/main/data) (~1M vectors and
+  1024 dim)
 
 ### TODO:
 
@@ -381,13 +392,7 @@ Codebase is getting huge and hard to maintain it myself
 
 ### My Rules 😼
 
-- **DO NOT USE AI CODE PLEASE**, I can smell the SLOP from miles away, so get away from my trash. (Except boring
-  testing code, I do use AI for that.) 🤖🚫
-- **DO NOT REFACTOR SERVER AND CORE MODULES**, Unless there is a less I/O operations, those codes are sacred. 🙏📜
-- **DO NOT BRING YOUR 'BEST PRACTICES' BS HERE**, Im very opinionated about coding styles and still learning, so don't
-  waste your time. 🛑🧠
-- **DO NOT UNDER ANY CIRCUMSTANCES, ADD ANOTHER LOCKS/THREAD SPAWNS/ASYNC AWAIT UNLESS ABSOLUTELY NECESSARY**,
-  Those are the reasons why this code is thread-safe AND why its slow, and I even dont know HOW!!!!. 🛑🔒
+**JUST DON'T SPAM AI AND PLEASE DONT REMOVE UNCOMMENTED CODE**
 
 <h3 style="text-align: center;">VPS Support 😾</h3>
 
