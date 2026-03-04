@@ -1,5 +1,5 @@
 // These benchmarks are very experimental, Im just doing whatever the hell, I want, Idk how to actually bench vector db by Industry Standards :)
-
+// The bench takes about 20mins+ to run, I think to run separate bench concurrently, and Mutex all the jazz
 use blaze_db::core::HNSW;
 use blaze_db::core::Metrics;
 use blaze_db::prelude::EmbeddingStore;
@@ -166,16 +166,51 @@ async fn main() {
         }
     }
 
+    // Varying M values (max connections per layer)
+    {
+        let test_index_size = 10000;
+        let test_m_values = vec![18, 32, 48, 64, 96, 128];
+
+        for m in &test_m_values {
+            println!("Building index with M={}...", m);
+
+            let start = Instant::now();
+            let mut hnsw = HNSW::new(*m, 256, 18, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
+
+            for i in 0..test_index_size {
+                let vec = get_vector(&mmap, i, dim);
+                let level = hnsw.get_random_level();
+                let id = format!("chunk_{}", i);
+                hnsw.insert(id, vec, format!("metadata_{}", i), level).ok();
+            }
+
+            let elapsed = start.elapsed();
+            let time_ms = elapsed.as_secs_f64() * 1000.0;
+            let vectors_per_sec = test_index_size as f64 / elapsed.as_secs_f64();
+
+            println!(
+                "  M {}: {:.2} ms ({:.0} vectors/sec)",
+                m, time_ms, vectors_per_sec
+            );
+
+            results.push(BenchmarkResults {
+                name: format!("construction_M_{}", m),
+                time_ms,
+                metric: format!("{:.0} vec/sec", vectors_per_sec),
+            });
+        }
+    }
+
     // Varying ef_construction values
     {
-        let test_index_size = 12800;
-        let test_ef_construction = vec![64, 128, 256, 512, 768, 1024];
+        let test_index_size = 10000;
+        let test_ef_construction = vec![64, 96, 128, 144, 256, 512, 768, 1024];
 
         for ef in &test_ef_construction {
             println!("Building index with ef_construction={}...", ef);
 
             let start = Instant::now();
-            let mut hnsw = HNSW::new(16, *ef, 18, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
+            let mut hnsw = HNSW::new(18, *ef, 18, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
 
             for i in 0..test_index_size {
                 let vec = get_vector(&mmap, i, dim);
@@ -287,13 +322,12 @@ async fn main() {
         }
     }
 
-    let k = 64;
-
     // Recall with varying ef_search
     {
-        let recall_samples = 128;
+        let k = 64;
+        let recall_samples = 1280; // The more, the better
 
-        let ef_search_values = vec![32, 64, 128, 256, 512, 768, 1024];
+        let ef_search_values = vec![32, 64, 128, 256, 512, 768];
         println!(
             "Measuring Recall@{} over {} samples with varying ef: {:?}",
             k, recall_samples, ef_search_values
@@ -306,8 +340,12 @@ async fn main() {
                 let query_idx = fastrand::usize(0..=num_vectors - 1);
                 let query = get_vector(&mmap, query_idx, dim);
 
-                // Get HNSW results
-                let hnsw_results = hnsw.search(query, k, None);
+                // Bypasses adaptive ef_search loop
+                let internal_results = hnsw.search_internal(query, k, ef);
+                let hnsw_results: Vec<(String, f32)> = internal_results
+                    .into_iter()
+                    .map(|(id, sim)| (hnsw.nodes[id].node_id.clone(), sim))
+                    .collect();
 
                 // Get brute force results
                 let bf_results = hnsw.brute_force_search(query, k);

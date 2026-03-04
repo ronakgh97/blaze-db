@@ -4,9 +4,10 @@ import json
 import os
 
 import matplotlib.pyplot as plt
+from numpy import float64
 
 plt.style.use("dark_background")
-plt.rcParams["font.family"] = "monospace"
+plt.rcParams["font.family"] = "Consolas"
 plt.rcParams["font.size"] = 11
 plt.rcParams["axes.facecolor"] = "#1e1e1e"
 plt.rcParams["figure.facecolor"] = "#1e1e1e"
@@ -16,7 +17,7 @@ plt.rcParams["xtick.color"] = "#ccc"
 plt.rcParams["ytick.color"] = "#ccc"
 plt.rcParams["text.color"] = "#ccc"
 
-COLORS = ["#ff5050", "#50c878", "#6495ff", "#ffc850", "#c864ff"]
+COLORS = ["#ff5050", "#50c878", "#6495ff", "#ffc850", "#c864ff", "#50e3c2"]
 
 
 def load_results():
@@ -32,6 +33,7 @@ def plot_construction_speed(results):
 
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(sizes, speeds, marker="o", color=COLORS[0], linewidth=2.5, markersize=10)
+    ax.fill_between(sizes, speeds, alpha=0.15, color=COLORS[2])
     ax.set_xlabel("Index Size (vectors)", fontsize=12)
     ax.set_ylabel("Vectors/sec", fontsize=12)
     ax.set_title(
@@ -70,6 +72,7 @@ def plot_construction_ef(results):
 
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.plot(efs, speeds, marker="s", color=COLORS[1], linewidth=2.5, markersize=10)
+    ax.fill_between(efs, speeds, alpha=0.15, color=COLORS[2])
     ax.set_xlabel("ef_construction", fontsize=12)
     ax.set_ylabel("Vectors/sec", fontsize=12)
     ax.set_title(
@@ -100,14 +103,49 @@ def plot_construction_ef(results):
     plt.close()
 
 
+def plot_construction_M(results):
+    Ms = 18, 32, 48, 64, 96, 128
+    speeds = [float(results[f"construction_M_{M}"]["metric"].split()[0]) for M in Ms]
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(Ms, speeds, marker="^", color=COLORS[2], linewidth=2.5, markersize=10)
+    ax.fill_between(Ms, speeds, alpha=0.15, color=COLORS[2])
+    ax.set_xlabel("M (max neighbour per node)", fontsize=12)
+    ax.set_ylabel("Vectors/sec", fontsize=12)
+    ax.set_title(
+        "Effect of M on Build Speed",
+        fontsize=13,
+        fontweight="bold",
+        pad=15,
+    )
+    ax.grid(alpha=0.3)
+    ax.set_xticks(Ms)
+    ax.set_xticklabels(Ms)
+
+    for M, sp in zip(Ms, speeds):
+        ax.annotate(
+            f"{sp:.0f}",
+            (M, sp),
+            textcoords="offset points",
+            xytext=(0, 12),
+            ha="center",
+            fontsize=10,
+            fontweight="bold",
+        )
+
+    plt.tight_layout()
+    plt.savefig("benches/plots/construction_M.png", dpi=150)
+    print("Saved: benches/plots/construction_M.png")
+    plt.close()
+
+
 def plot_qps_vs_k(results):
     ks = [12, 24, 48, 96, 192, 384]
     qps = [float(results[f"search_qps_at_k_{k}"]["metric"].split()[0]) for k in ks]
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(ks, qps, marker="o", color=COLORS[2], linewidth=2.5, markersize=10)
+    ax.plot(ks, qps, marker="o", color=COLORS[3], linewidth=2.5, markersize=10)
     ax.fill_between(ks, qps, alpha=0.15, color=COLORS[2])
-
     ax.set_xlabel("K (number of results to return)", fontsize=12)
     ax.set_ylabel("Queries Per Second (QPS)", fontsize=12)
     ax.set_title(
@@ -157,10 +195,10 @@ def plot_latency_vs_k(results):
         label="p50 (median)",
     )
     ax.plot(
-        ks, p95, marker="s", color=COLORS[1], linewidth=2.5, markersize=8, label="p95"
+        ks, p95, marker="s", color=COLORS[4], linewidth=2.5, markersize=8, label="p95"
     )
     ax.plot(
-        ks, p99, marker="^", color=COLORS[2], linewidth=2.5, markersize=8, label="p99"
+        ks, p99, marker="^", color=COLORS[5], linewidth=2.5, markersize=8, label="p99"
     )
     ax.fill_between(ks, p50, p99, alpha=0.1, color=COLORS[0])
 
@@ -182,7 +220,7 @@ def plot_latency_vs_k(results):
             textcoords="offset points",
             xytext=(8, 8),
             ha="left",
-            fontsize=9,
+            fontsize=12,
             color=COLORS[0],
         )
     for k, v in zip(ks, p95):
@@ -192,7 +230,7 @@ def plot_latency_vs_k(results):
             textcoords="offset points",
             xytext=(12, 8),
             ha="left",
-            fontsize=9,
+            fontsize=12,
             color=COLORS[1],
         )
     for k, v in zip(ks, p99):
@@ -202,7 +240,7 @@ def plot_latency_vs_k(results):
             textcoords="offset points",
             xytext=(12, 10),
             ha="left",
-            fontsize=9,
+            fontsize=12,
             color=COLORS[2],
         )
 
@@ -213,19 +251,18 @@ def plot_latency_vs_k(results):
 
 
 def plot_recall_vs_ef(results):
-    efs = [32, 64, 128, 256, 512, 768, 1024]
+    efs = [32, 64, 128, 256, 512, 768]
     recalls = [
-        float(results[f"recall_at_64_ef_{ef}"]["metric"].replace("%", "")) for ef in efs
+        float64(results[f"recall_at_64_ef_{ef}"]["metric"].replace("%", "")) for ef in efs
     ]
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
     ax.axhline(
-        y=90, color="gray", linestyle="--", alpha=0.6, linewidth=1.5, label="90% target"
+        y=90, color="gray", linestyle="--", alpha=0.6, linewidth=1.5, label=">90% target"
     )
-    ax.plot(efs, recalls, marker="o", color=COLORS[3], linewidth=2.5, markersize=10)
+    ax.plot(efs, recalls, marker="o", color=COLORS[5], linewidth=2.5, markersize=10)
     ax.fill_between(efs, recalls, alpha=0.15, color=COLORS[3])
-
     ax.set_xlabel("ef_search (search-time exploration width)", fontsize=12)
     ax.set_ylabel("Recall % (accuracy vs brute-force)", fontsize=12)
     ax.set_title(
@@ -265,10 +302,10 @@ def main():
     print("Generating plots...")
     plot_construction_speed(results)
     plot_construction_ef(results)
+    plot_construction_M(results)
     plot_qps_vs_k(results)
     plot_latency_vs_k(results)
     plot_recall_vs_ef(results)
-    print("\nAll plots saved to benches/plots/")
 
 
 if __name__ == "__main__":
