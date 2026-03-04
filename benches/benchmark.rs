@@ -132,7 +132,7 @@ async fn main() {
 
     // Varying index construction sizes
     {
-        let test_index_sizes = vec![5120, 10240, 20480, 40960, 81920];
+        let test_index_sizes = vec![2560, 5120, 10240, 20480, 40960, 81920];
 
         for size in &test_index_sizes {
             println!("Building index with {} vectors...", size);
@@ -168,14 +168,14 @@ async fn main() {
 
     // Varying ef_construction values
     {
-        let test_index_size = 25600;
-        let test_ef_construction = vec![32, 64, 256, 512];
+        let test_index_size = 12800;
+        let test_ef_construction = vec![64, 128, 256, 512, 768, 1024];
 
         for ef in &test_ef_construction {
             println!("Building index with ef_construction={}...", ef);
 
             let start = Instant::now();
-            let mut hnsw = HNSW::new(16, 200, *ef, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
+            let mut hnsw = HNSW::new(16, *ef, 18, 1.0 / 16.0_f32.ln(), &Some(Metrics::Cosine));
 
             for i in 0..test_index_size {
                 let vec = get_vector(&mmap, i, dim);
@@ -307,9 +307,9 @@ async fn main() {
                 let query = get_vector(&mmap, query_idx, dim);
 
                 // Get HNSW results
-                let hnsw_results = hnsw.search(query, k, Some(ef));
+                let hnsw_results = hnsw.search(query, k, None);
 
-                // Get brute force results using HNSW::brute_force_search
+                // Get brute force results
                 let bf_results = hnsw.brute_force_search(query, k);
 
                 let recall = compare_recall_at_k(&hnsw_results, &bf_results, k);

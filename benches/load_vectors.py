@@ -9,8 +9,8 @@ from pathlib import Path
 
 # Dataset Link: https://huggingface.co/datasets/KShivendu/dbpedia-entities-openai-1M
 def main():
-    downloads = Path(os.path.expanduser("~/Downloads"))
-    parquet_files = sorted(downloads.glob("train-*-of-00026-*.parquet"))
+    path = Path(os.path.expanduser("~/Downloads/dim1536_size1M"))
+    parquet_files = sorted(path.glob("train-*-of-00026-*.parquet"))
 
     print(f"Found {len(parquet_files)} parquet files", file=sys.stderr)
 

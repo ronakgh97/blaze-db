@@ -8,7 +8,6 @@ use crate::{debug, error, info, trace, warn};
 use anyhow::{Context, Result};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -579,48 +578,4 @@ pub async fn load_index_from_database(database: String, source: String) -> Optio
 
     // Return (store) - we don't use version numbers anymore
     loaded_hnsw
-}
-
-// TODO: Schedule this to run periodically in background task (use this)
-
-/// Cleanup old index files, keeping only the last N indexes
-/// This prevents disk space from filling up with old indexes
-#[allow(unused)]
-async fn cleanup_old_indexes(db_path: &PathBuf, prefix: &str, keep_last: usize) -> Result<()> {
-    let mut index_files: Vec<(usize, PathBuf)> = Vec::new();
-
-    // Scan directory for index files
-    for entry in std::fs::read_dir(db_path)? {
-        let entry = entry?;
-        let path = entry.path();
-        if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
-            && let Some(suffix) = file_name.strip_prefix(prefix)
-        {
-            let suffix = suffix.strip_suffix(".bin").unwrap_or(suffix);
-            let suffix = suffix.strip_prefix('_').unwrap_or(suffix);
-            if let Ok(num) = suffix.parse::<usize>() {
-                index_files.push((num, path));
-            }
-        }
-    }
-
-    // Sort by index number (ascending)
-    index_files.sort_by_key(|(num, _)| *num);
-
-    // Delete all except last N
-    if index_files.len() > keep_last {
-        let to_delete = index_files.len() - keep_last;
-        for (idx, path) in index_files.iter().take(to_delete) {
-            debug!("Cleaning up old index: {} at {:?}", idx, path);
-            tokio::fs::remove_file(path)
-                .await
-                .with_context(|| format!("Failed to delete old index: {:?}", path))?;
-        }
-        debug!(
-            "Cleanup complete: deleted {} old index(es), kept last {}",
-            to_delete, keep_last
-        );
-    }
-
-    Ok(())
 }

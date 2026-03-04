@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import json
-import matplotlib.pyplot as plt
 import os
+
+import matplotlib.pyplot as plt
 
 plt.style.use("dark_background")
 plt.rcParams["font.family"] = "monospace"
@@ -26,7 +27,7 @@ def load_results():
 
 
 def plot_construction_speed(results):
-    sizes = [5120, 10240, 20480, 40960, 81920]
+    sizes = [2560, 5120, 10240, 20480, 40960, 81920]
     speeds = [float(results[f"construction_{s}"]["metric"].split()[0]) for s in sizes]
 
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -62,7 +63,7 @@ def plot_construction_speed(results):
 
 
 def plot_construction_ef(results):
-    efs = [32, 64, 256, 512]
+    efs = 64, 128, 256, 512, 768, 1024
     speeds = [
         float(results[f"construction_ef_{ef}"]["metric"].split()[0]) for ef in efs
     ]
@@ -78,6 +79,7 @@ def plot_construction_ef(results):
         pad=15,
     )
     ax.grid(alpha=0.3)
+    ax.set_xscale("log")
     ax.set_xticks(efs)
     ax.set_xticklabels(efs)
 
@@ -115,7 +117,7 @@ def plot_qps_vs_k(results):
         pad=15,
     )
     ax.grid(alpha=0.3)
-    ax.set_yscale("log")
+    ax.set_xscale("log")
     ax.set_xticks(ks)
     ax.set_xticklabels(ks)
 
@@ -169,9 +171,40 @@ def plot_latency_vs_k(results):
     )
     ax.legend(loc="upper left", framealpha=0.9)
     ax.grid(alpha=0.3)
-    ax.set_yscale("log")
+    ax.set_xscale("log")
     ax.set_xticks(ks)
     ax.set_xticklabels(ks)
+
+    for k, v in zip(ks, p50):
+        ax.annotate(
+            f"{v:.1f}ms",
+            (k, v),
+            textcoords="offset points",
+            xytext=(8, 8),
+            ha="left",
+            fontsize=9,
+            color=COLORS[0],
+        )
+    for k, v in zip(ks, p95):
+        ax.annotate(
+            f"{v:.1f}ms",
+            (k, v),
+            textcoords="offset points",
+            xytext=(12, 8),
+            ha="left",
+            fontsize=9,
+            color=COLORS[1],
+        )
+    for k, v in zip(ks, p99):
+        ax.annotate(
+            f"{v:.1f}ms",
+            (k, v),
+            textcoords="offset points",
+            xytext=(12, 10),
+            ha="left",
+            fontsize=9,
+            color=COLORS[2],
+        )
 
     plt.tight_layout()
     plt.savefig("benches/plots/latency_vs_k.png", dpi=150)
