@@ -71,6 +71,8 @@ impl PartialOrd for ScoredResult {
 
 const DEFAULT_EF_MULTIPLIER: usize = 4;
 
+const DEFAULT_EF_INC_FACTOR: f32 = 1.5;
+
 /// # Hierarchical Navigable Small World (HNSW)
 ///
 /// ## Properties:
@@ -90,20 +92,16 @@ pub struct HNSW {
     /// All nodes in the graph, not layer-wise
     pub nodes: Vec<Node>,
     /// First node at the top layer, used as entry point for searches
-    /// Can be a random node in top layer, just use the first inserted node for now TODO: think?
     pub entry_point: Option<NodeIndex>,
     /// Total number of layers in the graph
     pub max_layers: usize,
     /// Degree of each node (max number of neighbors) per layer
     pub max_neighbors: usize,
-    /// Beam width during construction (higher = better quality but slower)
-    /// Must be >= max_neighbors
     /// More values explored during insertion means better chance of finding good neighbors
     pub ef_construction: usize,
     /// Controls the layer distribution of nodes (exponential distribution bias) CURRENTLY UNUSED
     pub distribution_bias: f32,
     /// Similarity metric to use for distance calculations (default: Cosine)
-    // TODO: Take Option type here
     pub metrics: Option<Metrics>,
     /// Mapping from external ID (set by params) to internal ID (array index)
     /// It's just a fucking HashMap for O(1) lookups, that's all it is, nothing fancy
@@ -111,11 +109,6 @@ pub struct HNSW {
 }
 
 impl Default for HNSW {
-    /// Default HNSW parameters:
-    /// - max_neighbors: 16
-    /// - ef_construction: 200
-    /// - max_layers: 12
-    /// - distribution_bias: 1.0 (Unused btw)
     fn default() -> Self {
         HNSW::new(16, 200, 16, 1.0, &Some(Metrics::Cosine))
     }
@@ -231,7 +224,6 @@ impl HNSW {
             let candidates =
                 self.search_layer_knn(&new_vector, current_nearest, self.ef_construction, layer);
 
-            // But only connect to max_neighbors of them
             let selected: Vec<NodeIndex> = candidates
                 .into_par_iter()
                 .take(self.max_neighbors)
@@ -239,7 +231,6 @@ impl HNSW {
 
             // Connect new node to its neighbors (bidirectional!!)
             for &neighbor_id in &selected {
-                // Only connect if neighbor exists at this layer
                 if layer <= self.nodes[neighbor_id].max_level {
                     self.nodes[node_id].neighbors[layer].push(neighbor_id);
                     self.nodes[neighbor_id].neighbors[layer].push(node_id);
@@ -479,13 +470,14 @@ impl HNSW {
             }
 
             // Not enough active results, perform DOMAIN EXPANSION 🟣
-            // TODO: This factor should be a configurable
-            current_ef = (current_ef as f32 * 1.5) as usize;
+            current_ef = (current_ef as f32 * DEFAULT_EF_INC_FACTOR) as usize;
             current_ef = current_ef.min(max_ef);
         }
     }
 
     /// Internal search method that performs the actual HNSW search
+    /// Returns array index and similarity of candidates, including tombstoned nodes
+    #[inline]
     pub fn search_internal(&self, query: &[f32], k: usize, ef: usize) -> Vec<(NodeIndex, f32)> {
         let entry = self.entry_point.expect("Entry point should exist");
         let entry_level = self.nodes[entry].max_level;

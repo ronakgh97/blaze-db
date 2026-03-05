@@ -65,7 +65,6 @@ blzdb serve
 ### Docker
 
 ```shell
-# Pull the image from Docker Hub
 docker pull ronakgh97/blazedb:latest
 
 # Run the container (use --backup flag to start with backup scheduler enabled)
@@ -102,57 +101,43 @@ blzdb query --database amazon_products_2023 --source default_src --search "Wirel
 ### Run Isolated Benchmark
 
 ```shell
-blzdb bench                                                  
+blzdb bench
 BENCHMARK RESULTS
 
 Concurrent Writes
-   Databases: 79 | Vectors/DB: 1148
-   Total Time: 16.37s
-   Min: 4.082s | Max: 16.273s | Avg: 10.039s
+   Databases: 79 | Vectors/DB: 984
+   Total Time: 7.75s
+   Min: 2.330s | Max: 7.751s | Avg: 4.986s
    Success: 79/79 ✓
-   Speedup: 48.4x (vs sequential)
-   Server CPU: 68.7% (avg) / 115.4% (peak)
-   Server Memory: 369.0 MB (avg) / 610 MB (peak)
+   Speedup: 50.8x (vs sequential)
+   Server CPU: 84.5% (avg) / 92.9% (peak)
+   Server Memory: 334.5 MB (avg) / 459 MB (peak)
 
 Thundering herd
-   Concurrent Requests: 844
-   Total Time: 1.67s
-   Min: 0.014s | Max: 1.643s | Avg: 0.834s
-   Success: 844/844 ✓
-   Latency Ratio: 117.3x ✗ (high)
-   Latency Percentiles: P50: 723.6ms | P95: 1612.2ms | P99: 1633.1ms
-   Server Search: P50: 3.6ms | P95: 10.7ms | P99: 42.2ms   (HNSW search time)
-   Server I/O: P50: 0.0ms | P95: 0.0ms | P99: 0.0ms   (disk/metadata I/O time)
-   Memory: 88.2 MB (avg) / 106 MB (peak) ✗ (unstable)
+   Concurrent Requests: 807
+   Total Time: 1.18s
+   Min: 0.025s | Max: 1.154s | Avg: 0.674s
+   Success: 807/807 ✓
+   Latency Ratio: 48.1x ✗ (high)
+   Latency Percentiles: P50: 751.1ms | P95: 1121.0ms | P99: 1145.3ms
+   Server Search: P50: 3.6ms | P95: 14.7ms | P99: 25.2ms   (HNSW search time)
+   Server I/O: P50: 0.0ms | P95: 0.0ms | P99: 0.1ms   (disk/metadata I/O time)
+   Memory: 81.1 MB (avg) / 119 MB (peak) ✗ (unstable)
 
 Mixed Read/Write Workload
-   Readers: 63 (69 queries each)
-   Writers: 27 (8 inserts of 513 vectors each)
-   Total Time: 39.05s
-   Successful Reads: 4347/4347 ✓
+   Readers: 61 (75 queries each)
+   Writers: 27 (8 inserts of 580 vectors each)
+   Total Time: 39.66s
+   Successful Reads: 4575/4575 ✓
    Successful Writes: 216/216 ✓
-   Server CPU: 80.5% (avg) / 97.6% (peak)
-   Server Memory: 903.4 MB (avg) / 1151 MB (peak)
-
-Top K Scaling
-   top_k           latency      scaling
-   ------------------------------------
-   100              17.8ms        1.0x
-   500              16.1ms        0.9x
-   1000             14.6ms        0.8x
-   2500             14.5ms        0.8x
-   5000             14.8ms        0.8x
-   7500             12.7ms        0.7x
-   10000            13.4ms        0.8x
+   Server CPU: 82.0% (avg) / 95.3% (peak)
+   Server Memory: 944.6 MB (avg) / 1179 MB (peak)
  Some benchmarks had issues, don't question my code and get a better CPU
 ```
 
 - This commands spin ups child background blz servers in temp environment
 - Bench simulates client-server interactions with concurrent reads and writes, measuring latency, throughput, and
   resource usage.
-- Results show significant speedup for concurrent writes, but thundering herd issue is still present, this is done on
-  purpose, the bench is too extreme, and unrealistic.
-- The hell is going on with the latency ratio, I have no idea.
 
 ### SEARCH ON 2023 AMAZON PRODUCT DATASET (350k Index)
 
@@ -334,10 +319,11 @@ test stress_test_concurrent_writes_different_databases ... ok
 ![Index_time_varying_M](./benches/plots/construction_M.png)
 ![Recall@64_varying_EF](./benches/plots/recall_vs_ef.png)
 ![Query_time_varying_K](./benches/plots/qps_vs_k.png)
+![Latency_varying_K](./benches/plots/latency_vs_k.png)
 
-- All Benchmarks are done with 16GB RAM and AMD i7 14th CPU, checkout `benches/` directory.
+- All Benchmarks are done with 16GB RAM and Intel i7 14th CPU, checkout `benches/` directory.
 - [Datasets used](https://huggingface.co/datasets/KShivendu/dbpedia-entities-openai-1M/tree/main/data) (~1M vectors and
-  1024 dim)
+  1536 dim)
 
 ### TODO:
 
@@ -353,7 +339,7 @@ test stress_test_concurrent_writes_different_databases ... ok
 - Too many clones across the codebase, memory explosion everywhere. `FIXED`
 - Too many code duplications across modules. `NEED HELP`
 - Similarity calculation caching for faster search queries. `IN PROGRESS`
-- Implement LRU for fast query. `DONE`
+- Implement LRU for fast cache query. `DONE`
 - Make a storage engine, e.g SSTable or LSMTree based. (Actually, I have no idea how to do that. 😵‍💫) `NEED HELP`
 - Bad Indexing, Loading and Memory Explosion issues when inserting large batch of nodes. (HNSW)
   `SIGNIFICANTLY IMPROVED - HNSW insert now uses references`
@@ -361,12 +347,12 @@ test stress_test_concurrent_writes_different_databases ... ok
 - Gotta destroy/refactor the utils module. It's a mess. `DONE`
 - Use gRPC/Protobuf for client-server communication?`
 - Better API Error handling and logging. `IN PROGRESS`
-- API Validation, so that a stupid user/me doesnt corrupted the HNSW index. 😶 `PARTIALLY DONE`
+- API Validation, so that a stupid user/me doesnt corrupted the HNSW index. `PARTIALLY DONE`
 - Complete HTTP API server for remote database access. `Few deletion and list are missinng.`
-- Better Database and Source Managing `IN PROGRESS`
+- Better Database and Source Managing `DONE`
 - Docker env and app config are conflicting `DONE`
 - Query filtering and metadata support. `DONE`
-- Incremental updates without full reindex. (HNSW) `DONE (Need better indexing)`
+- Incremental updates without full reindex. (HNSW) `DONE`
 - Move hardcoded Values to separate config files. `DONE`
 - So many Locks and IO everywhere, need a serious fix, no jokes. `Someone help me pls. 😭`
 - Server logs are mess, current using my custom macros, need proper monitoring solution.
@@ -377,13 +363,14 @@ test stress_test_concurrent_writes_different_databases ... ok
 - Tombstone deletion and Background reindexing for better performance. `DONE, but so many room for improvement`
 - Add embedded Embeddings model, no more API shit `NEED_HELP`
 - Add Backup Mechanism, Background Jobs? API Endpoint? or something else `DONE, but have rare edge case, but still`
-- Playground demo in [Landing Page](https://blazedb.online) using Qdrant used datasets `IN_PROGESS`
+- Playground demo in [Landing Page](https://blazedb.online) using Qdrant used datasets `DONE`
 
 ## References
 
 - [Curse of Dimensionality](https://en.wikipedia.org/wiki/Curse_of_dimensionality)
-- [Little Intro](https://www.pinecone.io/learn/series/faiss/hnsw/)
+- [HNSW Intro](https://www.pinecone.io/learn/series/faiss/hnsw/)
 - [Arvix HNSW Paper](https://arxiv.org/abs/2512.06636)
+- [HNSW Benches](https://www.techrxiv.org/users/922842/articles/1311476-a-comparative-study-of-hnsw-implementations-for-scalable-approximate-nearest-neighbor-search)
 
 ## Contributing
 
@@ -392,7 +379,7 @@ Codebase is getting huge and hard to maintain it myself
 
 ### My Rules 😼
 
-**JUST DON'T SPAM AI AND PLEASE DONT REMOVE UNCOMMENTED CODE**
+**JUST DON'T SPAM AI AND PLEASE DONT REMOVE COMMENTED CODE**
 
 <h3 style="text-align: center;">VPS Support 😾</h3>
 
