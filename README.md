@@ -105,33 +105,33 @@ blzdb bench
 BENCHMARK RESULTS
 
 Concurrent Writes
-   Databases: 79 | Vectors/DB: 984
-   Total Time: 7.75s
-   Min: 2.330s | Max: 7.751s | Avg: 4.986s
-   Success: 79/79 ✓
-   Speedup: 50.8x (vs sequential)
-   Server CPU: 84.5% (avg) / 92.9% (peak)
-   Server Memory: 334.5 MB (avg) / 459 MB (peak)
+   Databases: 97 | Vectors/DB: 1014
+   Total Time: 12.17s
+   Min: 3.083s | Max: 11.941s | Avg: 7.569s
+   Success: 97/97 ✓
+   Speedup: 60.3x (vs sequential)
+   Server CPU: 72.0% (avg) / 83.9% (peak)
+   Server Memory: 358.2 MB (avg) / 530 MB (peak)
 
 Thundering herd
-   Concurrent Requests: 807
-   Total Time: 1.18s
-   Min: 0.025s | Max: 1.154s | Avg: 0.674s
-   Success: 807/807 ✓
-   Latency Ratio: 48.1x ✗ (high)
-   Latency Percentiles: P50: 751.1ms | P95: 1121.0ms | P99: 1145.3ms
-   Server Search: P50: 3.6ms | P95: 14.7ms | P99: 25.2ms   (HNSW search time)
-   Server I/O: P50: 0.0ms | P95: 0.0ms | P99: 0.1ms   (disk/metadata I/O time)
-   Memory: 81.1 MB (avg) / 119 MB (peak) ✗ (unstable)
+   Concurrent Requests: 786
+   Total Time: 2.12s
+   Min: 0.026s | Max: 2.093s | Avg: 0.974s
+   Success: 786/786 ✓
+   Latency Ratio: 80.5x ✗ (high)
+   Latency Percentiles: P50: 1065.5ms | P95: 2059.6ms | P99: 2084.8ms
+   Server Search: P50: 4.3ms | P95: 24.0ms | P99: 63.2ms   (HNSW search time)
+   Server I/O: P50: 0.0ms | P95: 0.0ms | P99: 0.0ms   (disk/metadata I/O time)
+   Memory: 70.1 MB (avg) / 89 MB (peak) ✗ (unstable)
 
 Mixed Read/Write Workload
-   Readers: 61 (75 queries each)
-   Writers: 27 (8 inserts of 580 vectors each)
-   Total Time: 39.66s
-   Successful Reads: 4575/4575 ✓
-   Successful Writes: 216/216 ✓
-   Server CPU: 82.0% (avg) / 95.3% (peak)
-   Server Memory: 944.6 MB (avg) / 1179 MB (peak)
+   Readers: 60 (55 queries each)
+   Writers: 23 (9 inserts of 598 vectors each)
+   Total Time: 38.70s
+   Successful Reads: 3300/3300 ✓
+   Successful Writes: 207/207 ✓
+   Server CPU: 80.8% (avg) / 95.3% (peak)
+   Server Memory: 1010.0 MB (avg) / 1195 MB (peak)
  Some benchmarks had issues, don't question my code and get a better CPU
 ```
 
@@ -245,45 +245,6 @@ Metadata: don’t understand what is meant by ‘a skillful commander,’” rep
 Score: 0.50
 Time taken (sec): 0.0009919
 ```
-
-### HHSW DEMO WITH Benchmarks (RANDOM 50,000 VECTORS)
-
-```shell
-Building HNSW graph with 50000 nodes...
-Indexing completed in 263.5830083s
-
-HNSW Layer Statistics:
-  Layer 0: 50000 nodes (100.00%)
-  Layer 1: 3096 nodes (6.19%)
-  Layer 2: 181 nodes (0.36%)
-  Layer 3: 15 nodes (0.03%)
-  Layer 4: 1 nodes (0.00%)
-  Entry point: node 21918 at layer 4
-Querying vector: [0.21357012, -0.8388252, -0.25997758]...
-Search completed in: 0.0011535s
-
-Top 5 nearest neighbors:
-  1. Node 46879 - similarity: 0.09, Metadata: what a nice vector
-  2. Node 23231 - similarity: 0.08, Metadata: what a nice vector
-  3. Node 25242 - similarity: 0.08, Metadata: what a nice vector
-  4. Node 44287 - similarity: 0.07, Metadata: what a nice vector
-  5. Node 41951 - similarity: 0.07, Metadata: what a nice vector
-
-Brute-force search completed in: 0.0074883s
-
-Top 5 nearest neighbors (Brute-force):
-  1. Node 22258 - similarity: 0.13, Metadata: what a nice vector
-  2. Node 35588 - similarity: 0.12, Metadata: what a nice vector
-  3. Node 35335 - similarity: 0.11, Metadata: what a nice vector
-  4. Node 14154 - similarity: 0.11, Metadata: what a nice vector
-  5. Node 21531 - similarity: 0.11, Metadata: what a nice vector
-
-Speedup over brute-force: 6.49x
-```
-
-- Curse of dimensionality applies here, due to bad random vectors
-- HNSW implementation is basic and can be further optimized. (Which are beyond of my knowledge 😵‍💫)
-- Anyway, Look at that smooth exponential layer distribution! _chief kiss_ 😼
 
 ### Cache Benchmarking
 
