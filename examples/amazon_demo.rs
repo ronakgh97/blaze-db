@@ -14,7 +14,7 @@ const NODES_TO_INDEX: usize = 400_000;
 #[tokio::main]
 async fn main() -> Result<()> {
     let vector_data =
-        VectorData::read_from_disk(&PathBuf::from("embeddings/EMBEDDINGS.bin")).await?;
+        VectorData::read_from_disk(&PathBuf::from("../embeddings/Amazon_EMBEDDINGS.bin")).await?;
 
     let nodes_to_index = vector_data.size().min(NODES_TO_INDEX) as u64;
 

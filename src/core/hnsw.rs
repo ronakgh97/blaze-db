@@ -110,7 +110,7 @@ pub struct HNSW {
 
 impl Default for HNSW {
     fn default() -> Self {
-        HNSW::new(16, 200, 16, 1.0, &Some(Metrics::Cosine))
+        HNSW::new(18, 256, 16, 1.0, &Some(Metrics::Cosine))
     }
 }
 

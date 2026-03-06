@@ -139,42 +139,60 @@ Mixed Read/Write Workload
 - Bench simulates client-server interactions with concurrent reads and writes, measuring latency, throughput, and
   resource usage.
 
-### SEARCH ON 2023 AMAZON PRODUCT DATASET (350k Index)
+### SEARCH ON 2023 AMAZON PRODUCT DATASET (400k Index)
 
 ```shell
 Query: Gaming RTX 4060 Laptop with 165Hz Display
-Search completed in: 3.5474ms
+Search completed in: 3.414ms
 Top 100 search results for query: 'Gaming RTX 4060 Laptop with 165Hz Display'
-1. ID: 134406, Score: 0.81
-Title: Razer Blade 16 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 16" Dual Mode Mini LED (4K UHD+ 120Hz & FHD+ 240Hz) - 32GB RAM - 2TB SSD - Compact GaN Charger - Windows 11
-2. ID: 134757, Score: 0.80
-Title: Razer Blade 18 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 18" QHD+ 240Hz - 32GB RAM - 2TB SSD - CNC Aluminum - Compact GaN Charger - Windows 11 - Chroma RGB
-3. ID: 193739, Score: 0.78
-Title: ASUS ROG Swift PG32UQR 32” 4K HDR 144Hz DSC HDMI 2.1 Gaming Monitor - UHD (3840 x 2160), IPS, 1ms, G-SYNC Compatible, Extreme Low Motion Blur Sync, Eye Care, DisplayPort, USB, DisplayHDR 600,BLACK
-4. ID: 195982, Score: 0.78
-Title: Alienware M15 R7 Gaming Laptop, 15.6 inch QHD 240Hz 2ms Display, AMD Ryzen R7 6800H, GeForce RTX 3070Ti, 32GB DDR5 RAM, 1TB NVMe SSD, USB-C, Wi-Fi 6, RGB LED Lighting, Windows 11, Black
-5. ID: 195699, Score: 0.78
-Title: Dell 24 Inch Gaming Monitor, 1ms response time, Overclocked 144Hz AMD FreeSync
+1. ID: 38801a5b-f49d-4ef2-ad7a-6ada98884d0e, Score: 0.83
+Title: ASUS Dual GeForce RTX™ 4060 OC Edition 8GB GDDR6 (PCIe 4.0, 8GB GDDR6, DLSS 3, HDMI 2.1a, DisplayPort 1.4a, 2.5-Slot Design, Axial-tech Fan Design, 0dB Technology, and More)
+2. ID: 0c696905-6bb1-4275-9a39-9eb7b4588d89, Score: 0.82
+Title: ASUS Dual GeForce RTX™ 4060 Ti OC Edition 8GB GDDR6 (PCIe 4.0, 8GB GDDR6, DLSS 3, HDMI 2.1, DisplayPort 1.4a, Axial-tech Fan Design, 0dB Technology, and More)
+3. ID: 3f066ff0-bf50-4c40-bb93-14b6d4106393, Score: 0.82
+Title: Acer Predator Helios 16 Gaming Laptop | 13th Gen Intel Core i7-13700HX | NVIDIA GeForce RTX 4060 | 16" 2560 x 1600 165Hz G-SYNC Display | 16GB DDR5 | 1TB Gen 4 SSD | Killer Wi-Fi 6E | PH16-71-74UU                                                 
+4. ID: 629fde5c-dbb3-4940-bcb3-602acbcab298, Score: 0.82
+Title: ASUS Dual GeForce RTX™ 4060 Ti 16GB OC Edition GDDR6 (PCIe 4.0, 16GB GDDR6, DLSS 3, HDMI 2.1a, DisplayPort 1.4a, 2.5-Slot Design, Axial-tech Fan Design, 0dB Technology, and More)                                                                   
+5. ID: 1b160aa9-bc3d-4057-84f1-ba40793830b4, Score: 0.81
+Title: ASUS Dual GeForce® RTX 4070 OC Edition 12GB GDDR6X, IP5X, Auto-Extreme Technology, 144-Hour Validation Program, HDMI 2.1a, DP 1.4a                                                                                                                   
+6. ID: e35a4f2b-96a7-4917-a067-81a7c70d7a4a, Score: 0.81
+Title: Razer Blade 14 Gaming Laptop (2023): AMD Ryzen 9 7940HS CPU - NVIDIA GeForce RTX 4070 GPU - 14" 16:10 QHD+ 240Hz -16GB DDR5 RAM - 1TB SSD - Windows 11 - Vapor Chamber Cooling - Chroma RGB                                                          
+7. ID: 083c34b6-fc42-477d-a102-4ae809f612c1, Score: 0.81
+Title: Razer Blade 16 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 16" Dual Mode Mini LED (4K UHD+ 120Hz & FHD+ 240Hz) - 32GB RAM - 2TB SSD - Compact GaN Charger - Windows 11                                                 
+8. ID: 37a48f7e-2dfd-4e3d-8f90-78875c02cf1a, Score: 0.81
+Title: Acer Nitro 17 Gaming Laptop | AMD Ryzen 7 7735HS Octa-Core CPU | NVIDIA GeForce RTX 4050 GPU | 17.3" FHD 165Hz IPS Display | 16GB DDR5 | 1TB Gen 4 SSD | Wi-Fi 6E | RGB Backlit KB | AN17-41-R8N5, Black                                             
+9. ID: 20a3f68f-38f9-40cc-a4d4-0a998fe35519, Score: 0.80
+Title: Lenovo IdeaPad Gaming 3 - (2022) - Essential Gaming Laptop Computer - 15.6" FHD - 120Hz - AMD Ryzen 5 6600H - NVIDIA GeForce RTX 3050 - 8GB DDR5 RAM - 256GB NVMe Storage - Windows 11 Home                                                          
+10. ID: 15d7b55a-90da-40ce-9844-879f8bbe6fac, Score: 0.80
+Title: Razer Blade 18 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 18" QHD+ 240Hz - 32GB RAM - 2TB SSD - CNC Aluminum - Compact GaN Charger - Windows 11 - Chroma RGB                                                          
 
 Brute search results (for comparison)
-Brute search completed in: 47.3905ms
-1. ID: 134406, Score: 0.81
-Title: Razer Blade 16 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 16" Dual Mode Mini LED (4K UHD+ 120Hz & FHD+ 240Hz) - 32GB RAM - 2TB SSD - Compact GaN Charger - Windows 11
-2. ID: 134757, Score: 0.80
-Title: Razer Blade 18 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 18" QHD+ 240Hz - 32GB RAM - 2TB SSD - CNC Aluminum - Compact GaN Charger - Windows 11 - Chroma RGB
-3. ID: 193739, Score: 0.78
-Title: ASUS ROG Swift PG32UQR 32” 4K HDR 144Hz DSC HDMI 2.1 Gaming Monitor - UHD (3840 x 2160), IPS, 1ms, G-SYNC Compatible, Extreme Low Motion Blur Sync, Eye Care, DisplayPort, USB, DisplayHDR 600,BLACK
-4. ID: 195982, Score: 0.78
-Title: Alienware M15 R7 Gaming Laptop, 15.6 inch QHD 240Hz 2ms Display, AMD Ryzen R7 6800H, GeForce RTX 3070Ti, 32GB DDR5 RAM, 1TB NVMe SSD, USB-C, Wi-Fi 6, RGB LED Lighting, Windows 11, Black
-5. ID: 195699, Score: 0.78
-Title: Dell 24 Inch Gaming Monitor, 1ms response time, Overclocked 144Hz AMD FreeSync
+Brute search completed in: 73.8505ms
+1. ID: 38801a5b-f49d-4ef2-ad7a-6ada98884d0e, Score: 0.83
+Title: ASUS Dual GeForce RTX™ 4060 OC Edition 8GB GDDR6 (PCIe 4.0, 8GB GDDR6, DLSS 3, HDMI 2.1a, DisplayPort 1.4a, 2.5-Slot Design, Axial-tech Fan Design, 0dB Technology, and More)                                                                        
+2. ID: 0c696905-6bb1-4275-9a39-9eb7b4588d89, Score: 0.82
+Title: ASUS Dual GeForce RTX™ 4060 Ti OC Edition 8GB GDDR6 (PCIe 4.0, 8GB GDDR6, DLSS 3, HDMI 2.1, DisplayPort 1.4a, Axial-tech Fan Design, 0dB Technology, and More)                                                                                       
+3. ID: 3f066ff0-bf50-4c40-bb93-14b6d4106393, Score: 0.82
+Title: Acer Predator Helios 16 Gaming Laptop | 13th Gen Intel Core i7-13700HX | NVIDIA GeForce RTX 4060 | 16" 2560 x 1600 165Hz G-SYNC Display | 16GB DDR5 | 1TB Gen 4 SSD | Killer Wi-Fi 6E | PH16-71-74UU                                                 
+4. ID: 629fde5c-dbb3-4940-bcb3-602acbcab298, Score: 0.82
+Title: ASUS Dual GeForce RTX™ 4060 Ti 16GB OC Edition GDDR6 (PCIe 4.0, 16GB GDDR6, DLSS 3, HDMI 2.1a, DisplayPort 1.4a, 2.5-Slot Design, Axial-tech Fan Design, 0dB Technology, and More)                                                                   
+5. ID: 1b160aa9-bc3d-4057-84f1-ba40793830b4, Score: 0.81
+Title: ASUS Dual GeForce® RTX 4070 OC Edition 12GB GDDR6X, IP5X, Auto-Extreme Technology, 144-Hour Validation Program, HDMI 2.1a, DP 1.4a                                                                                                                   
+6. ID: e35a4f2b-96a7-4917-a067-81a7c70d7a4a, Score: 0.81
+Title: Razer Blade 14 Gaming Laptop (2023): AMD Ryzen 9 7940HS CPU - NVIDIA GeForce RTX 4070 GPU - 14" 16:10 QHD+ 240Hz -16GB DDR5 RAM - 1TB SSD - Windows 11 - Vapor Chamber Cooling - Chroma RGB                                                          
+7. ID: 083c34b6-fc42-477d-a102-4ae809f612c1, Score: 0.81
+Title: Razer Blade 16 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 16" Dual Mode Mini LED (4K UHD+ 120Hz & FHD+ 240Hz) - 32GB RAM - 2TB SSD - Compact GaN Charger - Windows 11                                                 
+8. ID: 37a48f7e-2dfd-4e3d-8f90-78875c02cf1a, Score: 0.81
+Title: Acer Nitro 17 Gaming Laptop | AMD Ryzen 7 7735HS Octa-Core CPU | NVIDIA GeForce RTX 4050 GPU | 17.3" FHD 165Hz IPS Display | 16GB DDR5 | 1TB Gen 4 SSD | Wi-Fi 6E | RGB Backlit KB | AN17-41-R8N5, Black                                             
+9. ID: 20a3f68f-38f9-40cc-a4d4-0a998fe35519, Score: 0.80
+Title: Lenovo IdeaPad Gaming 3 - (2022) - Essential Gaming Laptop Computer - 15.6" FHD - 120Hz - AMD Ryzen 5 6600H - NVIDIA GeForce RTX 3050 - 8GB DDR5 RAM - 256GB NVMe Storage - Windows 11 Home                                                          
+10. ID: 15d7b55a-90da-40ce-9844-879f8bbe6fac, Score: 0.80
+Title: Razer Blade 18 Gaming Laptop: NVIDIA GeForce RTX 4090-13th Gen Intel 24-Core i9 HX CPU - 18" QHD+ 240Hz - 32GB RAM - 2TB SSD - CNC Aluminum - Compact GaN Charger - Windows 11 - Chroma RGB                                                          
 
-Speedup: 13.36x
+Speedup: 21.63x
 ```
 
-- Had a classic moment here, was getting >50ms, until I realized that I was running in debug mode. 😶
-- Anyway, <5ms is pretty good for 350_000 vectors! 😭👨‍🍳🔥
-- That Accuracy is pure luck or maybe the dataset/HNSW params is just that good, but I will take it. 😎
+- <5ms with ~21x is pretty good for 400_000 vectors! I guess...
 - Amazon product 2023
   dataset: [Source Link](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products?select=amazon_products.csv)
 

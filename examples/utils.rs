@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 
 pub const BATCH_SIZE: usize = 4096;
-pub const EMBED_FILE_NAME: &str = "EMBEDDINGS.bin";
+pub const EMBED_FILE_NAME: &str = "Amazon_EMBEDDINGS.bin";
 
 #[tokio::main]
 async fn main() -> Result<()> {

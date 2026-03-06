@@ -86,7 +86,7 @@ wincode = { version = "0.4.5", features = ["derive", "std"] }
 clap = { version = "4.5.60", features = ["derive"] }
 axum = "0.8.8"
 tower-http = { version = "0.6.8", features = ["cors"] }
-uuid = { version = "1.21.0", features = ["v4"] }
+uuid = { version = "1.22.0", features = ["v4"] }
 dirs = "6.0.0"
 toml = { version = "0.9.8" }
 chrono = "0.4.44"
