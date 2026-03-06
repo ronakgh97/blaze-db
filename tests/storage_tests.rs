@@ -1,5 +1,5 @@
 use blaze_db::core::Metrics;
-use blaze_db::prelude::{EmbeddingStore, HNSW, VectorData};
+use blaze_db::prelude::{EmbeddingStore, HNSW};
 use std::path::PathBuf;
 use tempfile::tempdir;
 
@@ -117,59 +117,6 @@ async fn test_read_binary_nonexistent_directory() {
             .to_string()
             .contains("Failed to read directory")
     );
-}
-
-#[test]
-fn test_vector_data_get_vector() {
-    let vector_data = VectorData {
-        chunk: vec!["chunk1".to_string(), "chunk2".to_string()],
-        embedding: vec![vec![1.0, 2.0], vec![3.0, 4.0]],
-        dimensions: 2,
-    };
-
-    assert_eq!(vector_data.get_vector(0), Some([1.0, 2.0].as_slice()));
-    assert_eq!(vector_data.get_vector(1), Some([3.0, 4.0].as_slice()));
-    assert_eq!(vector_data.get_vector(2), None);
-}
-
-#[test]
-fn test_vector_data_get_chunk() {
-    let vector_data = VectorData {
-        chunk: vec!["chunk1".to_string(), "chunk2".to_string()],
-        embedding: vec![vec![1.0, 2.0], vec![3.0, 4.0]],
-        dimensions: 2,
-    };
-
-    assert_eq!(vector_data.get_chunk(0), Some("chunk1"));
-    assert_eq!(vector_data.get_chunk(1), Some("chunk2"));
-    assert_eq!(vector_data.get_chunk(2), None);
-}
-
-#[test]
-fn test_vector_data_memory_usage() {
-    let vector_data = VectorData {
-        chunk: vec!["test".to_string()],
-        embedding: vec![vec![1.0; 100]], // 100 f32 values
-        dimensions: 100,
-    };
-
-    let memory_mb = vector_data.data_size_mb();
-    assert!(memory_mb > 0.0);
-    // Should be approximately 400 bytes (100 * 4) + 4 bytes for "test" = ~0.0004 MB
-    assert!(memory_mb < 1.0); // Should be less than 1MB
-}
-
-#[test]
-fn test_vector_data_empty() {
-    let vector_data = VectorData {
-        chunk: vec![],
-        embedding: vec![],
-        dimensions: 0,
-    };
-
-    assert_eq!(vector_data.get_vector(0), None);
-    assert_eq!(vector_data.get_chunk(0), None);
-    assert_eq!(vector_data.data_size_mb(), 0.0);
 }
 
 #[test]

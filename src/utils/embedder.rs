@@ -1,11 +1,21 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use memmap2::Mmap;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
+use std::fs::File;
+use std::path::Path;
+use wincode::{SchemaRead, SchemaWrite};
 
-// A Bridge Wrapper struct to hold vector data and associated metadata, for outside module usage
-#[derive(Serialize, Deserialize, Debug, Clone)]
+const _HEADER_SIZE: usize = 8;
+const _CHUNK_OFFSET_SIZE: usize = 4;
+
+//TODO: I would like to use a custom writer format here, Format: [num_vectors: u32][dim: u32][vectors: f32...][chunk_offsets: u32...][chunks: string...], but having skill issues
+// Header: 8 bytes (4 for num_vectors, 4 for dim)
+// Vectors: num_vectors * dim * 4 bytes
+// Chunk offsets: num_vectors * 4 bytes (offset from start of chunk data)
+// Chunk data: UTF-8 strings
+#[derive(Serialize, Deserialize, Debug, Clone, SchemaWrite, SchemaRead)]
 pub struct VectorData {
     pub chunk: Vec<String>,
     pub embedding: Vec<Vec<f32>>,
@@ -19,7 +29,6 @@ impl Default for VectorData {
 }
 
 impl VectorData {
-    /// Create an empty VectorData
     pub fn new() -> Self {
         Self {
             chunk: Vec::new(),
@@ -29,21 +38,34 @@ impl VectorData {
     }
 
     #[inline]
-    /// Get a specific vector by index
-    pub fn get_vector(&self, index: usize) -> Option<&[f32]> {
-        self.embedding.get(index).map(|v| v.as_slice())
+    pub fn fill(chunk: Vec<String>, embedding: Vec<Vec<f32>>, dimensions: usize) -> Self {
+        Self {
+            chunk,
+            embedding,
+            dimensions,
+        }
+    }
+
+    // Get embedding vector for a specific index
+    #[inline]
+    pub fn get_vector(&self, index: usize) -> Option<&Vec<f32>> {
+        self.embedding.get(index)
+    }
+
+    // Get chunk string for a specific index
+    #[inline]
+    pub fn get_chunk(&self, index: usize) -> Option<&String> {
+        self.chunk.get(index)
     }
 
     #[inline]
-    /// Get text chunk by index
-    pub fn get_chunk(&self, index: usize) -> Option<&str> {
-        self.chunk.get(index).map(|s| s.as_str())
+    pub fn size(&self) -> usize {
+        self.embedding.len()
     }
 
     #[inline]
     /// Calculate the raw data size in MB (vectors + metadata strings only)
-    /// This represents the actual memory footprint of the data, not the serialized file size.
-    pub fn data_size_mb(&self) -> f64 {
+    pub fn data_size(&self) -> f64 {
         let vector_bytes: usize = self
             .embedding
             .par_iter()
@@ -57,41 +79,56 @@ impl VectorData {
         (vector_bytes + metadata_bytes) as f64 / (1024.0 * 1024.0)
     }
 
-    /// Total number of embeddings
-    pub fn len(&self) -> usize {
-        self.embedding.len()
-    }
-
-    /// Check if empty
-    pub fn is_empty(&self) -> bool {
-        self.embedding.is_empty()
-    }
-
-    // Read VectorData from disk JSON file (Memory mapped)
+    /// Load vectors from binary mmap file
     pub async fn read_from_disk(path: &Path) -> Result<Self> {
         let path = path.to_path_buf();
-        let json_data = tokio::task::spawn_blocking(move || -> Result<Self> {
-            let file = std::fs::File::open(path)?;
-            let mmap = unsafe { memmap2::Mmap::map(&file)? };
-            let data_str = std::str::from_utf8(&mmap)?;
-            let vector_data: VectorData = serde_json::from_str(data_str)?;
-            Ok(vector_data)
-        });
-        json_data.await?
+        tokio::task::spawn_blocking(move || Self::read_binary_mmap(&path)).await?
     }
 
-    // Write VectorData to disk as a JSON file using atomic write-rename
-    pub async fn write_to_disk(&self, path: &PathBuf) -> Result<()> {
-        let json_data = serde_json::to_string_pretty(self)?;
+    /// Write vectors to binary file
+    pub async fn write_to_disk(&self, path: &Path) -> Result<()> {
+        let path = path.to_path_buf();
+        let data = self.clone();
+        tokio::task::spawn_blocking(move || data.write_binary(&path)).await?
+    }
 
-        if let Some(parent) = path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+    fn read_binary_mmap(path: &Path) -> Result<Self> {
+        let file = File::open(path)?;
+        let mmap = unsafe { Mmap::map(&file)? };
+
+        let config = wincode::config::Configuration::default()
+            .with_preallocation_size_limit::<{ 128 * 1024 * 1024 }>();
+
+        let store = wincode::config::deserialize(&mmap[..], config)
+            .with_context(|| format!("Failed to deserialize: {:?}", path))?;
+
+        Ok(store)
+    }
+
+    fn write_binary(&self, path: &Path) -> Result<()> {
+        let num_vectors = self.embedding.len();
+        let dim = self.dimensions;
+
+        if num_vectors == 0 || dim == 0 {
+            anyhow::bail!("Cannot write empty vector data");
         }
 
-        let temp_path = path.with_extension("tmp");
-        tokio::fs::write(&temp_path, json_data).await?;
+        let config = wincode::config::Configuration::default()
+            .with_preallocation_size_limit::<{ 128 * 1024 * 1024 }>();
 
-        tokio::fs::rename(&temp_path, path).await?;
+        let bytes = wincode::config::serialize(self, config).with_context(|| {
+            format!(
+                "Failed to serialize vector data for disk at {}",
+                path.to_string_lossy()
+            )
+        })?;
+
+        std::fs::write(path, bytes).with_context(|| {
+            format!(
+                "Failed to write vector data to disk at {}",
+                path.to_string_lossy()
+            )
+        })?;
 
         Ok(())
     }

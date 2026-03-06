@@ -34,9 +34,7 @@ impl StartupDemo {
 async fn main() -> Result<()> {
     let _data = read_dataset().await?;
 
-    // run_startup_demo_embed().await?;
-
-    let embeddings_path = "embeddings/Startup_EMBEDDINGS.json";
+    let embeddings_path = "embeddings/Startup_EMBEDDINGS.bin";
 
     let index_path = "examples/startup_index/HNSW_INDEX.bin";
 
@@ -58,7 +56,7 @@ async fn main() -> Result<()> {
         "local",
     );
 
-    let query = "Search engine";
+    let query = "Database";
     let embedding = provider.fetch_embedding(query).await?;
 
     let index = EmbeddingStore::load_index_file(&PathBuf::from(index_path)).await?;
@@ -211,25 +209,28 @@ async fn check_datasets() -> Result<()> {
 
 async fn run_startup_index(index_path: &Path) -> Result<()> {
     let vector_data =
-        VectorData::read_from_disk(&PathBuf::from("embeddings/Startup_EMBEDDINGS.json")).await?;
+        VectorData::read_from_disk(&PathBuf::from("embeddings/Startup_EMBEDDINGS.bin")).await?;
 
     let raw_data = read_dataset().await?;
 
     // Progress bar setup
-    let progress_bar = ProgressBar::new(vector_data.chunk.len() as u64);
+    let progress_bar = ProgressBar::new(vector_data.size() as u64);
     progress_bar.set_style(
         ProgressStyle::default_bar()
             .template("Nodes: [{bar:60.cyan/yellow}] {pos}/{len} ({percent}%)")?
             .progress_chars("■>-"),
     );
 
-    let mut hnsw = HNSW::new(16, 200, 16, 0.8, &Some(Metrics::Cosine));
+    let mut hnsw = HNSW::new(32, 512, 16, 0.8, &Some(Metrics::Cosine));
     let mut skipped = 0;
 
-    // Create a reference to avoid cloning in loop
     let data_ref = &raw_data;
 
-    for (embedding, metadata) in vector_data.embedding.iter().zip(vector_data.chunk.iter()) {
+    for i in 0..vector_data.size() {
+        // Pray
+        let embedding = vector_data.get_vector(i).unwrap();
+        let metadata = vector_data.get_chunk(i).unwrap();
+
         let random_id = uuid::Uuid::new_v4().to_string();
         let random_level = hnsw.get_random_level();
 
@@ -289,7 +290,6 @@ async fn get_startup_by_name(
 
 async fn run_startup_demo_embed() -> Result<()> {
     use blaze_db::prelude::{Provider, VectorData};
-    use indicatif::{ProgressBar, ProgressStyle};
     use std::path::PathBuf;
     let data = read_dataset().await?;
 
@@ -301,18 +301,15 @@ async fn run_startup_demo_embed() -> Result<()> {
         "local",
     );
 
-    // Progress bar setup
-    let progress_bar = ProgressBar::new(data.len() as u64);
-    progress_bar.set_style(
-        ProgressStyle::default_bar()
-            .template("Nodes: [{bar:60.cyan/blue}] {pos}/{len} ({percent}%)")?
-            .progress_chars("■>-"),
-    );
-
     // We have enough RAM bro
     let mut all_chunks: Vec<String> = Vec::with_capacity(data.len());
     let mut all_embeddings: Vec<Vec<f32>> = Vec::with_capacity(data.len());
     let mut dimensions: usize = 0;
+
+    println!(
+        "Starting embedding process for {} datapoints...",
+        data.len()
+    );
 
     for i in (0..data.len()).step_by(batch_size) {
         let batch = &data[i..(i + batch_size).min(data.len())];
@@ -329,8 +326,6 @@ async fn run_startup_demo_embed() -> Result<()> {
             })
             .collect();
 
-        progress_bar.inc(batch.len() as u64);
-
         let batch_data = provider.fetch_embeddings(&texts_to_embed).await?;
 
         // Accumulate embeddings in memory
@@ -339,19 +334,22 @@ async fn run_startup_demo_embed() -> Result<()> {
         if dimensions == 0 {
             dimensions = batch_data.dimensions;
         }
+        println!(
+            "Processed batch {} - {} (Total so far: {})",
+            i,
+            (i + batch_size).min(data.len()),
+            all_chunks.len()
+        );
     }
 
     // Write all data to disk at once
-    let output_path = PathBuf::from("embeddings/Startup_EMBEDDINGS.json");
-    let final_data = VectorData {
-        chunk: all_chunks,
-        embedding: all_embeddings,
-        dimensions,
-    };
+    let output_path = PathBuf::from("embeddings/Startup_EMBEDDINGS.bin");
+    let final_data = VectorData::fill(all_chunks, all_embeddings, dimensions);
     final_data.write_to_disk(&output_path).await?;
-    println!("Successfully wrote {} embeddings to disk", final_data.len());
-
-    progress_bar.finish_with_message("Complete");
+    println!(
+        "Successfully wrote {} embeddings to disk",
+        final_data.size()
+    );
 
     Ok(())
 }

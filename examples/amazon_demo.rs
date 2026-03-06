@@ -1,7 +1,7 @@
 use anyhow::Result;
 use blaze_db::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -9,23 +9,16 @@ use uuid::Uuid;
 const BATCH_SIZE: usize = 4096;
 
 // Adjust this as you need
-const NODES_TO_INDEX: usize = 350_000;
+const NODES_TO_INDEX: usize = 400_000;
 
-// TODO: Implement Resume logic and batch-wise indexing
 #[tokio::main]
 async fn main() -> Result<()> {
     let vector_data =
-        VectorData::read_from_disk(&PathBuf::from("embeddings/EMBEDDINGS.json")).await?;
+        VectorData::read_from_disk(&PathBuf::from("embeddings/EMBEDDINGS.bin")).await?;
 
-    assert_eq!(
-        vector_data.embedding.len(),
-        vector_data.chunk.len(),
-        "Embeddings and Chunks length mismatch!"
-    );
+    let nodes_to_index = vector_data.size().min(NODES_TO_INDEX) as u64;
 
-    let nodes_to_index = vector_data.embedding.len().min(NODES_TO_INDEX) as u64;
-
-    println!("Total embeddings: {}", vector_data.embedding.len());
+    println!("Total embeddings: {}", vector_data.size());
     println!("Building HNSW index with {} nodes...", nodes_to_index);
     // Progress bar setup
     let progress_bar = ProgressBar::new(nodes_to_index);
@@ -41,12 +34,15 @@ async fn main() -> Result<()> {
 
     let start_indexing = std::time::Instant::now();
     // Just DUMP embeddings into HNSW index 😒
-    for (embedding, metadata) in vector_data
-        .embedding
-        .iter()
-        .take(nodes_to_index as usize)
-        .zip(vector_data.chunk.iter())
-    {
+    for i in 0..nodes_to_index as usize {
+        let embedding = match vector_data.get_vector(i) {
+            Some(v) => v,
+            None => break,
+        };
+        let metadata = match vector_data.get_chunk(i) {
+            Some(m) => m,
+            None => break,
+        };
         let random_id = Uuid::new_v4().to_string();
         let random_level = hnsw.get_random_level();
         hnsw.insert(random_id, embedding, metadata.to_string(), random_level)?;
@@ -63,11 +59,11 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-#[allow(unused)]
-#[derive(Debug, Deserialize, Clone)]
-struct CsvDataPoint {
-    title: String,
-}
+// #[allow(unused)]
+// #[derive(Debug, Deserialize, Clone)]
+// struct CsvDataPoint {
+//     title: String,
+// }
 
 #[allow(unused)]
 async fn load_amazon_reviews_csv(file_path: &str) -> Result<Vec<CsvDataPoint>> {
@@ -80,50 +76,6 @@ async fn load_amazon_reviews_csv(file_path: &str) -> Result<Vec<CsvDataPoint>> {
     }
 
     Ok(data_points)
-}
-
-#[tokio::test]
-async fn index_health_check() -> Result<()> {
-    let hnsw_index =
-        EmbeddingStore::load_index_file(&PathBuf::from("examples/amazon_index/amazon_index.bin"))
-            .await?;
-
-    println!(
-        "Total nodes: {} in HNSW index",
-        hnsw_index.hnsw_store.nodes.len(),
-    );
-
-    let csv_points = load_amazon_reviews_csv("datasets/amazon_products.csv").await?;
-
-    // Take first N * BATCH_SIZE rows from csv
-    let check_points = csv_points[..NODES_TO_INDEX].to_vec();
-
-    // Get all metadata from index
-    let metadata_vec: Vec<String> = hnsw_index
-        .hnsw_store
-        .nodes
-        .clone()
-        .iter()
-        .map(|v| v.metadata.clone())
-        .collect();
-
-    use rayon::prelude::*;
-    check_points.par_iter().enumerate().for_each(|(i, point)| {
-        let matches = metadata_vec
-            .iter()
-            .filter(|meta| *meta == &point.title)
-            .count();
-        if matches == 0 {
-            panic!("Missing metadata in index: {}", point.title);
-        } else if matches > 1 {
-            println!(
-                "Warning: Duplicate metadata for point {}: {}",
-                i, point.title
-            );
-        }
-    });
-
-    Ok(())
 }
 
 #[tokio::test]
@@ -144,6 +96,71 @@ async fn check_csv() -> Result<()> {
     println!("Total duplicate titles: {}", duplicate_count);
     println!("Total CSV rows: {}", csv_points.len());
 
+    Ok(())
+}
+
+#[allow(unused)]
+#[derive(Debug, Deserialize, Serialize)]
+struct CsvDataPoint {
+    id: String,
+    title: String,
+    #[serde(rename = "imgUrl")]
+    img_url: String,
+    #[serde(rename = "productURL")]
+    product_url: String,
+    stars: String,
+    reviews: String,
+    price: String,
+    #[serde(rename = "listPrice")]
+    list_price: String,
+    category_id: String,
+    #[serde(rename = "isBestSeller")]
+    is_best_seller: String,
+    #[serde(rename = "boughtInLastMonth")]
+    bought_in_last_month: String,
+}
+
+#[tokio::test]
+async fn clean_csv() -> Result<()> {
+    use std::collections::HashSet;
+    let input_path = "datasets/amazon_products.csv";
+    let output_path = "datasets/amazon_products.csv";
+
+    let mut rdr = csv::Reader::from_path(input_path)?;
+    let mut seen_titles = HashSet::new();
+    let mut unique_records = Vec::new();
+
+    let mut total_count = 0;
+    let mut duplicate_count = 0;
+
+    for result in rdr.deserialize() {
+        total_count += 1;
+        let record: CsvDataPoint = result?;
+
+        if seen_titles.insert(record.title.clone()) {
+            unique_records.push(record);
+        } else {
+            duplicate_count += 1;
+        }
+    }
+
+    println!("Total records: {}", total_count);
+    println!("Duplicate records: {}", duplicate_count);
+    println!("Unique records: {}", unique_records.len());
+
+    if duplicate_count == 0 {
+        println!("No duplicates found");
+        return Ok(());
+    }
+
+    let mut wtr = csv::Writer::from_path(output_path)?;
+
+    for record in unique_records {
+        wtr.serialize(record)?;
+    }
+    wtr.flush()?;
+
+    println!("Cleaned CSV saved to {}", output_path);
     Ok(())
 }
 

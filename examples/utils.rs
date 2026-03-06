@@ -1,29 +1,14 @@
 use anyhow::Result;
 use blaze_db::prelude::{Provider, VectorData};
-use colored::Colorize;
 use serde::Deserialize;
 use std::path::PathBuf;
-use std::process::exit;
 
 pub const BATCH_SIZE: usize = 4096;
-pub const EMBED_FILE_NAME: &str = "EMBEDDINGS.json";
+pub const EMBED_FILE_NAME: &str = "EMBEDDINGS.bin";
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let csv_points = load_amazon_product_csv("datasets/amazon_products.csv").await?;
-
-    // Check for duplicate titles
-    let mut titles_set = std::collections::HashSet::new();
-    let mut duplicate_count = 0;
-    for point in &csv_points {
-        if !titles_set.insert(&point.title) {
-            duplicate_count += 1;
-        }
-    }
-    if duplicate_count > 0 {
-        println!("Found {} duplicate titles in CSV data!", duplicate_count);
-        exit(0);
-    }
 
     let embeddings_dir = PathBuf::from("embeddings");
     if !embeddings_dir.exists() {
@@ -38,37 +23,29 @@ async fn main() -> Result<()> {
     );
 
     // Resume logic
-
     println!("Checking for existing embeddings to resume from...");
     // Load embeddings if created earlier
     let embeddings_path = embeddings_dir.join(EMBED_FILE_NAME);
     let mut accumulated_vector_data = match VectorData::read_from_disk(&embeddings_path).await {
         Ok(v) => {
-            let file_size_mb = tokio::fs::metadata(&embeddings_path)
-                .await
-                .map(|m| m.len() as f64 / (1024.0 * 1024.0))
-                .unwrap_or(0.0);
             println!(
-                "Found embeddings on disk: {:?}, File: {:.2} MB, Data: {:.2} MB, Embeddings: {}, Chunks: {})",
+                "Found embeddings on disk: {:?}, Data: {:.2} MB, Count: {})",
                 embeddings_path.file_name().unwrap(),
-                file_size_mb,
-                v.data_size_mb(),
-                v.embedding.len(),
-                v.chunk.len()
+                v.data_size(),
+                v.size()
             );
             v
         }
         Err(e) => {
             println!(
                 "No existing embeddings found on disk, starting fresh. Error: {:?}",
-                e.to_string().red().dimmed()
+                e
             );
             VectorData::new()
         }
     };
 
-    // Cut to the number of already embedded items in csv
-    let already_embedded_count = accumulated_vector_data.chunk.len();
+    let already_embedded_count = accumulated_vector_data.size();
     if already_embedded_count > 0 {
         println!(
             "Resuming from previously saved embeddings, already embedded items: {}",
@@ -81,6 +58,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Cut to the number of already embedded items in csv
     let csv_points = &csv_points[already_embedded_count..];
 
     // Process in batches and save to disk
@@ -105,18 +83,18 @@ async fn main() -> Result<()> {
 
         let batch_vector_data = provider.fetch_embeddings(&titles).await?;
 
-        let before_count = accumulated_vector_data.len();
-        let batch_len = batch_vector_data.len();
+        let before_count = accumulated_vector_data.size();
+        let batch_len = batch_vector_data.size();
 
-        // Append the new batch to accumulated data
         accumulated_vector_data
             .embedding
             .extend(batch_vector_data.embedding);
         accumulated_vector_data
             .chunk
             .extend(batch_vector_data.chunk);
+        accumulated_vector_data.dimensions = batch_vector_data.dimensions;
 
-        let after_count = accumulated_vector_data.len();
+        let after_count = accumulated_vector_data.size();
         assert_eq!(
             after_count,
             before_count + batch_len,
@@ -129,24 +107,19 @@ async fn main() -> Result<()> {
         // Save accumulated data to disk
         accumulated_vector_data.write_to_disk(&filename).await?;
 
-        let file_size_mb = tokio::fs::metadata(&filename)
-            .await
-            .map(|m| m.len() as f64 / (1024.0 * 1024.0))
-            .unwrap_or(0.0);
         println!(
-            "Batch {}/{} saved to {:?} (File: {:.2} MB, Data: {:.2} MB, Total Count: {})",
+            "Batch {}/{} saved to {:?} Data: {:.2} MB, Total Count: {})",
             batch_number,
             total_batches,
             filename.file_name().unwrap(),
-            file_size_mb,
-            accumulated_vector_data.data_size_mb(),
-            accumulated_vector_data.len()
+            accumulated_vector_data.data_size(),
+            accumulated_vector_data.size()
         );
     }
 
     println!(
         "Total embeddings saved: {} (new: {}, previous: {})",
-        accumulated_vector_data.len(),
+        accumulated_vector_data.size(),
         csv_points.len(),
         already_embedded_count
     );
