@@ -1,7 +1,6 @@
 /target
 /embeddings
 /.idea
-/docs
 /examples/amazon_index
 /examples/startup_index
 datasets/amazon_products.csv

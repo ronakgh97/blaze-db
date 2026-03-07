@@ -20,7 +20,7 @@ pub fn generate_random_vectors(num_vectors: usize, dimensions: usize) -> Vec<Vec
 
 #[allow(unused)]
 pub async fn load_index_from_example() -> anyhow::Result<EmbeddingStore> {
-    let index_path = PathBuf::from("/examples/amazon_index/amazon_index.bin");
+    let index_path = PathBuf::from("/amazon_index/HNSW.bin");
     let index = EmbeddingStore::load_index_file(&index_path).await;
 
     match index {

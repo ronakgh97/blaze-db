@@ -253,13 +253,19 @@ def plot_latency_vs_k(results):
 def plot_recall_vs_ef(results):
     efs = [32, 64, 128, 256, 512, 768]
     recalls = [
-        float64(results[f"recall_at_64_ef_{ef}"]["metric"].replace("%", "")) for ef in efs
+        float64(results[f"recall_at_64_ef_{ef}"]["metric"].replace("%", ""))
+        for ef in efs
     ]
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
     ax.axhline(
-        y=90, color="gray", linestyle="--", alpha=0.6, linewidth=1.5, label=">90% target"
+        y=90,
+        color="gray",
+        linestyle="--",
+        alpha=0.6,
+        linewidth=1.5,
+        label=">90% target",
     )
     ax.plot(efs, recalls, marker="o", color=COLORS[5], linewidth=2.5, markersize=10)
     ax.fill_between(efs, recalls, alpha=0.15, color=COLORS[3])
