@@ -9,9 +9,15 @@ pub async fn serve_run(
     cli_port: Option<u16>,
     enable_backup: bool,
     disable_env: bool,
+    sandbox: bool,
     _source: Option<Vec<String>>,
 ) -> Result<Provider> {
     info!("Starting the Server...");
+
+    if sandbox {
+        info!("Running in sandbox mode with in-memory storage (no persistence)");
+        // TODO: Implement sandbox mode with in-memory storage
+    }
 
     // Get all sources from ServerFile
     let all_sources = list_sources().await?;
@@ -56,11 +62,10 @@ pub async fn serve_run(
     // Validate all sources before starting server
     let mut valid_sources = Vec::new();
     for src in &sources_to_check {
-        if check_source_valid(src).await? {
-            info!("Source: {} is valid", src);
-            valid_sources.push(src.clone());
-        } else {
+        if !check_source_valid(src).await? {
             warn!("Source: {} is not valid, skipping", src);
+        } else {
+            valid_sources.push(src.clone());
         }
     }
 

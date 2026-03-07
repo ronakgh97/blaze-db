@@ -1,4 +1,5 @@
 use anyhow::Result;
+use blaze_db::cli::{ClientArgs, ClientCommands};
 use blaze_db::prelude::*;
 use clap::Parser;
 

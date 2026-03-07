@@ -19,25 +19,22 @@ name = "blzdb"
 path = "src/bin/server.rs"
 bench = false
 
-[[bin]]
-name = "nsw"
-path = "sandbox/nsw.rs"
-bench = false
-
-[[bin]]
-name = "hnsw"
-path = "sandbox/hnsw.rs"
-bench = false
-
-[[bin]]
-name = "fst-emd"
-path = "sandbox/fastembedd.rs"
-bench = false
-
 [[bench]]
 name = "benchmark"
 path = "benches/benchmark.rs"
 harness = false
+
+[[example]]
+name = "ivf"
+path = "sandbox/ivf.rs"
+
+[[example]]
+name = "hnsw"
+path = "sandbox/hnsw.rs"
+
+[[example]]
+name = "nsw"
+path = "sandbox/nsw.rs"
 
 [profile.release]
 opt-level = 3

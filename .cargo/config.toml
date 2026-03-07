@@ -1,0 +1,5 @@
+[alias]
+bu = "build --release --all-targets"
+bc = "bench --bench benchmark"
+lint = "clippy -- -D warnings"
+fix = "clippy --fix --allow-dirty -- -D warnings"

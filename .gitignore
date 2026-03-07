@@ -12,3 +12,4 @@ benches/cache
 .env
 /.venv
 /models
+uv.lock

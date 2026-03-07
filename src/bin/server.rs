@@ -1,4 +1,5 @@
 use anyhow::Result;
+use blaze_db::cli::{ServerArgs, ServerCommands};
 use blaze_db::prelude::*;
 use clap::Parser;
 
@@ -14,9 +15,10 @@ async fn main() -> Result<()> {
             port,
             backup,
             no_env,
+            sandbox,
             source,
         }) => {
-            serve_run(port, backup, no_env, source).await?;
+            serve_run(port, backup, no_env, sandbox, source).await?;
         }
         Some(ServerCommands::Bench { .. }) => {
             bench_run().await?;

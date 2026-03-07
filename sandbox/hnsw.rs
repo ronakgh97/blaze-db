@@ -25,9 +25,6 @@ use std::sync::Mutex;
 use uuid::Uuid;
 
 /// Priority queue entry for nodes to explore during search.
-/// Example: candidates with similarities [0.5, 0.9, 0.3]
-/// - Heap top will be 0.9 (highest)
-/// - pop() returns 0.9, then 0.5, then 0.3
 #[derive(Clone, Copy)]
 struct Candidate(NodeIndex, f32);
 
@@ -55,10 +52,6 @@ impl PartialOrd for Candidate {
 /// We want to quickly find the WORST result in our top-k (to know when to prune)
 /// By reversing the comparison, the heap top is the LOWEST similarity in our results
 /// pop() gives us the worst result, making pruning O(1)
-/// Example: results with similarities [0.9, 0.7, 0.5] (k=3)
-/// - Heap top will be 0.5 (lowest in our top-k)
-/// - When new candidate with 0.8 arrives:
-/// - 0.8 > 0.5 (worst), so we add it and pop the worst (0.5)
 #[derive(Clone, Copy)]
 struct ScoredResult(NodeIndex, f32);
 
@@ -175,7 +168,7 @@ impl Hnsw {
     /// * `max_level` - The maximum level for this node
     ///
     /// # Returns
-    /// * `Ok(NodeId)` - The internal ID of the inserted node
+    /// * `Ok(NodeId)` - The array index of the newly inserted node in the `nodes` vector
     /// * `Err` - If the node_id already exists
     pub fn insert(
         &mut self,
@@ -195,7 +188,6 @@ impl Hnsw {
         let node_id = self.nodes.len();
 
         // Create the node with empty neighbor lists
-        // Note: Internal ID is the array index, not stored in the node
         let node = Node {
             node_id: vector_id.clone(),
             metadata,
@@ -208,7 +200,7 @@ impl Hnsw {
             tombstone: false,
         };
 
-        // Register the external -> internal mapping
+        // Register in ID mapper for O(1) lookups
         self.id_mapper.insert(vector_id, node_id);
 
         if self.entry_point.is_none() {
@@ -966,7 +958,6 @@ impl Hnsw {
     }
 }
 
-/// Internal identifier for a node in the Hnsw graph. (Changes during reindexing, not exposed to outside)
 /// It's just a fucking array index, that ip_mapper in Hnsw? It's just for fucking O(1)
 pub type NodeIndex = usize;
 
