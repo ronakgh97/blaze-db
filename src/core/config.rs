@@ -1,23 +1,19 @@
 use crate::core::data::{Source, VectorBase};
 use crate::utils::DataStore;
 use anyhow::{Context, Result};
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tokio::fs;
 use tokio::sync::RwLock;
 
-lazy_static! {
-    /// Global thread-safe ServerFile instance
-    /// All operations MUST go through this singleton to ensure thread safety
-    pub static ref SERVER_FILE: Arc<RwLock<Catalog>> = {
-        let server_file = Catalog::load_or_new()
-            .expect("Failed to initialize ServerFile");
-        Arc::new(RwLock::new(server_file))
-    };
-}
+/// Global thread-safe ServerFile instance
+/// All operations MUST go through this singleton to ensure thread safety
+pub static SERVER_FILE: LazyLock<Arc<RwLock<Catalog>>> = LazyLock::new(|| {
+    let server_file = Catalog::load_or_new().expect("Failed to initialize ServerFile");
+    Arc::new(RwLock::new(server_file))
+});
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserConfig {

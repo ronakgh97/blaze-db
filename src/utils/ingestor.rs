@@ -48,8 +48,8 @@ impl Ingestor {
     /// Respecting sentence/paragraph boundaries
     /// Adding overlap between chunks for context continuity
     ///
-    /// * `chunk_size` - Target number of words per chunk (default: 400)
-    /// * `overlap` - Number of words to overlap between chunks (default: 100)
+    /// * `chunk_size` - Target number of words per chunk
+    /// * `overlap` - Number of words to overlap between chunks
     pub fn read_chunks(&self, chunk_size: usize, overlap: usize) -> Result<Vec<Vec<String>>> {
         let file = File::open(&self.source)?;
         let mmap = unsafe { Mmap::map(&file)? };

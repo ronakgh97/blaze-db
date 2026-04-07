@@ -140,12 +140,17 @@ impl EmbeddingStore {
         let config = wincode::config::Configuration::default()
             .with_preallocation_size_limit::<{ 128 * 1024 * 1024 }>();
 
-        // TODO: Maybe do tokio::spawn_blocking here?
-        // Serialize to bytes and calculate checksum
-        let initial_bytes = wincode::config::serialize(&*self, config)?;
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(&initial_bytes);
-        let checksum = hex::encode(hasher.finalize());
+        // Serialize to bytes and calculate checksum in blocking task for better performance
+        let self_clone = self.clone();
+        let (initial_bytes, checksum) = tokio::task::spawn_blocking(move || {
+            let initial_bytes = wincode::config::serialize(&self_clone, config)?;
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(&initial_bytes);
+            let checksum = hex::encode(hasher.finalize());
+            Ok::<(Vec<u8>, String), anyhow::Error>((initial_bytes, checksum))
+        })
+        .await
+        .with_context(|| "Blocking task panicked during serialization")??;
 
         write_metadata(
             formatted_path

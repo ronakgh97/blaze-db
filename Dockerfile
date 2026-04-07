@@ -1,4 +1,4 @@
-FROM rust:1.93.1-slim-bookworm AS builder
+FROM rust:1.94.1-slim-bookworm AS builder
 
 # Install build dependencies (including libclang for llama-cpp-sys-2 bindings)
 RUN apt-get update && apt-get install -y \

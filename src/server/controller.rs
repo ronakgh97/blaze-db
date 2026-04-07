@@ -23,13 +23,12 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use dashmap::DashMap;
-use lazy_static::lazy_static;
 use lru::LruCache;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fmt::Display;
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::Duration;
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 use tokio::sync::{Mutex, RwLock};
@@ -39,42 +38,48 @@ static START_TIME: OnceLock<chrono::DateTime<chrono::Local>> = OnceLock::new();
 static PROVIDER: OnceLock<Provider> = OnceLock::new();
 static BACKUP_SERVICE: OnceLock<Arc<RwLock<BackupService>>> = OnceLock::new();
 
-type IndexEntry = Arc<RwLock<LruCache<String, (Arc<EmbeddingMetadata>, Arc<EmbeddingStore>)>>>;
+type IndexEntry =
+    LazyLock<Arc<RwLock<LruCache<String, (Arc<EmbeddingMetadata>, Arc<EmbeddingStore>)>>>>;
 
-lazy_static! {
-    /// Per-database write locks with LRU eviction
-    /// Automatically evicts least-recently-used locks when capacity is reached
-    /// Key format: "source:database"
-    pub static ref DB_WRITE_LOCKS: Arc<RwLock<LruCache<String, Arc<RwLock<()>>>>> =
+#[allow(clippy::type_complexity)]
+/// Per-database write locks with LRU eviction
+/// Automatically evicts least-recently-used locks when capacity is reached
+/// Key format: "source:database"
+pub static DB_WRITE_LOCKS: LazyLock<Arc<RwLock<LruCache<String, Arc<RwLock<()>>>>>> =
+    LazyLock::new(|| {
         Arc::new(RwLock::new(LruCache::new(
-            NonZeroUsize::new(4096).unwrap() // Max 4096 concurrent database locks
-        )));
+            NonZeroUsize::new(4096).unwrap(), // Max 4096 concurrent database locks
+        )))
+    });
 
-    /// Per-database loading locks with LRU eviction
-    /// Prevents duplicate index loads during cache misses
-    /// Key format: "source_database"
-    pub static ref LOADING_LOCKS: Arc<RwLock<LruCache<String, Arc<Mutex<()>>>>> =
+#[allow(clippy::type_complexity)]
+/// Per-database loading locks with LRU eviction
+/// Prevents duplicate index loads during cache misses
+/// Key format: "source_database"
+pub static LOADING_LOCKS: LazyLock<Arc<RwLock<LruCache<String, Arc<Mutex<()>>>>>> =
+    LazyLock::new(|| {
         Arc::new(RwLock::new(LruCache::new(
-            NonZeroUsize::new(4096).unwrap() // Max 4096 concurrent loading locks
-        )));
+            NonZeroUsize::new(4096).unwrap(), // Max 4096 concurrent loading locks
+        )))
+    });
 
-    /// LRU Cache for loaded indexes to limit memory usage during queries
-    /// Key format: "source_database"
-    pub static ref INDEX_CACHE: IndexEntry =
-        Arc::new(RwLock::new(LruCache::new(
-            NonZeroUsize::new(128).unwrap() // Cache upto 128 index
-        )));
+/// LRU Cache for loaded indexes to limit memory usage during queries
+/// Key format: "source_database"
+pub static INDEX_CACHE: IndexEntry = LazyLock::new(|| {
+    Arc::new(RwLock::new(LruCache::new(
+        NonZeroUsize::new(128).unwrap(), // Cache upto 128 index
+    )))
+});
 
-    /// In-memory checksum cache to avoid reading metadata.json from disk on every query
-    /// Key format: "source_database"
-    /// Value: checksum string
-    /// Populated on write operations, invalidated on restore
-    pub static ref CHECKSUM_CACHE: DashMap<String, String> = DashMap::new();
+#[allow(clippy::type_complexity)]
+/// In-memory checksum cache to avoid reading metadata.json from disk on every query
+/// Key format: "source_database"
+/// Value: checksum string
+/// Populated on write operations, invalidated on restore
+pub static CHECKSUM_CACHE: LazyLock<DashMap<String, String>> = LazyLock::new(DashMap::new);
 
-
-    pub static ref SYSTEM_MONITOR: Arc<SystemMonitor> = Arc::new(SystemMonitor::new(100));
-
-}
+pub static SYSTEM_MONITOR: LazyLock<Arc<SystemMonitor>> =
+    LazyLock::new(|| Arc::new(SystemMonitor::new(512)));
 
 pub struct SystemMonitor {
     cpu_usage: Arc<DashMap<u64, f32>>,

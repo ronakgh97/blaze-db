@@ -2,8 +2,8 @@
 
 ![Blaze-DB Logo](blazedb-icon.png)
 
-Blaze-DB is a high-performance vector database written in Rust, designed for efficient storage and fast retrieval of
-embeddings using HNSW Indexing.
+Blaze-DB is a *reasonably* high-performance vector database designed for efficient hard disk-storage and fast retrieval
+of embeddings thanks to HNSW Indexing & turboquant quantization.
 
 ## Current State
 
@@ -58,8 +58,8 @@ blzdb serve
 ```
 
 - Download the Index
-  here: [Google Drive Link](https://drive.google.com/file/d/13tSMijMC3C7xV1lbV_EiWk46hfNKNuf7/view?usp=sharing)
-- Checksum (Sha256): **2621bb7a65f3da9f38d50ebda2fd619b49332a6ade02e51f5d4c1c7b118e2763**
+  here: [Google Drive Link](https://drive.google.com/file/d/1K3Pki_AXvuvDcQVxH5OqJtByLCnxsQMa/view?usp=sharing)
+- Checksum (Sha256): **3FDF8FF9C872DAC5153057E3AE0048E15FFF33E8CC7221CEDE3A90E832C02588**
 - Extract to `~/.blaze/sources/default_src/amazon_products_2023/`
 
 ### Docker
@@ -79,8 +79,8 @@ docker run -d \
 ```
 
 - Download Pre-Indexed
-  from: [Google Drive Link](https://drive.google.com/file/d/13tSMijMC3C7xV1lbV_EiWk46hfNKNuf7/view?usp=sharing)
-- Checksum (SHA256): **2621bb7a65f3da9f38d50ebda2fd619b49332a6ade02e51f5d4c1c7b118e2763**
+  from: [Google Drive Link](https://drive.google.com/file/d/1K3Pki_AXvuvDcQVxH5OqJtByLCnxsQMa/view?usp=sharing)
+- Checksum (SHA256): **3FDF8FF9C872DAC5153057E3AE0048E15FFF33E8CC7221CEDE3A90E832C02588**
 - Extract and copy to Docker volume
 - Before copying, create a database `amazon_products_2023` using CLI or API, so that the server recognizes it.
 
@@ -196,56 +196,6 @@ Speedup: 21.63x
 - Amazon product 2023
   dataset: [Source Link](https://www.kaggle.com/datasets/asaniczka/amazon-products-dataset-2023-1-4m-products?select=amazon_products.csv)
 
-### SEARCH ON WAR AND PEACE DATASET
-
-```shell
-blzcli query --search "War and peace" --database def_db --source default_src --top-k 10 
-
-Search querying the database: def_db
-
-
-Item 1:
-Metadata: thousand corpses lay there, but even on the island of St. Helena in the peaceful solitude where he said he intended to devote his leisure to an account of the great deeds he had done, he wrote: The Russian war should have been the most popular war of modern times: it was a war of good sense, for real interests, for the tranquillity and security of all; it was purely pacific and conservative. It was a war for a great cause, the end of uncertainties and the beginning of security. A new horizon and new labors were opening out, full of well-being and prosperity for all. The European system was already founded; all that remained was to organize it. Satisfied on these great points and with tranquility everywhere, I too should have had my Congress and my Holy Alliance. Those ideas were                 
-Score: 0.56
-
-Item 2:
-Metadata: Author: graf Leo Tolstoy Translator: Aylmer Maude Louise Maude Release date: April 1, 2001 [eBook #2600] Most recently updated: June 14, 2022 Language: English Credits: An Anonymous Volunteer and David Widger *** START OF THE PROJECT GUTENBERG EBOOK WAR AND PEACE *** WAR AND PEACE By Leo Tolstoy/Tolstoi CHAPTER I “Well, Prince, so Genoa and Lucca are now just family estates of the Buonapartes. But I warn you, if you don’t tell me that this means war, if you still try to defend the infamies and horrors perpetrated by that Antichrist—I really believe he is Antichrist—I will have nothing more to do with you and you are no longer my friend, no longer my ‘faithful slave,’ as you call yourself! But how do you do? I see I have frightened you—sit down and tell me all the news.”                          
-Score: 0.55
-
-Item 3:
-Metadata: when there was a war, like this one, it would be war! And then the determination of the troops would be quite different. Then all these Westphalians and Hessians whom Napoleon is leading would not follow him into Russia, and we should not go to fight in Austria and Prussia without knowing why. War is not courtesy but the most horrible thing in life; and we ought to understand that and not play at war. We ought to accept this terrible necessity sternly and seriously. It all lies in that: get rid of falsehood and let war be war and not a game. As it is now, war is the favorite pastime of the idle and frivolous. The military calling is the most highly honored. “But what is war? What is needed for success in warfare? What are the                                                                       
-Score: 0.54
-
-Item 4:
-Metadata: that: get rid of falsehood and let war be war and not a game. As it is now, war is the favorite pastime of the idle and frivolous. The military calling is the most highly honored. “But what is war? What is needed for success in warfare? What are the habits of the military? The aim of war is murder; the methods of war are spying, treachery, and their encouragement, the ruin of a country’s inhabitants, robbing them or stealing to provision the army, and fraud and falsehood termed military craft. The habits of the military class are the absence of freedom, that is, discipline, idleness, ignorance, cruelty, debauchery, and drunkenness. And in spite of all this it is the highest class, respected by everyone. All the kings, except the Chinese, wear military uniforms, and he who kills most people receives the highest rewards.                                                                                                                
-Score: 0.53
-
-Item 5:
-Metadata: of states and nations in their conflicts with one another is expressed in wars, and that as a direct result of greater or less success in war the political strength of states and nations increases or decreases. Strange as may be the historical account of how some king or emperor, having quarreled with another, collects an army, fights his enemy’s army, gains a victory by killing three, five, or ten thousand men, and subjugates a kingdom and an entire nation of several millions, all the facts of history (as far as we know it) confirm the truth of the statement that the greater or lesser success of one army against another is the cause, or at least an essential indication, of an increase or decrease in the strength of the nation—even though it is unintelligible why the defeat of an army—a hundredth part of a nation—should oblige                                                                                                        
-Score: 0.52
-
-Item 6:
-Metadata: fatherland, and it happened in the greatest of all known wars. The period of the campaign of 1812 from the battle of Borodinó to the expulsion of the French proved that the winning of a battle does not produce a conquest and is not even an invariable indication of conquest; it proved that the force which decides the fate of peoples lies not in the conquerors, nor even in armies and battles, but in something else. The French historians, describing the condition of the French army before it left Moscow, affirm that all was in order in the Grand Army, except the cavalry, the artillery, and the transport—there was no forage for the horses or the cattle. That was a misfortune no one could remedy, for the peasants of the district burned their hay rather than let the French have it.                    
-Score: 0.51
-
-Item 7:
-Metadata: did in 1813—salute according to all the rules of art, and, presenting the hilt of their rapier gracefully and politely, hand it to their magnanimous conqueror, but at the moment of trial, without asking what rules others have adopted in similar cases, simply and easily pick up the first cudgel that comes to hand and strike with it till the feeling of resentment and revenge in their soul yields to a feeling of contempt and compassion. CHAPTER II One of the most obvious and advantageous departures from the so-called laws of war is the action of scattered groups against men pressed together in a mass. Such action always occurs in wars that take on a national character. In such actions, instead of two crowds opposing each other, the men disperse, attack singly, run away when attacked by stronger forces, but again attack when opportunity offers. This was done                                                                            
-Score: 0.51
-
-Item 8:
-Metadata: of the statement that the greater or lesser success of one army against another is the cause, or at least an essential indication, of an increase or decrease in the strength of the nation—even though it is unintelligible why the defeat of an army—a hundredth part of a nation—should oblige that whole nation to submit. An army gains a victory, and at once the rights of the conquering nation have increased to the detriment of the defeated. An army has suffered defeat, and at once a people loses its rights in proportion to the severity of the reverse, and if its army suffers a complete defeat the nation is quite subjugated. So according to history it has been found from the most ancient times, and so it is to our own day. All Napoleon’s wars serve to confirm this                                     
-Score: 0.50
-
-Item 9:
-Metadata: had thought it was all the same to him whether or not Moscow was taken as Smolénsk had been, was suddenly checked in his speech by an unexpected cramp in his throat. He paced up and down a few times in silence, but his eyes glittered feverishly and his lips quivered as he began speaking. “If there was none of this magnanimity in war, we should go to war only when it was worth while going to certain death, as now. Then there would not be war because Paul Ivánovich had offended Michael Ivánovich. And when there was a war, like this one, it would be war! And then the determination of the troops would be quite different. Then all these Westphalians and Hessians whom Napoleon is leading would not follow him into Russia, and we should not go to fight in Austria and Prussia                             
-Score: 0.50
-
-Item 10:
-Metadata: don’t understand what is meant by ‘a skillful commander,’” replied Prince Andrew ironically. “A skillful commander?” replied Pierre. “Why, one who foresees all contingencies... and foresees the adversary’s intentions.” “But that’s impossible,” said Prince Andrew as if it were a matter settled long ago. Pierre looked at him in surprise. “And yet they say that war is like a game of chess?” he remarked. “Yes,” replied Prince Andrew, “but with this little difference, that in chess you may think over each move as long as you please and are not limited for time, and with this difference too, that a knight is always stronger than a pawn, and two pawns are always stronger than one, while in war a battalion is sometimes stronger than a division and sometimes weaker than a company. The relative strength of bodies of troops can                                                                                                                  
-Score: 0.50
-Time taken (sec): 0.0009919
-```
-
 ### Cache Benchmarking
 
 ```shell
@@ -254,7 +204,7 @@ cargo nextest run test_cache_and_bench --release --run-ignored only --no-capture
 running 1 test
 Total time without cache: 3.3927011s (Client: 2.0225559s, Server: 1.3701452s)
 Total time with cache: 0.041175100000000006s (Client: 0.0395715s, Server: 0.0016036000000000002s)
-Improvement factor (Server side): 854.42x
+Improvement factor (Server side): 1854.42x
 test test_cache_and_bench ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.08s
@@ -277,17 +227,16 @@ Databases created, starting concurrent writes...
   Databases written: 50
   Vectors per database: 2000
   Successful: 50/50
-  Total time: 45.0082293s
-  Min write time: 19.152629s
-  Max write time: 40.6575577s
-  Avg write time: 27.468832606s
-  Expected if sequential: 1373.4416303s
-  Speedup: 30.52x
-Concurrent writes to different databases work in parallel!
+  Total time: 23.6189502s
+  Min write time: 11.0376978s
+  Max write time: 20.9275324s
+  Avg write time: 15.53754459s
+  Expected if sequential: 776.8772295s
+  Speedup: 32.89x
 test stress_test_concurrent_writes_different_databases ... ok
 ```
 
-- Concurrent writes to different databases work in parallel🔥
+- Concurrent writes to different databases work in parallel
 - Each write operation is still quite slow due to HNSW indexing and slight disk read checks, but at least they don't
   block each other.
 - Checkout the Test: [Stress Test](tests/stress_tests.rs)
@@ -299,6 +248,7 @@ test stress_test_concurrent_writes_different_databases ... ok
 ![Recall@64_varying_EF](./benches/plots/recall_vs_ef.png)
 ![Query_time_varying_K](./benches/plots/qps_vs_k.png)
 ![Latency_varying_K](./benches/plots/latency_vs_k.png)
+![Construction_time_varying_EF](./benches/plots/construction_ef.png)
 
 - All Benchmarks are done with 16GB RAM and Intel i7 14th CPU, checkout `benches/` directory.
 - [Datasets used](https://huggingface.co/datasets/KShivendu/dbpedia-entities-openai-1M/tree/main/data) (~1M vectors and
