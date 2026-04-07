@@ -16,9 +16,6 @@ pub struct ClientArgs {
 
 #[derive(Subcommand)]
 pub enum ClientCommands {
-    /// Register to BlazeDB user service
-    Register {},
-
     /// Initialize the Blaze-DB client configuration
     Init {},
 
@@ -130,7 +127,7 @@ pub enum ServerCommands {
         source: Option<Vec<String>>, //TODO: Will use this later...
     },
 
-    /// Run benchmarks
+    /// Run benchmarks in Isolated environment
     Bench {
         // /// Test HNSW index performance (TODO: Add more benchmark options later)
         // #[arg(short, long)]

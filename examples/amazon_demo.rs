@@ -291,7 +291,9 @@ async fn clean_csv() -> Result<()> {
 #[tokio::test]
 async fn bench_search() -> Result<()> {
     use colored::Colorize;
-    let index = EmbeddingStore::load_index_file(&PathBuf::from("amazon_index/HNSW.bin")).await;
+    let index =
+        EmbeddingStore::load_index_file(&PathBuf::from("examples/amazon_index/HNSW_INDEX.bin"))
+            .await;
 
     let embedding_store = match index {
         Ok(index) => index,
@@ -324,6 +326,7 @@ async fn bench_search() -> Result<()> {
         .brute_force_search_with_metadata(&query_embedding.embedding[0], top_k);
     let brute_duration = start_brute.elapsed();
 
+    println!("Showing 10 results only");
     println!("\nQuery: {}", query.to_string().blue());
     println!("Search completed in: {:?}", duration);
     println!("Top {} search results for query: '{}'", top_k, query);

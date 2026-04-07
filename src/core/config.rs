@@ -70,7 +70,7 @@ impl UserConfig {
             .await
             .with_context(|| format!("Failed to read config file {}", config_path.display()))?;
 
-        let config: UserConfig = toml::from_str(&config_content)
+        let config: UserConfig = serde_json::from_str(&config_content)
             .with_context(|| "Failed to parse config".to_string())?;
 
         Ok(config)
@@ -100,10 +100,10 @@ where
             .with_context(|| format!("Failed to create config directory {}", parent.display()))?;
     }
 
-    let toml_string = toml::to_string_pretty(&config)
+    let str_data = serde_json::to_string_pretty(&config)
         .with_context(|| format!("Failed to serialize config to {}", config_path.display()))?;
 
-    fs::write(&config_path, toml_string)
+    fs::write(&config_path, str_data)
         .await
         .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
 

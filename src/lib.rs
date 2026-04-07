@@ -7,7 +7,7 @@ pub mod utils;
 pub mod prelude {
     pub use crate::args::{
         bench_run, create_run, embed_run, init_run_client, init_run_server, list_run, print_ascii,
-        query_run, register_run, serve_run,
+        query_run, serve_run,
     };
     pub use crate::core::{
         Catalog, HNSW, Metrics, Node, NodeIndex, SERVER_FILE, Source, SyncReport, UserConfig,

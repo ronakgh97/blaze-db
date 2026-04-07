@@ -45,10 +45,9 @@ impl Ingestor {
     /// Read file content and split into chunks with overlap
     ///
     /// This method creates better chunks for embedding by:
-    /// - Respecting sentence/paragraph boundaries
-    /// - Adding overlap between chunks for context continuity
+    /// Respecting sentence/paragraph boundaries
+    /// Adding overlap between chunks for context continuity
     ///
-    /// # Arguments
     /// * `chunk_size` - Target number of words per chunk (default: 400)
     /// * `overlap` - Number of words to overlap between chunks (default: 100)
     pub fn read_chunks(&self, chunk_size: usize, overlap: usize) -> Result<Vec<Vec<String>>> {

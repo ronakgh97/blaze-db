@@ -4,7 +4,7 @@ use blaze_db::prelude::{QueryRequest, QueryResponse};
 // This test requires for server to be running, and amazon product index created.
 #[ignore]
 #[tokio::test]
-async fn test_cache_and_bench() -> anyhow::Result<()> {
+async fn test_cache_bench() -> anyhow::Result<()> {
     // Send a query request to the server
     let client = reqwest::Client::new();
 

@@ -140,11 +140,12 @@ impl EmbeddingStore {
         let config = wincode::config::Configuration::default()
             .with_preallocation_size_limit::<{ 128 * 1024 * 1024 }>();
 
+        // TODO: Maybe do tokio::spawn_blocking here?
         // Serialize to bytes and calculate checksum
         let initial_bytes = wincode::config::serialize(&*self, config)?;
         let mut hasher = sha2::Sha256::new();
         hasher.update(&initial_bytes);
-        let checksum = format!("{:x}", hasher.finalize());
+        let checksum = hex::encode(hasher.finalize());
 
         write_metadata(
             formatted_path
@@ -188,7 +189,7 @@ impl EmbeddingStore {
         let initial_json = serde_json::to_string_pretty(&self)?;
         let mut hasher = sha2::Sha256::new();
         hasher.update(&initial_json);
-        let checksum = format!("{:x}", hasher.finalize());
+        let checksum = hex::encode(hasher.finalize());
 
         write_metadata(
             formatted_path
