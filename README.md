@@ -105,33 +105,33 @@ blzdb bench
 BENCHMARK RESULTS
 
 Concurrent Writes
-   Databases: 97 | Vectors/DB: 1014
-   Total Time: 12.17s
-   Min: 3.083s | Max: 11.941s | Avg: 7.569s
-   Success: 97/97 ✓
-   Speedup: 60.3x (vs sequential)
-   Server CPU: 72.0% (avg) / 83.9% (peak)
-   Server Memory: 358.2 MB (avg) / 530 MB (peak)
+   Databases: 108 | Vectors/DB: 1106
+   Total Time: 15.56s
+   Min: 4.037s | Max: 15.516s | Avg: 10.751s
+   Success: 108/108 ✓
+   Speedup: 74.6x (vs sequential)
+   Server CPU: 80.3% (avg) / 91.4% (peak)
+   Server Memory: 549.6 MB (avg) / 856 MB (peak)
 
 Thundering herd
-   Concurrent Requests: 786
-   Total Time: 2.12s
-   Min: 0.026s | Max: 2.093s | Avg: 0.974s
-   Success: 786/786 ✓
-   Latency Ratio: 80.5x ✗ (high)
-   Latency Percentiles: P50: 1065.5ms | P95: 2059.6ms | P99: 2084.8ms
-   Server Search: P50: 4.3ms | P95: 24.0ms | P99: 63.2ms   (HNSW search time)
-   Server I/O: P50: 0.0ms | P95: 0.0ms | P99: 0.0ms   (disk/metadata I/O time)
-   Memory: 70.1 MB (avg) / 89 MB (peak) ✗ (unstable)
+   Concurrent Requests: 796
+   Total Time: 1.59s
+   Min: 0.021s | Max: 1.561s | Avg: 0.718s
+   Success: 796/796 ✓
+   Latency Ratio: 78.0x ✗ (high)
+   Latency Percentiles: P50: 682.9ms | P95: 1190.8ms | P99: 1557.8ms
+   Server Search: P50: 3.9ms | P95: 13.3ms | P99: 61.1ms   (HNSW search time)
+   Server I/O: P50: 0.0ms | P95: 0.0ms | P99: 0.1ms   (disk/metadata I/O time)
+   Memory: 74.3 MB (avg) / 107 MB (peak) ✗ (unstable)
 
 Mixed Read/Write Workload
-   Readers: 60 (55 queries each)
-   Writers: 23 (9 inserts of 598 vectors each)
-   Total Time: 38.70s
-   Successful Reads: 3300/3300 ✓
-   Successful Writes: 207/207 ✓
-   Server CPU: 80.8% (avg) / 95.3% (peak)
-   Server Memory: 1010.0 MB (avg) / 1195 MB (peak)
+   Readers: 73 (56 queries each)
+   Writers: 23 (8 inserts of 527 vectors each)
+   Total Time: 32.08s
+   Successful Reads: 4088/4088 ✓
+   Successful Writes: 184/184 ✓
+   Server CPU: 79.0% (avg) / 89.4% (peak)
+   Server Memory: 866.6 MB (avg) / 1057 MB (peak)
  Some benchmarks had issues, don't question my code and get a better CPU
 ```
 
@@ -358,7 +358,7 @@ Codebase is getting huge and hard to maintain it myself
 
 ### My Rules 😼
 
-**JUST DON'T SPAM AI AND PLEASE DONT REMOVE COMMENTED CODE**
+**JUST DON'T SPAM AI AND PLEASE DON'T REMOVE COMMENTED CODE**
 
 <h3 style="text-align: center;">VPS Support 😾</h3>
 
