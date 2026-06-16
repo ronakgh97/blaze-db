@@ -1,3 +1,6 @@
+> *sigh* need refactor, not sure if i will do it, given my mental state and time
+
+
 # Blaze-DB
 
 ![Blaze-DB Logo](blazedb-icon.png)
